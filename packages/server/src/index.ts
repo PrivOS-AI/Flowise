@@ -20,6 +20,7 @@ import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
 import { IdentityManager } from './IdentityManager'
+import { verifyExternalAuth } from './middlewares/externalAuth'
 import { SSEStreamer } from './utils/SSEStreamer'
 import { validateAPIKey } from './utils/validateKey'
 import { LoggedInUser } from './enterprise/Interface.Enterprise'
@@ -225,6 +226,9 @@ export class App {
                     const isWhitelisted = whitelistURLs.some((url) => req.path.startsWith(url))
                     if (isWhitelisted) {
                         next()
+                    } else if (req.headers.authorization && process.env.EXTERNAL_AUTH_PROFILE_URL) {
+                        // External authentication - validate token via profile URL
+                        verifyExternalAuth(req, res, next)
                     } else if (req.headers['x-request-from'] === 'internal') {
                         verifyToken(req, res, next)
                     } else {
