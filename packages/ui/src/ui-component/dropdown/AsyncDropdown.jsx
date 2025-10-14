@@ -149,7 +149,8 @@ export const AsyncDropdown = ({
                                 id: currentNode.id,
                                 name: currentNode.data.name,
                                 label: currentNode.data.label,
-                                inputs: currentNode.data.inputs
+                                inputs: currentNode.data.inputs,
+                                credential: currentNode.data.credential || nodeData.credential
                             }
                             body.currentNode = currentNode
                         }
@@ -173,7 +174,7 @@ export const AsyncDropdown = ({
         })()
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [nodeData.credential, JSON.stringify(nodeData.inputs)])
 
     return (
         <>

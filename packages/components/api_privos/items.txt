@@ -1,0 +1,155 @@
+import { IItem, IList, IStage, ICustomFieldValue } from './interface';
+
+/**
+ * Privos External API - Item Management Endpoints
+ *
+ * Base URL: https://privos-dev-web.roxane.one/api/v1
+ *
+ * This module defines the Item Management endpoints for the Privos external API.
+ * Items are the individual entries within lists that can be organized across stages.
+ *
+ * ## Endpoints Overview (/v1/external.items.*)
+ *
+ * ### Retrieval Operations
+ * - GET /byListId - Fetch all items in a list with pagination support
+ *   Parameters: listId, offset?, count?
+ *   Returns: paginated item array with total count
+ *
+ * - GET /byStageId - Fetch items within a specific stage
+ *   Parameters: stageId, limit?
+ *   Returns: items in stage with stage name and count
+ *
+ * - GET /info - Retrieve detailed information about a specific item
+ *   Parameters: itemId
+ *   Returns: item details including list name, stage name, and children count
+ *
+ * - GET /search - Search items by text within a list
+ *   Parameters: listId, text, offset?, count?
+ *   Returns: paginated search results
+ *
+ * ### Modification Operations
+ * - POST /create - Create a new item
+ *   Parameters: name, description?, listId, stageId, parentId?, customFields?, order?
+ *   Returns: created item's basic info
+ *
+ * - PUT /update - Update item properties and custom field values
+ *   Parameters: itemId, name?, description?, customFields?
+ *   Returns: confirmation message with item ID
+ *
+ * - POST /move - Move item to a different stage
+ *   Parameters: itemId, stageId, order?
+ *   Returns: confirmation with new stage ID
+ *
+ * - DELETE /delete - Delete item with optional children deletion
+ *   Parameters: itemId, deleteChildren?
+ *   Returns: confirmation message
+ *
+ * ### Batch Operations
+ * - POST /batch-create - Create multiple items in a single request
+ *   Parameters: listId, items array
+ *   Returns: created items array
+ *
+ * - POST /batch-move - Move multiple items to a stage
+ *   Parameters: itemIds array, stageId
+ *   Returns: moved and failed item lists
+ *
+ * ## Data Types
+ * - Items support custom fields defined at the list level
+ * - Items can have parent-child relationships for hierarchical organization
+ * - Each item belongs to exactly one stage within a list
+ */
+
+interface ITEMS_ENDPOINTS {
+	'/v1/external.items.byListId': {
+		GET: (params: { listId: IList['_id']; offset?: number; count?: number }) => {
+			items: Partial<IItem>[];
+			count: number;
+			offset: number;
+			total: number;
+		};
+	};
+	'/v1/external.items.byStageId': {
+		GET: (params: { stageId: IStage['_id']; limit?: number }) => {
+			items: Partial<IItem>[];
+			count: number;
+			stageId: IStage['_id'];
+			stageName: string;
+		};
+	};
+	'/v1/external.items.info': {
+		GET: (params: { itemId: IItem['_id'] }) => {
+			item: Partial<IItem> & {
+				listName?: string;
+				stageName?: string;
+				childrenCount: number;
+			};
+		};
+	};
+	'/v1/external.items.create': {
+		POST: (params: {
+			name: string;
+			description?: string;
+			listId: IList['_id'];
+			stageId: IStage['_id'];
+			parentId?: IItem['_id'];
+			customFields?: ICustomFieldValue[];
+			order?: number;
+		}) => {
+			item: Pick<IItem, '_id' | 'name' | 'listId' | 'stageId'>;
+		};
+	};
+	'/v1/external.items.update': {
+   PUT: (params: {
+    itemId: IItem['_id'];
+    name?: string;
+    description?: string;
+    stageId?: IStage['_id'];
+    customFields?: ICustomFieldValue[];
+   }) => {
+    message: string;
+    itemId: IItem['_id'];
+   };
+  };
+	'/v1/external.items.move': {
+		POST: (params: { itemId: IItem['_id']; stageId: IStage['_id']; order?: number }) => {
+			message: string;
+			itemId: IItem['_id'];
+			newStageId: IStage['_id'];
+		};
+	};
+	'/v1/external.items.delete': {
+		DELETE: (params: { itemId: IItem['_id']; deleteChildren?: boolean }) => {
+			message: string;
+		};
+	};
+	'/v1/external.items.batch-create': {
+		POST: (params: {
+			listId: IList['_id'];
+			items: Array<{
+				name: string;
+				description?: string;
+				stageId: IStage['_id'];
+				parentId?: IItem['_id'];
+				customFields?: ICustomFieldValue[];
+				order?: number;
+			}>;
+		}) => {
+			message: string;
+			items: Pick<IItem, '_id' | 'name' | 'stageId'>[];
+		};
+	};
+	'/v1/external.items.batch-move': {
+		POST: (params: { itemIds: IItem['_id'][]; stageId: IStage['_id'] }) => {
+			message: string;
+			movedItems: IItem['_id'][];
+			failedItems: IItem['_id'][];
+		};
+	};
+	'/v1/external.items.search': {
+		GET: (params: { listId: IList['_id']; text: string; offset?: number; count?: number }) => {
+			items: Partial<IItem>[];
+			count: number;
+			offset: number;
+		};
+	};
+}

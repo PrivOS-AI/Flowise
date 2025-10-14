@@ -1,0 +1,117 @@
+import { IDocument, IDocumentVersion } from './interface';
+
+/**
+ * Privos External API Endpoints
+ *
+ * Base URL: https://privos-dev-web.roxane.one/api/v1
+ *
+ * This module defines the complete set of REST API endpoints for the Privos external API,
+ * organized into the following categories:
+ *
+ * ## Document Management (/v1/external.documents.*)
+ * - GET/PUT/DELETE /:documentId - Retrieve, update, or delete a specific document
+ * - GET /byRoomId - Fetch all documents in a room (paginated)
+ * - GET /byTemplateKey - Fetch documents by template key
+ * - GET /byTemplateDocumentKey - Fetch documents by template document key
+ * - GET /versions - Retrieve version history for a document
+ * - GET /getVersion - Retrieve a specific version of a document
+ * - POST /create - Create a new document
+ * - POST /revert - Revert document to a previous version
+ * - POST /batch-create - Create multiple documents in one request
+ *
+ * ## List Management (/v1/external.lists.*)
+ * - GET/PUT/DELETE /:listId - Retrieve, update, or delete a specific list
+ * - GET /byTemplateKey - Fetch lists by template key
+ * - GET /byTemplateListKey - Fetch list by template list key
+ * - GET /byRoomId - Fetch all lists in a room (paginated)
+ * - POST /create - Create a new list with optional stages and fields
+ * - GET/POST/PUT /fields/:listId - Manage field definitions for a list
+ *
+ * ## Item Management (/v1/external.items.*)
+ * - GET /byListId - Fetch all items in a list (paginated)
+ * - GET /byStageId - Fetch items in a specific stage
+ * - GET /info - Retrieve detailed information about an item
+ * - POST /create - Create a new item
+ * - PUT /update - Update item properties and custom fields
+ * - POST /move - Move item to different stage
+ * - DELETE /delete - Delete item with optional children deletion
+ * - POST /batch-create - Create multiple items in one request
+ * - POST /batch-move - Move multiple items to a stage
+ * - GET /search - Search items by text within a list
+ *
+ * ## Stage Management (/v1/external.stages.*)
+ * - GET /byListId - Fetch all stages for a list
+ * - GET/PUT/DELETE /:stageId - Retrieve, update, or delete a specific stage
+ * - POST /create - Create a new stage
+ * - POST /reorder - Reorder stages within a list
+ * - GET /items - Retrieve items within a stage
+ *
+ * ## Workflow Templates (/v1/external.workflow-templates.*)
+ * - GET /lists - Retrieve lists for a workflow template
+ * - GET /documents - Retrieve documents for a workflow template
+ *
+ * All endpoints support authentication via API key and return JSON responses.
+ * Pagination is available on collection endpoints using offset and count parameters.
+ */
+interface DOCUMENTS_ENDPOINTS {
+	'/v1/external.documents/:documentId': {
+		GET: (params: { documentId: string }) => {
+			document: IDocument;
+		};
+		PUT: (params: { documentId: string; title?: string; content?: string; description?: string }) => {
+			document: IDocument;
+		};
+		DELETE: (params: { documentId: string }) => {
+			deleted: boolean;
+		};
+	};
+	'/v1/external.documents.byRoomId': {
+		GET: (params: { roomId: string; offset?: number; count?: number }) => {
+			documents: IDocument[];
+			count: number;
+			offset: number;
+			total: number;
+		};
+	};
+	'/v1/external.documents.byTemplateKey': {
+		GET: (params: { templateKey: string; roomId: string }) => {
+			documents: IDocument[];
+		};
+	};
+	'/v1/external.documents.byTemplateDocumentKey': {
+		GET: (params: { templateDocumentKey: string; roomId: string }) => {
+			documents: IDocument[];
+		};
+	};
+	'/v1/external.documents.versions': {
+		GET: (params: { documentId: string }) => {
+			documentId: string;
+			currentVersion: number;
+			versions: { version: number; createdAt: Date; createdBy: string }[];
+		};
+	};
+	'/v1/external.documents.getVersion': {
+		GET: (params: { documentId: string; version: string }) => {
+			documentTitle: string;
+			version: Pick<IDocumentVersion, 'version' | 'content' | 'createdAt'> & { createdBy: string };
+		};
+	};
+	'/v1/external.documents.create': {
+		POST: (params: { roomId: string; title: string; content: string; description?: string }) => {
+			document: IDocument;
+		};
+	};
+	'/v1/external.documents.revert': {
+		POST: (params: { documentId: string; version: string }) => {
+			document: IDocument;
+		};
+	};
+	'/v1/external.documents.batch-create': {
+		POST: (params: { roomId: string; documents: { title: string; content: string; description?: string }[] }) => {
+			created: IDocument[];
+			errors: { title: string; error: string }[];
+			totalCreated: number;
+			totalErrors: number;
+		};
+	};
+}

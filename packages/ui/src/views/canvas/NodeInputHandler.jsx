@@ -978,6 +978,12 @@ const NodeInputHandler = ({
                                 onSelect={(newValue) => {
                                     data.credential = newValue
                                     data.inputs[FLOWISE_CREDENTIAL_ID] = newValue // in case data.credential is not updated
+                                    // Update ReactFlow node in agentflow
+                                    if (onCustomDataChange) {
+                                        onCustomDataChange({ nodeId: data.id, inputParam, newValue })
+                                    } else if (onNodeDataChange) {
+                                        onNodeDataChange({ nodeId: data.id, inputParam, newValue })
+                                    }
                                 }}
                             />
                         )}

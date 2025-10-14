@@ -184,7 +184,7 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
             const filteredResult = {}
             for (const category in result) {
                 if (isAgentCanvasV2) {
-                    if (category !== 'Agent Flows') {
+                    if (category !== 'Agent Flows' && category !== 'PrivOS') {
                         continue
                     }
                 } else {
