@@ -116,7 +116,7 @@ stop_containers() {
     log_info "Stopping containers..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" down
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
 
     log_success "Containers stopped"
 }
@@ -126,7 +126,7 @@ restart_containers() {
     log_info "Restarting containers..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" restart
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart
 
     log_success "Containers restarted"
 }
@@ -136,8 +136,8 @@ rebuild_containers() {
     log_info "Rebuilding containers from source (no cache)..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" down
-    docker-compose -f "$COMPOSE_FILE" build --no-cache
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
     docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
     log_success "Containers rebuilt and started"
@@ -148,7 +148,7 @@ view_logs() {
     log_info "Viewing logs (Ctrl+C to exit)..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" logs -f
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
 }
 
 # Check status
@@ -157,11 +157,11 @@ check_status() {
     echo ""
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" ps
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 
     echo ""
     log_info "Docker images:"
-    docker-compose -f "$COMPOSE_FILE" images
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" images
 }
 
 # Clean everything
@@ -174,7 +174,7 @@ clean_all() {
         log_info "Cleaning up..."
 
         cd "$PROJECT_DIR"
-        docker-compose -f "$COMPOSE_FILE" down -v --rmi all
+        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down -v --rmi all
 
         log_success "Cleanup complete"
     else
@@ -194,8 +194,8 @@ pull_and_deploy() {
 
         log_info "Rebuilding and deploying..."
         cd "$PROJECT_DIR"
-        docker-compose -f "$COMPOSE_FILE" down
-        docker-compose -f "$COMPOSE_FILE" build --no-cache
+        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
         docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
         log_success "Deployment complete!"
@@ -215,7 +215,7 @@ scale_workers() {
     log_info "Scaling workers to $2 instances..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" up -d --scale flowise-worker="$2"
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --scale flowise-worker="$2"
 
     log_success "Workers scaled to $2"
 }
