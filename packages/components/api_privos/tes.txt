@@ -1,0 +1,92 @@
+const fieldDefinitions: IFieldDefinition[] = [
+ {
+  _id: 'recruitment_cv_field',
+  name: 'CV',
+  type: 'FILE',
+  order: 1,
+ },
+ {
+  _id: 'recruitment_ai_summary_field',
+  name: 'AI Summary',
+  type: 'TEXT',
+  order: 2,
+ },
+ {
+  _id: 'recruitment_ai_score_field',
+  name: 'AI Score',
+  type: 'NUMBER',
+  order: 3,
+ },
+ {
+  _id: 'recruitment_interview_time_field',
+  name: 'Interview Time',
+  type: 'DATE',
+  order: 4,
+ },
+ {
+  _id: 'recruitment_interviewer_field',
+  name: 'Interviewer',
+  type: 'USER',
+  order: 5,
+ },
+ {
+  _id: 'recruitment_interview_notes_field',
+  name: 'Interview Notes',
+  type: 'TEXTAREA',
+  order: 6,
+ },
+ {
+  _id: 'recruitment_interview_score_field',
+  name: 'Interview Score',
+  type: 'NUMBER',
+  order: 7,
+ },
+ {
+  _id: 'recruitment_trial_time_field',
+  name: 'Trial Time',
+  type: 'DATE',
+  order: 8,
+ },
+ {
+  _id: 'recruitment_cv_content_field',
+  name: 'CV Content',
+  type: 'TEXTAREA',
+  order: 9,
+ }
+];
+
+const stages: ITemplateStage[] = [
+ { key: 'stage_create', name: 'Create', order: 1, color: '#6B7280' },
+ { key: 'stage_ready_to_interview', name: 'Ready to Interview', order: 2, color: '#0EA5E9' },
+ { key: 'stage_interview', name: 'Interview', order: 3, color: '#8B5CF6' },
+ { key: 'stage_good_cv', name: 'Good CV', order: 4, color: '#22C55E' },
+];
+
+const list: ITemplateList = {
+ key: 'list_personnel_recruitment',
+ name: 'Personnel Recruitment',
+ description: 'Recruitment process for personnel',
+ fieldDefinitions,
+ stages,
+ order: 1,
+};
+
+const documents: ITemplateDocument[] = [
+ {
+  key: 'doc_personnel_recruitment',
+  title: 'Job Description',
+  content: '',
+ },
+];
+
+export const personnelRecruitment: DefaultWorkflowTemplate = {
+ templateKey: 'personnel-recruitment',
+ name: 'Personnel Recruitment',
+ description: 'Recruitment process for personnel',
+ isActive: true,
+ lists: [list],
+ documents,
+ metadata: {
+  version: '1.0.1',
+ },
+};
