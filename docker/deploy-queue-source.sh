@@ -31,7 +31,6 @@ NC='\033[0m' # No Color
 
 # Configuration
 COMPOSE_FILE="docker-compose-queue-source.yml"
-ENV_FILE=".env.queue-source"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Helper functions
@@ -51,6 +50,13 @@ log_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
+# Determine which env file to use (prefer .local with actual secrets)
+if [ -f "$PROJECT_DIR/.env.queue-source.local" ]; then
+    ENV_FILE=".env.queue-source.local"
+else
+    ENV_FILE=".env.queue-source"
+fi
+
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
@@ -66,12 +72,26 @@ check_prerequisites() {
     fi
 
     if [ ! -f "$PROJECT_DIR/$ENV_FILE" ]; then
-        log_warning "Environment file not found: $ENV_FILE"
-        log_info "Creating from example..."
-        cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/$ENV_FILE" 2>/dev/null || true
-        log_warning "Please edit $ENV_FILE with your configuration!"
+        log_error "Environment file not found: $ENV_FILE"
+
+        if [ "$ENV_FILE" = ".env.queue-source.local" ]; then
+            log_info "Creating .env.queue-source.local from template..."
+            if [ -f "$PROJECT_DIR/.env.queue-source" ]; then
+                cp "$PROJECT_DIR/.env.queue-source" "$PROJECT_DIR/.env.queue-source.local"
+                log_success "Created $ENV_FILE"
+                log_warning "Please edit $ENV_FILE with your secrets before deploying!"
+                log_info "At minimum, change:"
+                log_info "  - JWT_AUTH_TOKEN_SECRET"
+                log_info "  - JWT_REFRESH_TOKEN_SECRET"
+                log_info "  - DATABASE credentials (if using PostgreSQL)"
+            else
+                log_error "Template file .env.queue-source not found!"
+            fi
+        fi
         exit 1
     fi
+
+    log_success "Using environment file: $ENV_FILE"
 
     log_success "Prerequisites check passed"
 }
