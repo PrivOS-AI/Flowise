@@ -255,7 +255,13 @@ router.get('/', async (req: Request, res: Response) => {
 
         appServer.cachePool.addSSOTokenCache(ssoToken, returnUser)
         logger.info('[ExternalSSO]: Stored user data in cache successfully')
-        logger.info(`[ExternalSSO]: Cache data: ${JSON.stringify({ id: returnUser.id, email: returnUser.email, permissions: returnUser.permissions })}`)
+        logger.info(
+            `[ExternalSSO]: Cache data: ${JSON.stringify({
+                id: returnUser.id,
+                email: returnUser.email,
+                permissions: returnUser.permissions
+            })}`
+        )
 
         logger.info(`[ExternalSSO]: ========== SSO LOGIN SUCCESSFUL ==========`)
         logger.info(`[ExternalSSO]: User: ${email}`)
@@ -304,7 +310,9 @@ router.get('/success', async (req: Request, res: Response) => {
         }
 
         logger.info(`[ExternalSSO Success]: User found in cache: ${user.email}`)
-        logger.info(`[ExternalSSO Success]: User data: ${JSON.stringify({ id: user.id, email: user.email, permissions: user.permissions })}`)
+        logger.info(
+            `[ExternalSSO Success]: User data: ${JSON.stringify({ id: user.id, email: user.email, permissions: user.permissions })}`
+        )
 
         // Delete token after use (one-time use)
         await appServer.cachePool.deleteSSOTokenCache(ssoToken)
@@ -337,6 +345,5 @@ router.post('/logout', (req: Request, res: Response) => {
         res.json({ success: true, message: 'Logged out successfully' })
     }
 })
-
 
 export default router
