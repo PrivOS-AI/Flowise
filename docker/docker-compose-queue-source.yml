@@ -9,8 +9,8 @@ services:
         networks:
             - flowise-net
 
-    flowise:
-        container_name: flowise-main
+    privos-flow:
+        container_name: privos-flow-main
         build:
             context: .. # Build using the Dockerfile in the root directory
             dockerfile: docker/Dockerfile
@@ -155,8 +155,8 @@ services:
         networks:
             - flowise-net
 
-    flowise-worker:
-        container_name: flowise-worker
+    privos-flow-worker:
+        container_name: privos-flow-worker
         build:
             context: .. # Build context is still the root
             dockerfile: docker/worker/Dockerfile # Ensure this path is correct
@@ -296,7 +296,7 @@ services:
             - TRUST_PROXY=${TRUST_PROXY}
         depends_on:
             - redis
-            - flowise
+            - privos-flow
         networks:
             - flowise-net
 
