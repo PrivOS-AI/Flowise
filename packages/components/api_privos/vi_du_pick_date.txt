@@ -1,0 +1,167 @@
+import React, { forwardRef } from 'react'
+import DatePicker from 'react-datepicker'
+import { TextField } from '@mui/material'
+import 'react-datepicker/dist/react-datepicker.css'
+
+// Custom input component for DatePicker
+const DatePickerCustomInput = forwardRef<HTMLInputElement, any>(
+    function DatePickerCustomInput({ value, onClick, placeholder, label, ...props }, ref) {
+        return (
+            <TextField
+                {...props}
+                ref={ref}
+                value={value || ''}
+                onClick={onClick}
+                label={label}
+                placeholder={placeholder}
+                size="small"
+                fullWidth
+                InputProps={{
+                    readOnly: true,
+                }}
+                sx={{
+                    '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#e0e0e0'
+                    },
+                    cursor: 'pointer'
+                }}
+            />
+        )
+    }
+)
+
+interface DateInputProps {
+    value?: Date | null
+    onChange: (date: Date | null) => void
+    label?: string
+    placeholder?: string
+    disabled?: boolean
+    minDate?: Date
+    maxDate?: Date
+}
+
+const DateInput: React.FC<DateInputProps> = ({
+    value,
+    onChange,
+    label = "Select Date",
+    placeholder = "Choose a date",
+    disabled = false,
+    minDate,
+    maxDate
+}) => {
+    return (
+        <DatePicker
+            selected={value}
+            onChange={onChange}
+            disabled={disabled}
+            minDate={minDate}
+            maxDate={maxDate}
+            dateFormat="yyyy-MM-dd"
+            customInput={
+                <DatePickerCustomInput
+                    label={label}
+                    placeholder={placeholder}
+                />
+            }
+            showPopperArrow={false}
+        />
+    )
+}
+
+export default DateInput
+import { INodeParams, INodeData } from 'flowise-components'
+
+// Trong phần inputs của node
+this.inputs = [
+    {
+        label: 'Select Date',
+        name: 'selectedDate',
+        type: 'date',  // Sử dụng type 'date'
+        description: 'Choose a date for processing',
+        optional: true
+    },
+    // Các input khác...
+]
+
+// Trong phần init method
+async init(nodeData: INodeData): Promise<any> {
+    const selectedDate = nodeData.inputs?.selectedDate as string
+    
+    if (selectedDate) {
+        // Xử lý date string
+        const dateObj = new Date(selectedDate)
+        console.log('Selected date:', dateObj.toISOString())
+    }
+    
+    // Logic xử lý của bạn...
+}
+import { INode, INodeData, INodeParams } from 'flowise-components'
+
+class DateProcessor implements INode {
+    label: string
+    name: string
+    version: number
+    description: string
+    type: string
+    icon: string
+    category: string
+    baseClasses: string[]
+    inputs: INodeParams[]
+
+    constructor() {
+        this.label = 'Date Processor'
+        this.name = 'dateProcessor'
+        this.version = 1.0
+        this.type = 'DateProcessor'
+        this.icon = 'calendar.svg'
+        this.category = 'Utilities'
+        this.description = 'Process dates and return formatted output'
+        this.baseClasses = [this.type]
+        this.inputs = [
+            {
+                label: 'Start Date',
+                name: 'startDate',
+                type: 'date',
+                description: 'Select the start date for processing'
+            },
+            {
+                label: 'End Date',
+                name: 'endDate',
+                type: 'date',
+                description: 'Select the end date for processing',
+                optional: true
+            },
+            {
+                label: 'Date Format',
+                name: 'dateFormat',
+                type: 'options',
+                options: [
+                    { label: 'YYYY-MM-DD', name: 'yyyy-MM-dd' },
+                    { label: 'DD/MM/YYYY', name: 'dd/MM/yyyy' },
+                    { label: 'MM/DD/YYYY', name: 'MM/dd/yyyy' }
+                ],
+                default: 'yyyy-MM-dd'
+            }
+        ]
+    }
+
+    async init(nodeData: INodeData): Promise<string> {
+        const startDate = nodeData.inputs?.startDate as string
+        const endDate = nodeData.inputs?.endDate as string
+        const dateFormat = nodeData.inputs?.dateFormat as string
+
+        if (!startDate) {
+            throw new Error('Start date is required')
+        }
+
+        const start = new Date(startDate)
+        const end = endDate ? new Date(endDate) : new Date()
+
+        // Xử lý logic với dates
+        const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+
+        return `Date range: ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]} (${daysDiff} days)`
+    }
+}
+
+module.exports = { nodeClass: DateProcessor }

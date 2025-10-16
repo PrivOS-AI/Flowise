@@ -1,0 +1,80 @@
+ {
+            "_id": "68efa5baa35448087970fd34",
+            "name": "nao",
+            "description": "sdfsafdsagsfg",
+            "listId": "68ec612616afe32a121ca272",
+            "stageId": "68ec612616afe32a121ca276",
+            "parentId": null,
+            "customFields": [
+                {
+                    "fieldId": "S7NXKXPXkocjkqTqS",
+                    "value": "2025-10-18T13:47:00.000Z"
+                },
+                {
+                    "fieldId": "marketing_campaign_assignees_field",
+                    "value": [
+                        {
+                            "_id": "47jWuGGAvKax98Gtr",
+                            "username": "HoaDao"
+                        }
+                    ]
+                },
+                {
+                    "fieldId": "marketing_campaign_due_date_field",
+                    "value": "2025-10-31T00:00:00.000Z"
+                },
+                {
+                    "fieldId": "marketing_campaign_start_date_field",
+                    "value": "2025-10-17T00:00:00.000Z"
+                },
+                {
+                    "fieldId": "marketing_campaign_end_date_field",
+                    "value": "2025-10-30T00:00:00.000Z"
+                },
+                {
+                    "fieldId": "marketing_campaign_file_link_field",
+                    "value": {
+                        "_id": "9q8ib98Cm5DWEmNSK",
+                        "name": "Kiểm tra giữa kỳ N22.pdf",
+                        "size": 93277,
+                        "type": "application/pdf",
+                        "url": "/file-upload/9q8ib98Cm5DWEmNSK/Ki%E1%BB%83m%20tra%20gi%E1%BB%AFa%20k%E1%BB%B3%20N22.pdf",
+                        "uploadedAt": "2025-10-15T13:48:32.733Z"
+                    }
+                },
+                {
+                    "fieldId": "marketing_campaign_documents_field",
+                    "value": [
+                        {
+                            "_id": "doc_1760536104800_pq6yopgdz",
+                            "title": "fffff",
+                            "content": "ffff",
+                            "versions": [
+                                {
+                                    "version": 1,
+                                    "content": "ffff",
+                                    "createdAt": "2025-10-15T13:48:30.438Z",
+                                    "createdBy": {
+                                        "_id": "GRqeKLPGZ8zndK2by",
+                                        "username": "ductai077",
+                                        "name": "documentId"
+                                    }
+                                }
+                            ],
+                            "currentVersion": 1,
+                            "createdAt": "2025-10-15T13:48:24.800Z",
+                            "updatedAt": "2025-10-15T13:48:30.438Z",
+                            "updatedBy": {
+                                "_id": "GRqeKLPGZ8zndK2by",
+                                "username": "ductai077",
+                                "name": "documentId"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "fieldId": "marketing_campaign_note_field",
+                    "value": "dffff"
+                }
+            ],
+ }
