@@ -69,7 +69,16 @@ class PrivosItemUpdate_Agentflow implements INode {
                 type: 'asyncOptions',
                 loadMethod: 'listLists',
                 refresh: true,
-                description: 'Select a list to view its items'
+                description: 'Select a list to view its stages'
+            },
+            {
+                label: 'Select Stage',
+                name: 'selectedStage',
+                type: 'asyncOptions',
+                loadMethod: 'listStages',
+                refresh: true,
+                optional: true,
+                description: 'Filter items by stage (leave empty to show all items)'
             },
             {
                 label: 'Select Item to Update',
@@ -473,6 +482,86 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
         },
 
+        async listStages(nodeData: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
+            const returnData: INodeOptionsValue[] = []
+
+            try {
+                console.log('[listStages] START')
+
+                const selectedListStr = nodeData.inputs?.selectedList as string
+                console.log('[listStages] selectedList:', selectedListStr)
+
+                if (!selectedListStr) {
+                    console.log('[listStages] No list selected')
+                    return returnData
+                }
+
+                // Parse selectedList to get listId
+                let listId: string
+                try {
+                    const parsed = JSON.parse(selectedListStr)
+                    listId = parsed.listId
+                    console.log('[listStages] Parsed listId:', listId)
+                } catch (e) {
+                    listId = selectedListStr
+                    console.log('[listStages] Using listId directly:', listId)
+                }
+
+                if (!listId) {
+                    console.error('[listStages] No listId found')
+                    return returnData
+                }
+
+                const credentialId = nodeData.credential || ''
+                if (!credentialId) return returnData
+
+                const credentialData = await getCredentialData(credentialId, options)
+                if (!credentialData) return returnData
+
+                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const userId = credentialData.userId
+                const authToken = credentialData.authToken
+
+                if (!userId || !authToken) return returnData
+
+                // Get list details to fetch stages
+                const apiUrl = `${baseUrl}/external.lists/${listId}`
+                console.log('[listStages] Fetching list details from:', apiUrl)
+
+                const response = await secureAxiosRequest({
+                    method: 'GET',
+                    url: apiUrl,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Id': userId,
+                        'X-Auth-Token': authToken
+                    }
+                })
+
+                const stages = response.data?.stages || []
+                console.log('[listStages] Stages found:', stages.length)
+
+                // Sort stages by order
+                stages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+
+                for (const stage of stages) {
+                    returnData.push({
+                        label: stage.name,
+                        name: stage._id,
+                        description: `Order: ${stage.order}${stage.color ? ` | Color: ${stage.color}` : ''}`
+                    })
+                }
+
+                console.log('[listStages] Returning', returnData.length, 'stage options')
+                return returnData
+
+            } catch (error: any) {
+                console.error('[listStages] Error:', error.message)
+                console.error('[listStages] Error details:', error.response?.data || 'No response data')
+                return returnData
+            }
+        },
+
         async listItems(nodeData: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
             const returnData: INodeOptionsValue[] = []
 
@@ -519,7 +608,31 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 if (!userId || !authToken) return returnData
 
-                const apiUrl = `${baseUrl}/external.items.byListId`
+                // Check if stage is selected to filter items
+                const selectedStage = nodeData.inputs?.selectedStage as string
+                console.log('[listItems] selectedStage:', selectedStage)
+
+                let apiUrl: string
+                let apiParams: any
+
+                if (selectedStage) {
+                    // Use byStageId endpoint to get items in specific stage
+                    apiUrl = `${baseUrl}/external.items.byStageId`
+                    apiParams = {
+                        stageId: selectedStage,
+                        limit: 100
+                    }
+                    console.log('[listItems] Fetching items by stageId:', selectedStage)
+                } else {
+                    // Use byListId endpoint to get all items in list
+                    apiUrl = `${baseUrl}/external.items.byListId`
+                    apiParams = {
+                        listId: listId,
+                        offset: 0,
+                        count: 100
+                    }
+                    console.log('[listItems] Fetching all items in listId:', listId)
+                }
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
@@ -529,15 +642,12 @@ class PrivosItemUpdate_Agentflow implements INode {
                         'X-User-Id': userId,
                         'X-Auth-Token': authToken
                     },
-                    params: {
-                        listId: listId,
-                        offset: 0,
-                        count: 100
-                    }
+                    params: apiParams
                 })
 
                 const items = response.data?.items || []
-                console.log('[listItems] Found', items.length, 'items')
+                const stageName = response.data?.stageName || ''
+                console.log('[listItems] Found', items.length, 'items', selectedStage ? `in stage: ${stageName}` : 'in list')
 
                 for (const item of items) {
                     // Build rich formatted info text for display
@@ -706,12 +816,48 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const apiUrl = `${baseUrl}/channels.members`
-                console.log('[listUsers] Fetching from:', apiUrl, 'with roomId:', roomId)
+                // First, get room details to determine room type
+                const cacheKey = `${userId}_${authToken}`
+                const cached = roomsCacheUpdateItem.get(cacheKey)
+                let rooms: any[] = []
+
+                if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                    rooms = cached.rooms
+                } else {
+                    rooms = await fetchRoomsFromAPI(baseUrl, userId, authToken)
+                    roomsCacheUpdateItem.set(cacheKey, { rooms, timestamp: Date.now() })
+                }
+
+                const room = rooms.find((r: any) => r._id === roomId)
+                const roomType = room?.t || 'c' // Default to channel if not found
+
+                console.log('[listUsers] Room type:', roomType, 'for room:', roomId)
+
+                // Determine correct endpoint based on room type
+                // c = channel (public), p = private group, d = direct message
+                let apiEndpoint: string
+
+                switch (roomType) {
+                    case 'p': // Private group
+                        apiEndpoint = `${baseUrl}/groups.members`
+                        console.log('[listUsers] Using groups.members for private group')
+                        break
+                    case 'd': // Direct message
+                        apiEndpoint = `${baseUrl}/im.members`
+                        console.log('[listUsers] Using im.members for direct message')
+                        break
+                    case 'c': // Public channel
+                    default:
+                        apiEndpoint = `${baseUrl}/channels.members`
+                        console.log('[listUsers] Using channels.members for public channel')
+                        break
+                }
+
+                console.log('[listUsers] Fetching from:', apiEndpoint, 'with roomId:', roomId)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
-                    url: apiUrl,
+                    url: apiEndpoint,
                     headers: {
                         'Content-Type': 'application/json',
                         'X-User-Id': userId,
@@ -748,13 +894,13 @@ class PrivosItemUpdate_Agentflow implements INode {
         }
     }
 
-    async init(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
+    async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
         const selectedItemStr = nodeData.inputs?.selectedItem as string
         const itemName = nodeData.inputs?.itemName as string
         const itemDescription = nodeData.inputs?.itemDescription as string
 
         // 7 hardcoded fields
-        const field_assignees = nodeData.inputs?.field_assignees as string[]
+        const field_assignees = nodeData.inputs?.field_assignees as any // Can be string, array, or object
         const field_due_date = nodeData.inputs?.field_due_date as string
         const field_start_date = nodeData.inputs?.field_start_date as string
         const field_end_date = nodeData.inputs?.field_end_date as string
@@ -820,19 +966,41 @@ class PrivosItemUpdate_Agentflow implements INode {
             // Build customFields array for the 7 hardcoded fields + additional custom fields
             const allCustomFields: any[] = []
 
-            // 1. Assignees
-            if (field_assignees && field_assignees.length > 0) {
-                const parsedAssignees = field_assignees.map(a => {
-                    try {
-                        return JSON.parse(a)
-                    } catch {
-                        return a
+            // 1. Assignees - Process same way as POST LIST
+            if (field_assignees) {
+                try {
+                    let assigneesValue: any[] = []
+
+                    if (typeof field_assignees === 'string') {
+                        if (field_assignees.trim().startsWith('[')) {
+                            assigneesValue = JSON.parse(field_assignees)
+                        } else {
+                            assigneesValue = [JSON.parse(field_assignees)]
+                        }
+                    } else if (Array.isArray(field_assignees)) {
+                        assigneesValue = (field_assignees as any[]).map((user: any) => {
+                            if (typeof user === 'string') {
+                                return JSON.parse(user)
+                            }
+                            return user
+                        })
+                    } else {
+                        assigneesValue = [field_assignees]
                     }
-                })
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_assignees_field',
-                    value: parsedAssignees
-                })
+
+                    const validatedValue = assigneesValue.map((user: any) => ({
+                        _id: user._id || user.id || user,
+                        username: user.username || user.name || 'Unknown'
+                    }))
+
+                    allCustomFields.push({
+                        fieldId: 'marketing_campaign_assignees_field',
+                        value: validatedValue
+                    })
+                } catch (e) {
+                    console.error('Failed to parse assignees:', e)
+                    throw new Error('Invalid assignees format')
+                }
             }
 
             // 2. Due Date
@@ -912,6 +1080,30 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             console.log('Update Item Payload:', JSON.stringify(payload, null, 2))
 
+            // Get list details for better output formatting
+            const listId = currentItem.listId
+            let listData: any = {}
+            let fieldDefinitions: any[] = []
+
+            if (listId) {
+                try {
+                    const listApiUrl = `${baseUrl}/external.lists/${listId}`
+                    const listResponse = await secureAxiosRequest({
+                        method: 'GET',
+                        url: listApiUrl,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-User-Id': userId,
+                            'X-Auth-Token': authToken
+                        }
+                    })
+                    listData = listResponse.data?.list || listResponse.data
+                    fieldDefinitions = listData.fieldDefinitions || []
+                } catch (err) {
+                    console.error('Error fetching list details:', err)
+                }
+            }
+
             // Send update request
             const apiUrl = `${baseUrl}/external.items.update`
             const response = await secureAxiosRequest({
@@ -927,17 +1119,102 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             console.log('Update Item Response:', JSON.stringify(response.data, null, 2))
 
+            const updatedItem = response.data?.item || response.data
+
+            // Format custom fields summary
+            const customFieldsSummary = allCustomFields && allCustomFields.length > 0
+                ? allCustomFields.map((cf: any) => {
+                    const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
+                    const fieldName = fieldDef?.name || cf.fieldId
+                    
+                    // Format value based on type
+                    let displayValue = cf.value
+                    if (Array.isArray(cf.value)) {
+                        if (cf.value.length > 0 && cf.value[0]._id && cf.value[0].username) {
+                            // User array
+                            displayValue = cf.value.map((u: any) => `@${u.username}`).join(', ')
+                        } else {
+                            displayValue = JSON.stringify(cf.value)
+                        }
+                    } else if (typeof cf.value === 'object') {
+                        displayValue = JSON.stringify(cf.value)
+                    } else if (typeof cf.value === 'string' && cf.value.includes('T') && cf.value.includes('Z')) {
+                        // Date
+                        displayValue = new Date(cf.value).toLocaleString('en-GB')
+                    }
+                    
+                    return `   ${fieldName}: ${displayValue}`
+                }).join('\n')
+                : '   No fields updated'
+
+            const outputContent = `ITEM UPDATED SUCCESSFULLY
+${'='.repeat(50)}
+
+ITEM ID: ${itemId}
+ITEM NAME: ${payload.name || currentItem.name}
+
+LIST: ${listData.name || listId || 'Unknown'}
+${payload.description ? `\nDESCRIPTION:\n${payload.description}\n` : ''}
+${'='.repeat(50)}
+UPDATED FIELDS:
+${'='.repeat(50)}
+
+${customFieldsSummary}
+
+${'='.repeat(50)}
+
+The item has been updated successfully.`
+
             const outputData = {
                 success: true,
                 itemId: itemId,
-                updated: response.data
+                itemName: payload.name || currentItem.name,
+                listId: listId,
+                listName: listData.name || '',
+                updatedFieldsCount: allCustomFields.length,
+                updatedItem: updatedItem
             }
 
-            return JSON.stringify(outputData, null, 2)
+            return {
+                id: nodeData.id,
+                name: this.name,
+                input: payload,
+                output: {
+                    content: outputContent,
+                    ...outputData
+                },
+                state: options.agentflowRuntime?.state || {}
+            }
 
         } catch (error: any) {
             console.error('Update Item Error:', error)
-            throw new Error(`Failed to update item: ${error.message}`)
+
+            const errorMessage = error.message || 'Unknown error'
+            const errorDetails = error.response?.data || null
+
+            const errorContent = `FAILED TO UPDATE ITEM
+${'='.repeat(50)}
+
+ERROR: ${errorMessage}
+
+${errorDetails ? `DETAILS: ${JSON.stringify(errorDetails, null, 2)}\n\n` : ''}${'='.repeat(50)}`
+
+            return {
+                id: nodeData.id,
+                name: this.name,
+                input: {
+                    itemId: nodeData.inputs?.selectedItem,
+                    error: 'Failed to process update'
+                },
+                output: {
+                    content: errorContent,
+                    success: false,
+                    error: errorMessage,
+                    details: errorDetails,
+                    statusCode: error.response?.status || 500
+                },
+                state: options.agentflowRuntime?.state || {}
+            }
         }
     }
 }

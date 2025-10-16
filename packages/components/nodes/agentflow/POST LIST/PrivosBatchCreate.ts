@@ -503,13 +503,49 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                // Get room members
-                const apiUrl = `${baseUrl}/channels.members`
-                console.log('Fetching room members from:', apiUrl)
+                // First, get room details to determine room type
+                const cacheKey = `${userId}_${authToken}`
+                const cached = roomsCachePostItem.get(cacheKey)
+                let rooms: any[] = []
+
+                if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                    rooms = cached.rooms
+                } else {
+                    rooms = await fetchRoomsFromAPIPostItem(baseUrl, userId, authToken)
+                    roomsCachePostItem.set(cacheKey, { rooms, timestamp: Date.now() })
+                }
+
+                const room = rooms.find((r: any) => r._id === selectedRoom)
+                const roomType = room?.t || 'c' // Default to channel if not found
+
+                console.log('[listUsers] Room type:', roomType, 'for room:', selectedRoom)
+
+                // Determine correct endpoint based on room type
+                // c = channel (public), p = private group, d = direct message
+                let apiEndpoint: string
+                let memberPath: string = 'members' // Path to members in response
+
+                switch (roomType) {
+                    case 'p': // Private group
+                        apiEndpoint = `${baseUrl}/groups.members`
+                        console.log('[listUsers] Using groups.members for private group')
+                        break
+                    case 'd': // Direct message
+                        apiEndpoint = `${baseUrl}/im.members`
+                        console.log('[listUsers] Using im.members for direct message')
+                        break
+                    case 'c': // Public channel
+                    default:
+                        apiEndpoint = `${baseUrl}/channels.members`
+                        console.log('[listUsers] Using channels.members for public channel')
+                        break
+                }
+
+                console.log('[listUsers] Fetching room members from:', apiEndpoint)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
-                    url: apiUrl,
+                    url: apiEndpoint,
                     headers: {
                         'Content-Type': 'application/json',
                         'X-User-Id': userId,
@@ -523,7 +559,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                 })
 
                 const members = response.data?.members || []
-                console.log('Members found:', members.length)
+                console.log('[listUsers] Members found:', members.length)
 
                 for (const member of members) {
                     returnData.push({
@@ -536,11 +572,12 @@ class PrivosBatchCreate_Agentflow implements INode {
                     })
                 }
 
-                console.log('Returning', returnData.length, 'user options')
+                console.log('[listUsers] Returning', returnData.length, 'user options')
                 return returnData
 
             } catch (error: any) {
                 console.error('[listUsers] Error:', error.message)
+                console.error('[listUsers] Error details:', error.response?.data || 'No response data')
                 return returnData
             }
         },
