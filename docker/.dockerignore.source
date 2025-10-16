@@ -1,6 +1,4 @@
-# Docker ignore for SOURCE builds (includes dist folder)
-# Use .dockerignore.original for NPM-based builds
-
+node_modules
 **/node_modules
 
 packages/server/.env
@@ -11,6 +9,8 @@ packages/ui/.env
 .git
 .gitignore
 .github
+*.md
+!README.md
 
 .flowise
 .turbo

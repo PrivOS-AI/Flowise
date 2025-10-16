@@ -109,3 +109,4 @@ docker/.env.production
 ## S/MIME message
 *.smime
 *.vsix
+.flowise

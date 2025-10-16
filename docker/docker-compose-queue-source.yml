@@ -13,7 +13,7 @@ services:
         container_name: privos-flow-main
         build:
             context: .. # Build using the Dockerfile in the root directory
-            dockerfile: docker/Dockerfile
+            dockerfile: docker/Dockerfile.source-prebuild
         ports:
             - '${PORT}:${PORT}'
         volumes:
