@@ -11,6 +11,66 @@ export interface IFieldDefinition {
 	options?: { _id: string; value: string; color?: string; order?: number }[];
 	order: number;
 }
+Hiếu, [10/15/2025 4:19 PM]
+export const LIST_FIELD_TYPES = {
+ TEXT: 'TEXT',
+ TEXTAREA: 'TEXTAREA',
+ NUMBER: 'NUMBER',
+ DATE: 'DATE',
+ DATE_TIME: 'DATE_TIME',
+ SELECT: 'SELECT',
+ MULTI_SELECT: 'MULTI_SELECT',
+ USER: 'USER',
+ CHECKBOX: 'CHECKBOX',
+ URL: 'URL',
+ FILE: 'FILE',
+ FILE_MULTIPLE: 'FILE_MULTIPLE',
+ DOCUMENT: 'DOCUMENT',
+};
+
+Hiếu, [10/15/2025 4:20 PM]
+export interface IDocumentFieldVersion {
+ version: number;
+ content: string;
+ createdAt: string;
+ createdBy?: {
+  _id: string;
+  username: string;
+  name?: string;
+ };
+}
+
+export interface IDocumentField {
+ _id: string;
+ title: string;
+ content: string;
+ versions: IDocumentFieldVersion[];
+ currentVersion: number;
+ createdAt: string;
+ createdBy?: {
+  _id: string;
+  username: string;
+  name?: string;
+ };
+ updatedAt?: string;
+ updatedBy?: {
+  _id: string;
+  username: string;
+  name?: string;
+ };
+}
+
+Hiếu, [10/15/2025 4:20 PM]
+export type IFileUploadResponse = {
+ file: {
+  _id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  uploadedAt: string;
+ };
+};
 
 export interface IList extends IRocketChatRecord {
 	name: string;

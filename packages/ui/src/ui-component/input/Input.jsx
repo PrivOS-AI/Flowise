@@ -34,6 +34,13 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
                 return 'number'
             case 'email':
                 return 'email'
+            case 'date':
+                return 'date'
+            case 'datetime':
+            case 'datetime-local':
+                return 'datetime-local'
+            case 'time':
+                return 'time'
             default:
                 return 'text'
         }
