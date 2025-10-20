@@ -1,6 +1,9 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
 import { getCredentialData } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+import * as fs from 'fs'
+import * as path from 'path'
+import FormData from 'form-data'
 
 // Global cache for rooms
 const roomsCacheUpdateItem: Map<string, { rooms: any[], timestamp: number }> = new Map()
@@ -315,7 +318,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 type: 'array',
                 acceptVariable: true,
                 optional: true,
-                description: 'Update additional custom fields beyond the 7 fixed fields',
+                description: 'Add or update additional custom fields beyond the 7 fixed fields',
                 array: [
                     {
                         label: 'Field Type',
@@ -339,21 +342,176 @@ class PrivosItemUpdate_Agentflow implements INode {
                         default: 'TEXT'
                     },
                     {
-                        label: 'Field Key/ID',
-                        name: 'fieldKey',
+                        label: 'Field Name',
+                        name: 'fieldName',
                         type: 'string',
-                        placeholder: 'custom_field_key',
-                        acceptVariable: true
-                    },
-                    {
-                        label: 'Field Value',
-                        name: 'fieldValue',
-                        type: 'string',
-                        placeholder: 'Enter value based on field type',
+                        placeholder: 'e.g., "Budget", "Priority", "Status"',
                         acceptVariable: true,
-                        rows: 2
+                        description: 'Human-readable field name (fieldId will be auto-generated)'
+                    },
+                    // TEXT type
+                    {
+                        label: 'Text Value',
+                        name: 'textValue',
+                        type: 'string',
+                        placeholder: 'Enter text value',
+                        acceptVariable: true,
+                        show: {
+                            fieldType: ['TEXT']
+                        }
+                    },
+                    // TEXTAREA type
+                    {
+                        label: 'Text Area Value',
+                        name: 'textareaValue',
+                        type: 'string',
+                        rows: 4,
+                        placeholder: 'Enter long text',
+                        acceptVariable: true,
+                        show: {
+                            fieldType: ['TEXTAREA']
+                        }
+                    },
+                    // NUMBER type
+                    {
+                        label: 'Number Value',
+                        name: 'numberValue',
+                        type: 'number',
+                        placeholder: '123',
+                        acceptVariable: true,
+                        show: {
+                            fieldType: ['NUMBER']
+                        }
+                    },
+                    // DATE type
+                    {
+                        label: 'Date Value',
+                        name: 'dateValue',
+                        type: 'date',
+                        acceptVariable: true,
+                        show: {
+                            fieldType: ['DATE']
+                        }
+                    },
+                    // DATE_TIME type
+                    {
+                        label: 'Date Time Value (ISO-8601)',
+                        name: 'dateTimeValue',
+                        type: 'string',
+                        placeholder: '2025-10-17T08:30:00.000Z',
+                        acceptVariable: true,
+                        description: 'ISO-8601 format with UTC timezone',
+                        show: {
+                            fieldType: ['DATE_TIME']
+                        }
+                    },
+                    // SELECT type
+                    {
+                        label: 'Select Option ID',
+                        name: 'selectValue',
+                        type: 'string',
+                        placeholder: 'option_id_here',
+                        acceptVariable: true,
+                        description: 'ID of the selected option',
+                        show: {
+                            fieldType: ['SELECT']
+                        }
+                    },
+                    // MULTI_SELECT type
+                    {
+                        label: 'Multi-Select Option IDs (JSON Array)',
+                        name: 'multiSelectValue',
+                        type: 'string',
+                        placeholder: '["option_id_1", "option_id_2"]',
+                        acceptVariable: true,
+                        description: 'JSON array of option IDs',
+                        show: {
+                            fieldType: ['MULTI_SELECT']
+                        }
+                    },
+                    // USER type
+                    {
+                        label: 'Select Users',
+                        name: 'userValue',
+                        type: 'asyncOptions',
+                        loadMethod: 'listUsers',
+                        list: true,
+                        description: 'Select one or multiple users',
+                        show: {
+                            fieldType: ['USER']
+                        }
+                    },
+                    // CHECKBOX type
+                    {
+                        label: 'Checkbox Value',
+                        name: 'checkboxValue',
+                        type: 'options',
+                        options: [
+                            { label: 'Checked (true)', name: 'true' },
+                            { label: 'Unchecked (false)', name: 'false' }
+                        ],
+                        default: 'false',
+                        show: {
+                            fieldType: ['CHECKBOX']
+                        }
+                    },
+                    // URL type
+                    {
+                        label: 'URL Value',
+                        name: 'urlValue',
+                        type: 'string',
+                        placeholder: 'https://example.com',
+                        acceptVariable: true,
+                        show: {
+                            fieldType: ['URL']
+                        }
+                    },
+                    // FILE type
+                    {
+                        label: 'File',
+                        name: 'fileValue',
+                        type: 'file',
+                        description: 'Upload a file (file path, base64, or JSON object)',
+                        show: {
+                            fieldType: ['FILE']
+                        }
+                    },
+                    // FILE_MULTIPLE type
+                    {
+                        label: 'Multiple Files (JSON Array)',
+                        name: 'fileMultipleValue',
+                        type: 'string',
+                        placeholder: '[{"_id":"file1","url":"..."},{"_id":"file2","url":"..."}]',
+                        acceptVariable: true,
+                        rows: 3,
+                        description: 'JSON array of file objects',
+                        show: {
+                            fieldType: ['FILE_MULTIPLE']
+                        }
+                    },
+                    // DOCUMENT type
+                    {
+                        label: 'Documents (JSON Array)',
+                        name: 'documentValue',
+                        type: 'string',
+                        placeholder: '[{"title":"Doc1","content":"..."}]',
+                        acceptVariable: true,
+                        rows: 3,
+                        description: 'JSON array of document objects with title and content',
+                        show: {
+                            fieldType: ['DOCUMENT']
+                        }
                     }
                 ]
+            },
+            // === MOVE TO STAGE ===
+            {
+                label: 'Move to Stage (Optional)',
+                name: 'moveToStage',
+                type: 'asyncOptions',
+                loadMethod: 'listStages',
+                optional: true,
+                description: 'Select a new stage to move this item to. Leave empty to keep current stage.'
             }
         ]
     }
@@ -898,6 +1056,7 @@ class PrivosItemUpdate_Agentflow implements INode {
         const selectedItemStr = nodeData.inputs?.selectedItem as string
         const itemName = nodeData.inputs?.itemName as string
         const itemDescription = nodeData.inputs?.itemDescription as string
+        const moveToStage = nodeData.inputs?.moveToStage as string
 
         // 7 hardcoded fields
         const field_assignees = nodeData.inputs?.field_assignees as any // Can be string, array, or object
@@ -963,11 +1122,35 @@ class PrivosItemUpdate_Agentflow implements INode {
                 payload.description = itemDescription
             }
 
+            // Get list field definitions to validate which fields exist
+            const currentListId = currentItem.listId
+            let listFieldIds: string[] = []
+            
+            if (currentListId) {
+                try {
+                    const listApiUrl = `${baseUrl}/external.lists/${currentListId}`
+                    const listResponse = await secureAxiosRequest({
+                        method: 'GET',
+                        url: listApiUrl,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-User-Id': userId,
+                            'X-Auth-Token': authToken
+                        }
+                    })
+                    const fieldDefinitions = listResponse.data?.list?.fieldDefinitions || []
+                    listFieldIds = fieldDefinitions.map((f: any) => f._id)
+                    console.log('[UPDATE ITEM] List field IDs:', listFieldIds)
+                } catch (err) {
+                    console.error('[UPDATE ITEM] Error fetching list fields:', err)
+                }
+            }
+
             // Build customFields array for the 7 hardcoded fields + additional custom fields
             const allCustomFields: any[] = []
 
             // 1. Assignees - Process same way as POST LIST
-            if (field_assignees) {
+            if (field_assignees && listFieldIds.includes('marketing_campaign_assignees_field')) {
                 try {
                     let assigneesValue: any[] = []
 
@@ -1004,7 +1187,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // 2. Due Date
-            if (field_due_date) {
+            if (field_due_date && listFieldIds.includes('marketing_campaign_due_date_field')) {
                 allCustomFields.push({
                     fieldId: 'marketing_campaign_due_date_field',
                     value: field_due_date
@@ -1012,7 +1195,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // 3. Start Date
-            if (field_start_date) {
+            if (field_start_date && listFieldIds.includes('marketing_campaign_start_date_field')) {
                 allCustomFields.push({
                     fieldId: 'marketing_campaign_start_date_field',
                     value: field_start_date
@@ -1020,7 +1203,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // 4. End Date
-            if (field_end_date) {
+            if (field_end_date && listFieldIds.includes('marketing_campaign_end_date_field')) {
                 allCustomFields.push({
                     fieldId: 'marketing_campaign_end_date_field',
                     value: field_end_date
@@ -1028,13 +1211,89 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // 5. File - Handle file upload if provided
-            if (field_file) {
-                // TODO: Implement file upload logic similar to POST LIST
-                console.log('File upload for UPDATE not yet implemented:', field_file)
+            if (field_file && listFieldIds.includes('marketing_campaign_file_link_field')) {
+                let fileValue: any
+
+                if (typeof field_file === 'string') {
+                    try {
+                        // Try parsing as JSON first (already uploaded file object)
+                        fileValue = JSON.parse(field_file)
+                    } catch (e) {
+                        // Not JSON, treat as file path or base64
+                        try {
+                            let fileData: Buffer
+                            let fileName: string
+
+                            // Check if it's base64 data URI
+                            if (field_file.startsWith('data:')) {
+                                const matches = field_file.match(/^data:(.+);base64,(.+)$/)
+                                if (matches) {
+                                    const mimeType = matches[1]
+                                    const base64Data = matches[2]
+                                    fileData = Buffer.from(base64Data, 'base64')
+                                    fileName = `file_${Date.now()}.${mimeType.split('/')[1]}`
+                                } else {
+                                    throw new Error('Invalid base64 format')
+                                }
+                            } else {
+                                // Treat as file path
+                                fileData = fs.readFileSync(field_file)
+                                fileName = path.basename(field_file)
+                            }
+
+                            // Upload file to Privos
+                            const formData = new FormData()
+                            formData.append('file', fileData, fileName)
+
+                            console.log('[UPDATE ITEM] Uploading file to Privos:', fileName)
+
+                            const uploadResponse = await secureAxiosRequest({
+                                method: 'POST',
+                                url: `${baseUrl}/files.upload`,
+                                headers: {
+                                    ...formData.getHeaders(),
+                                    'X-User-Id': userId,
+                                    'X-Auth-Token': authToken
+                                },
+                                data: formData
+                            })
+
+                            const uploadedFile = uploadResponse.data?.file
+
+                            if (!uploadedFile || !uploadedFile._id || !uploadedFile.url) {
+                                throw new Error('Upload response missing file data')
+                            }
+
+                            fileValue = {
+                                _id: uploadedFile._id,
+                                name: uploadedFile.name || fileName,
+                                size: uploadedFile.size || fileData.length,
+                                type: uploadedFile.type || 'application/octet-stream',
+                                url: uploadedFile.url,
+                                uploadedAt: uploadedFile.uploadedAt || new Date().toISOString()
+                            }
+
+                            console.log('[UPDATE ITEM] File uploaded successfully:', fileValue)
+                        } catch (uploadError: any) {
+                            console.error('[UPDATE ITEM] Error uploading file:', uploadError.message)
+                            throw new Error(`Failed to upload file: ${uploadError.message}`)
+                        }
+                    }
+                } else if (typeof field_file === 'object') {
+                    // Already a file object
+                    fileValue = field_file
+                }
+
+                if (fileValue) {
+                    allCustomFields.push({
+                        fieldId: 'marketing_campaign_file_link_field',
+                        value: fileValue
+                    })
+                }
             }
 
             // 6. Documents
-            if (field_documents && field_documents.length > 0) {
+            if (field_documents && field_documents.length > 0 && listFieldIds.includes('marketing_campaign_documents_field')) {
                 const documentsValue = field_documents.map(doc => ({
                     title: doc.title,
                     content: doc.content
@@ -1046,7 +1305,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // 7. Note
-            if (field_note) {
+            if (field_note && listFieldIds.includes('marketing_campaign_note_field')) {
                 allCustomFields.push({
                     fieldId: 'marketing_campaign_note_field',
                     value: field_note
@@ -1056,19 +1315,214 @@ class PrivosItemUpdate_Agentflow implements INode {
             // Add additional custom fields
             if (customFields && Array.isArray(customFields) && customFields.length > 0) {
                 for (const field of customFields) {
-                    if (field.fieldKey && field.fieldValue) {
-                        let parsedValue = field.fieldValue
-                        if (typeof field.fieldValue === 'string') {
-                            try {
-                                parsedValue = JSON.parse(field.fieldValue)
-                            } catch {
-                                parsedValue = field.fieldValue
+                    const fieldType = field.fieldType || 'TEXT'
+                    const fieldName = field.fieldName
+                    
+                    if (!fieldName) {
+                        console.warn('Skipping custom field without fieldName')
+                        continue
+                    }
+
+                    // Auto-generate unique fieldId from fieldName
+                    const fieldId = fieldName
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '')
+                        + '_' + Math.random().toString(36).substring(2, 9)
+
+                    let fieldValue: any = null
+
+                    // Parse value based on field type
+                    switch (fieldType) {
+                        case 'TEXT':
+                            fieldValue = field.textValue || ''
+                            break
+
+                        case 'TEXTAREA':
+                            fieldValue = field.textareaValue || ''
+                            break
+
+                        case 'NUMBER':
+                            fieldValue = field.numberValue ? Number(field.numberValue) : 0
+                            break
+
+                        case 'DATE':
+                            if (field.dateValue) {
+                                // Convert YYYY-MM-DD to ISO string
+                                fieldValue = new Date(field.dateValue).toISOString()
                             }
-                        }
+                            break
+
+                        case 'DATE_TIME':
+                            fieldValue = field.dateTimeValue || new Date().toISOString()
+                            break
+
+                        case 'SELECT':
+                            fieldValue = field.selectValue || ''
+                            break
+
+                        case 'MULTI_SELECT':
+                            if (field.multiSelectValue) {
+                                try {
+                                    fieldValue = typeof field.multiSelectValue === 'string' 
+                                        ? JSON.parse(field.multiSelectValue)
+                                        : field.multiSelectValue
+                                } catch (e) {
+                                    fieldValue = []
+                                }
+                            } else {
+                                fieldValue = []
+                            }
+                            break
+
+                        case 'USER':
+                            // Parse user selection (similar to field_assignees)
+                            if (field.userValue) {
+                                if (typeof field.userValue === 'string') {
+                                    try {
+                                        // Try parsing as JSON first
+                                        if (field.userValue.trim().startsWith('[')) {
+                                            // Array of user objects
+                                            fieldValue = JSON.parse(field.userValue)
+                                        } else {
+                                            // Single user object
+                                            fieldValue = [JSON.parse(field.userValue)]
+                                        }
+                                    } catch (e) {
+                                        fieldValue = []
+                                    }
+                                } else if (Array.isArray(field.userValue)) {
+                                    // Already array - map to proper format
+                                    fieldValue = field.userValue.map((userStr: any) => {
+                                        if (typeof userStr === 'string') {
+                                            try {
+                                                return JSON.parse(userStr)
+                                            } catch {
+                                                return null
+                                            }
+                                        }
+                                        return userStr
+                                    }).filter((u: any) => u !== null)
+                                } else if (typeof field.userValue === 'object') {
+                                    // Single user object
+                                    fieldValue = [field.userValue]
+                                } else {
+                                    fieldValue = []
+                                }
+                            } else {
+                                fieldValue = []
+                            }
+                            break
+
+                        case 'CHECKBOX':
+                            fieldValue = field.checkboxValue === 'true' || field.checkboxValue === true
+                            break
+
+                        case 'URL':
+                            fieldValue = field.urlValue || ''
+                            break
+
+                        case 'FILE':
+                            // Handle file upload similar to field_file
+                            if (field.fileValue) {
+                                let fileObj: any
+                                if (typeof field.fileValue === 'string') {
+                                    try {
+                                        fileObj = JSON.parse(field.fileValue)
+                                    } catch (e) {
+                                        // File path or base64 - need to upload
+                                        try {
+                                            let fileData: Buffer
+                                            let fileName: string
+
+                                            if (field.fileValue.startsWith('data:')) {
+                                                const matches = field.fileValue.match(/^data:(.+);base64,(.+)$/)
+                                                if (matches) {
+                                                    const mimeType = matches[1]
+                                                    const base64Data = matches[2]
+                                                    fileData = Buffer.from(base64Data, 'base64')
+                                                    fileName = `file_${Date.now()}.${mimeType.split('/')[1]}`
+                                                } else {
+                                                    throw new Error('Invalid base64 format')
+                                                }
+                                            } else {
+                                                fileData = fs.readFileSync(field.fileValue)
+                                                fileName = path.basename(field.fileValue)
+                                            }
+
+                                            const formData = new FormData()
+                                            formData.append('file', fileData, fileName)
+
+                                            const uploadResponse = await secureAxiosRequest({
+                                                method: 'POST',
+                                                url: `${baseUrl}/files.upload`,
+                                                headers: {
+                                                    ...formData.getHeaders(),
+                                                    'X-User-Id': userId,
+                                                    'X-Auth-Token': authToken
+                                                },
+                                                data: formData
+                                            })
+
+                                            const uploadedFile = uploadResponse.data?.file
+                                            fileObj = {
+                                                _id: uploadedFile._id,
+                                                name: uploadedFile.name || fileName,
+                                                size: uploadedFile.size || fileData.length,
+                                                type: uploadedFile.type || 'application/octet-stream',
+                                                url: uploadedFile.url,
+                                                uploadedAt: uploadedFile.uploadedAt || new Date().toISOString()
+                                            }
+                                        } catch (uploadError: any) {
+                                            console.error('Error uploading custom field file:', uploadError.message)
+                                            fileObj = null
+                                        }
+                                    }
+                                } else {
+                                    fileObj = field.fileValue
+                                }
+                                fieldValue = fileObj
+                            }
+                            break
+
+                        case 'FILE_MULTIPLE':
+                            if (field.fileMultipleValue) {
+                                try {
+                                    fieldValue = typeof field.fileMultipleValue === 'string'
+                                        ? JSON.parse(field.fileMultipleValue)
+                                        : field.fileMultipleValue
+                                } catch (e) {
+                                    fieldValue = []
+                                }
+                            } else {
+                                fieldValue = []
+                            }
+                            break
+
+                        case 'DOCUMENT':
+                            if (field.documentValue) {
+                                try {
+                                    fieldValue = typeof field.documentValue === 'string'
+                                        ? JSON.parse(field.documentValue)
+                                        : field.documentValue
+                                } catch (e) {
+                                    fieldValue = []
+                                }
+                            } else {
+                                fieldValue = []
+                            }
+                            break
+
+                        default:
+                            fieldValue = field.textValue || ''
+                    }
+
+                    if (fieldValue !== null && fieldValue !== undefined) {
                         allCustomFields.push({
-                            fieldId: field.fieldKey,
-                            value: parsedValue
+                            fieldId: fieldId,
+                            value: fieldValue
                         })
+                        console.log(`[UPDATE ITEM] Added custom field: ${fieldName} (${fieldId}) = ${JSON.stringify(fieldValue)}`)
                     }
                 }
             }
@@ -1121,6 +1575,59 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             const updatedItem = response.data?.item || response.data
 
+            // === MOVE TO STAGE (if specified) ===
+            let movedToStage = false
+            let newStageName = ''
+            
+            if (moveToStage) {
+                try {
+                    console.log('[UPDATE ITEM] Moving item to new stage:', moveToStage)
+                    
+                    const moveApiUrl = `${baseUrl}/external.items.move`
+                    const moveResponse = await secureAxiosRequest({
+                        method: 'POST',
+                        url: moveApiUrl,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-User-Id': userId,
+                            'X-Auth-Token': authToken
+                        },
+                        data: {
+                            itemId: itemId,
+                            stageId: moveToStage
+                        }
+                    })
+
+                    console.log('[UPDATE ITEM] Move stage response:', JSON.stringify(moveResponse.data, null, 2))
+                    movedToStage = true
+
+                    // Get stage name for display
+                    try {
+                        const stagesApiUrl = `${baseUrl}/external.stages.byListId`
+                        const stagesResponse = await secureAxiosRequest({
+                            method: 'GET',
+                            url: stagesApiUrl,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-User-Id': userId,
+                                'X-Auth-Token': authToken
+                            },
+                            params: { listId: listId }
+                        })
+
+                        const stages = stagesResponse.data?.stages || []
+                        const newStage = stages.find((s: any) => s._id === moveToStage)
+                        newStageName = newStage?.name || moveToStage
+                    } catch (e) {
+                        newStageName = moveToStage
+                    }
+
+                } catch (moveError: any) {
+                    console.error('[UPDATE ITEM] Error moving stage:', moveError.message)
+                    // Don't fail the whole operation, just log the error
+                }
+            }
+
             // Format custom fields summary
             const customFieldsSummary = allCustomFields && allCustomFields.length > 0
                 ? allCustomFields.map((cf: any) => {
@@ -1154,7 +1661,7 @@ ITEM ID: ${itemId}
 ITEM NAME: ${payload.name || currentItem.name}
 
 LIST: ${listData.name || listId || 'Unknown'}
-${payload.description ? `\nDESCRIPTION:\n${payload.description}\n` : ''}
+${movedToStage ? `MOVED TO STAGE: ${newStageName} ✅\n` : ''}${payload.description ? `\nDESCRIPTION:\n${payload.description}\n` : ''}
 ${'='.repeat(50)}
 UPDATED FIELDS:
 ${'='.repeat(50)}
@@ -1163,7 +1670,7 @@ ${customFieldsSummary}
 
 ${'='.repeat(50)}
 
-The item has been updated successfully.`
+The item has been updated successfully.${movedToStage ? ' Item moved to new stage.' : ''}`
 
             const outputData = {
                 success: true,
@@ -1172,7 +1679,12 @@ The item has been updated successfully.`
                 listId: listId,
                 listName: listData.name || '',
                 updatedFieldsCount: allCustomFields.length,
-                updatedItem: updatedItem
+                updatedItem: updatedItem,
+                ...(movedToStage && { 
+                    movedToStage: true, 
+                    newStageId: moveToStage,
+                    newStageName: newStageName 
+                })
             }
 
             return {

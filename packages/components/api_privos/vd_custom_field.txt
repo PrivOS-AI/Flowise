@@ -1,0 +1,311 @@
+{
+    "item": {
+        "_id": "68f20f56da571b9acf990866",
+        "name": "cvb xcvbcvbx",
+        "description": "dfbdfzdfzvdfgz",
+        "listId": "68f20f52da571b9acf990864",
+        "stageId": "68f20f52da571b9acf990865",
+        "parentId": null,
+        "customFields": [
+            {
+                "fieldId": "8DP5YnPdYPkiNa4qs",
+                "value": "sdasdfsdfsdf"
+            },
+            {
+                "fieldId": "aJthh3RrMtx9mfYA6", //CHECKBOX
+                "value": true
+            },
+            {
+                "fieldId": "7ca6CfAevWntpDSHY", //number
+                "value": 12343
+            },
+            {
+                "fieldId": "Gx3w6FaruKHHDnetC", //select
+                "value": "avhyEChpAdwZGRxKS"
+            },
+            {
+                "fieldId": "Xj676TfaWPBndPEzr", //MULTI_SELECT 
+                "value": [
+                    "ycn2yaKSBoj2fa2PS"
+                ]
+            },
+            {
+                "fieldId": "N7NpEP3WJqMKFQbje", //DATE_TIME
+                "value": "2025-10-17T09:49:00.000Z"
+            },
+            {
+                "fieldId": "YDTtJgCAbj7tCNzjS",
+                "value": []
+            },
+            {
+                "fieldId": "gpR8NPWvjY62FBLDH",
+                "value": "2025-10-05T00:00:00.000Z"
+            },
+            {
+                "fieldId": "ZNdwcWYx59KkMz6qT", //USER
+                "value": [
+                    {
+                        "_id": "47jWuGGAvKax98Gtr",
+                        "username": "HoaDao"
+                    }
+                ]
+            },
+            {
+                "fieldId": "c25M7s8Jq3nw4vTtE", //MULTI_SELECT
+                "value": []
+            },
+            {
+                "fieldId": "5eQkka5XeJAgPY3Ci", //text 
+                "value": "234234gegdfgvdfsdfv"
+            }
+        ],
+        "order": 0,
+        "key": "LIST20-1",
+        "createdAt": "2025-10-17T09:41:42.084Z",
+        "createdBy": {
+            "_id": "GRqeKLPGZ8zndK2by",
+            "username": "ductai077",
+            "name": "documentId"
+        },
+        "_updatedAt": "2025-10-17T09:47:36.167Z",
+        "children": []
+    },
+    "success": true
+}
+
+{
+    "lists": [
+        {
+            "_id": "68f20f52da571b9acf990864",
+            "name": "New List",
+            "key": "LIST20",
+            "roomId": "68f20e34da571b9acf990837",
+            "description": null,
+            "fieldDefinitions": [
+                {
+                    "_id": "8DP5YnPdYPkiNa4qs",
+                    "name": "Ủl",
+                    "type": "URL",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "aJthh3RrMtx9mfYA6",
+                    "name": "Cb",
+                    "type": "CHECKBOX",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "7ca6CfAevWntpDSHY",
+                    "name": "Ụ",
+                    "type": "NUMBER",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "Gx3w6FaruKHHDnetC",
+                    "name": "Sl",
+                    "type": "SELECT",
+                    "options": [
+                        {
+                            "_id": "avhyEChpAdwZGRxKS",
+                            "value": "Hi",
+                            "color": "#3498db",
+                            "order": 0
+                        },
+                        {
+                            "_id": "a852mHeHK8cPgdB4A",
+                            "value": "Oke",
+                            "color": "#96c2df",
+                            "order": 1
+                        }
+                    ],
+                    "order": null
+                },
+                {
+                    "_id": "Xj676TfaWPBndPEzr",
+                    "name": "Ml",
+                    "type": "MULTI_SELECT",
+                    "options": [
+                        {
+                            "_id": "ycn2yaKSBoj2fa2PS",
+                            "value": "Ok",
+                            "color": "#3498db",
+                            "order": 0
+                        }
+                    ],
+                    "order": 0
+                },
+                {
+                    "_id": "N7NpEP3WJqMKFQbje",
+                    "name": "Dy",
+                    "type": "DATE_TIME",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "zLyeySfGNTL7LXwM9",
+                    "name": "F",
+                    "type": "FILE",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "YDTtJgCAbj7tCNzjS",
+                    "name": "Doc",
+                    "type": "DOCUMENT",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "gpR8NPWvjY62FBLDH",
+                    "name": "Dt",
+                    "type": "DATE",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "ZNdwcWYx59KkMz6qT",
+                    "name": "Ch",
+                    "type": "USER",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "c25M7s8Jq3nw4vTtE",
+                    "name": "Ml",
+                    "type": "MULTI_SELECT",
+                    "options": [],
+                    "order": null
+                },
+                {
+                    "_id": "5eQkka5XeJAgPY3Ci",
+                    "name": "Dfgbdfgs",
+                    "type": "TEXT",
+                    "options": [],
+                    "order": 0
+                }
+            ],
+            "itemCount": 1,
+            "createdAt": "2025-10-17T09:41:38.027Z",
+            "createdBy": {
+                "_id": "GRqeKLPGZ8zndK2by",
+                "username": "ductai077",
+                "name": "documentId"
+            },
+            "hiddenFields": [
+                "description",
+                "createdBy",
+                "createdAt"
+            ],
+            "_updatedAt": "2025-10-17T09:47:28.023Z",
+            "stageCount": 1
+        },
+        {
+            "_id": "68f20e34da571b9acf99083b",
+            "name": "Marketing Tasks",
+            "roomId": "68f20e34da571b9acf990837",
+            "description": "Plan and execute marketing campaigns",
+            "fieldDefinitions": [
+                {
+                    "_id": "marketing_campaign_assignees_field",
+                    "name": "Assignees",
+                    "type": "USER",
+                    "order": 1
+                },
+                {
+                    "_id": "marketing_campaign_due_date_field",
+                    "name": "Due Date",
+                    "type": "DATE",
+                    "order": 2
+                },
+                {
+                    "_id": "marketing_campaign_start_date_field",
+                    "name": "Start Date",
+                    "type": "DATE",
+                    "order": 3
+                },
+                {
+                    "_id": "marketing_campaign_end_date_field",
+                    "name": "End Date",
+                    "type": "DATE",
+                    "order": 4
+                },
+                {
+                    "_id": "marketing_campaign_file_link_field",
+                    "name": "File",
+                    "type": "FILE",
+                    "order": 5
+                },
+                {
+                    "_id": "marketing_campaign_documents_field",
+                    "name": "Documents",
+                    "type": "DOCUMENT",
+                    "order": 6
+                },
+                {
+                    "_id": "marketing_campaign_note_field",
+                    "name": "Note",
+                    "type": "TEXTAREA",
+                    "order": 7
+                },
+                {
+                    "_id": "dYH66LHdwNzm5SADD",
+                    "name": "Hi",
+                    "type": "CHECKBOX",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "w2N2R6SyagdLSab6b",
+                    "name": "78",
+                    "type": "NUMBER",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "25izNiaRtb29ABLMx",
+                    "name": "Date time",
+                    "type": "DATE_TIME",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "xXnu8amoo73Tp73nN",
+                    "name": "Okk",
+                    "type": "MULTI_SELECT",
+                    "options": [],
+                    "order": 0
+                },
+                {
+                    "_id": "giMpQByXupeZs3Mm3",
+                    "name": "Url",
+                    "type": "USER",
+                    "options": [],
+                    "order": 0
+                }
+            ],
+            "templateKey": "marketing",
+            "templateListKey": "marketing_tasks_list",
+            "hiddenFields": [
+                "description",
+                "createdBy",
+                "createdAt"
+            ],
+            "key": "MT56",
+            "itemCount": 2,
+            "createdAt": "2025-10-17T09:36:52.676Z",
+            "createdBy": {
+                "_id": "GRqeKLPGZ8zndK2by",
+                "username": "ductai077"
+            },
+            "_updatedAt": "2025-10-17T09:39:01.243Z",
+            "stageCount": 5
+        }
+    ],
+    "count": 2,
+    "offset": 0,
+    "total": 2,
+    "success": true
+}

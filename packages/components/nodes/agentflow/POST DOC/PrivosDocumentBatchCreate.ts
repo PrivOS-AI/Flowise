@@ -1,6 +1,35 @@
-import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
-import { parseJsonBody } from '../../../src/utils'
+import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
+import { getCredentialData, getCredentialParam, parseJsonBody } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+
+// Global cache for rooms
+const roomsCachePostDoc: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function fetchRoomsFromAPIPostDoc(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
+    try {
+        const apiUrl = `${baseUrl}/rooms.get`
+        console.log('Fetching rooms from:', apiUrl)
+
+        const response = await secureAxiosRequest({
+            method: 'GET',
+            url: apiUrl,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': userId,
+                'X-Auth-Token': authToken
+            }
+        })
+
+        const rooms = response.data?.update || []
+        console.log('Fetched', rooms.length, 'rooms')
+        return rooms
+
+    } catch (error: any) {
+        console.error('Error fetching rooms:', error.message)
+        throw error
+    }
+}
 
 class PrivosDocumentBatchCreate_Agentflow implements INode {
     label: string
@@ -12,58 +41,46 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
     color: string
     category: string
     baseClasses: string[]
+    credential: INodeParams
     inputs: INodeParams[]
 
     constructor() {
         this.label = 'Create Documents'
         this.name = 'privosDocumentBatchCreate'
-        this.version = 1.0
+        this.version = 2.0
         this.type = 'PrivosDocumentBatchCreate'
         this.icon = 'privos.svg'
         this.category = 'PrivOS'
         this.color = '#2196F3'
-        this.description = 'Create documents in PrivOS'
+        this.description = 'Create one or multiple documents in a Privos room'
         this.baseClasses = [this.type]
+        this.credential = {
+            label: 'Privos API Credential',
+            name: 'credential',
+            type: 'credential',
+            credentialNames: ['privosApi']
+        }
         this.inputs = [
             {
-                label: 'Body Type',
-                name: 'bodyType',
-                type: 'options',
-                options: [
-                    {
-                        label: 'Documents Array (Form)',
-                        name: 'array'
-                    },
-                    {
-                        label: 'JSON Object',
-                        name: 'json'
-                    }
-                ],
-                default: 'array',
-                description: 'Select data entry method'
-            },
-            {
-                label: 'Room ID',
-                name: 'roomId',
-                type: 'string',
-                placeholder: 'room_xxxxx hoặc {{$flow.roomId}}',
-                acceptVariable: true,
-                description: 'Room ID - can use variable',
-                show: {
-                    bodyType: ['array']
-                }
+                label: 'Select Room',
+                name: 'selectedRoom',
+                type: 'asyncOptions',
+                loadMethod: 'listRooms',
+                refresh: true,
+                description: 'Select a room to create documents in'
             },
             {
                 label: 'Documents Data',
                 name: 'documentsData',
                 type: 'array',
                 acceptVariable: true,
+                description: 'List of documents to create. Can use {{variables}} from previous nodes',
                 array: [
                     {
                         label: 'Title',
                         name: 'title',
                         type: 'string',
-                        placeholder: 'Document title OR {{$flow.title}}',
+                        placeholder: 'Document title or {{$flow.title}}',
                         acceptVariable: true
                     },
                     {
@@ -71,117 +88,157 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                         name: 'content',
                         type: 'string',
                         rows: 5,
-                        placeholder: 'Nội dung document or {{$flow.content}}',
+                        placeholder: 'Document content or {{$flow.content}}',
                         acceptVariable: true
+                    },
+                    {
+                        label: 'Description (Optional)',
+                        name: 'description',
+                        type: 'string',
+                        rows: 2,
+                        placeholder: 'Document description',
+                        acceptVariable: true,
+                        optional: true
                     }
-                ],
-                description: 'List of documents to create. Can use {{variables}} from previous nodes',
-                show: {
-                    bodyType: ['array']
-                }
-            },
-            {
-                label: 'JSON Body',
-                name: 'jsonBody',
-                type: 'string',
-                rows: 10,
-                acceptVariable: true,
-                placeholder: `{
-  "roomId": "room_xxxxx",
-  "documents": [
-    {
-      "title": "Project Requirements",
-      "content": "# Project Overview\\n\\nDetailed requirements..."
-    },
-    {
-      "title": "Technical Specifications",
-      "content": "# Technical Details\\n\\nArchitecture..."
-    }
-  ]
-}`,
-                description: 'Enter the entire JSON payload. {{variables}} is acceptable.',
-                show: {
-                    bodyType: ['json']
-                }
+                ]
             }
         ]
     }
 
+    //@ts-ignore
+    loadMethods = {
+        async listRooms(nodeData: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
+            const returnData: INodeOptionsValue[] = []
+
+            try {
+                console.log('[listRooms] START')
+
+                const credentialId = nodeData.credential || ''
+                if (!credentialId) {
+                    console.error('No credential ID found!')
+                    return returnData
+                }
+
+                const credentialData = await getCredentialData(credentialId, options)
+                if (!credentialData || Object.keys(credentialData).length === 0) {
+                    console.error('No credential data returned!')
+                    return returnData
+                }
+
+                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const userId = credentialData.userId
+                const authToken = credentialData.authToken
+
+                if (!userId || !authToken) {
+                    console.error('Missing userId or authToken')
+                    return returnData
+                }
+
+                // Cache rooms
+                const cacheKey = `${userId}_${authToken}`
+                const now = Date.now()
+                const cached = roomsCachePostDoc.get(cacheKey)
+
+                let rooms: any[]
+                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                    console.log('Using cached rooms')
+                    rooms = cached.rooms
+                } else {
+                    console.log('Fetching fresh rooms from API')
+                    rooms = await fetchRoomsFromAPIPostDoc(baseUrl, userId, authToken)
+                    roomsCachePostDoc.set(cacheKey, { rooms, timestamp: now })
+                }
+
+                for (const room of rooms) {
+                    const roomName = room.fname || room.name || room._id
+                    const roomType = room.t === 'd' ? 'Direct' : room.t === 'p' ? 'Private' : 'Public'
+
+                    returnData.push({
+                        label: `${roomName} (${roomType})`,
+                        name: room._id,
+                        description: `${room.msgs || 0} messages`
+                    })
+                }
+
+                console.log('Returning', returnData.length, 'rooms')
+                return returnData
+
+            } catch (error: any) {
+                console.error('[listRooms] Error:', error.message)
+                return returnData
+            }
+        }
+    }
+
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        const bodyType = nodeData.inputs?.bodyType as string || 'array'
         const documentsData = nodeData.inputs?.documentsData as ICommonObject[]
-        const roomId = nodeData.inputs?.roomId as string
-        const jsonBody = nodeData.inputs?.jsonBody as string
+        const selectedRoom = nodeData.inputs?.selectedRoom as string
 
         const state = options.agentflowRuntime?.state as ICommonObject
 
         try {
-            let payload: any
-            const apiUrl = 'https://privos-dev-web.roxane.one/api/v1/external.documents.batch-create'
+            // Get credentials
+            const credentialData = await getCredentialData(nodeData.credential ?? '', options)
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-dev-web.roxane.one/api/v1'
+            const userId = getCredentialParam('userId', credentialData, nodeData)
+            const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
-            // Xử lý theo body type
-            if (bodyType === 'json') {
-                // Mode JSON: Parse JSON body
-                if (!jsonBody) {
-                    throw new Error('JSON Body is required when selecting JSON Object mode')
-                }
-                
-                payload = typeof jsonBody === 'string' ? parseJsonBody(jsonBody) : jsonBody
-                
-                // Validate payload có roomId và documents
-                if (!payload.roomId) {
-                    throw new Error('JSON payload must have "roomId" field')
-                }
-                if (!payload.documents || !Array.isArray(payload.documents) || payload.documents.length === 0) {
-                    throw new Error('JSON payload must have "documents" field (array not empty)')
-                }
-                
-            } else {
-                // Mode Array: Xây dựng từ form
-                if (!roomId) {
-                    throw new Error('Room ID is required')
-                }
-
-                if (!documentsData || !Array.isArray(documentsData) || documentsData.length === 0) {
-                    throw new Error('Documents Data is required and must contain at least 1 document.')
-                }
-
-                // Xây dựng documents array
-                const documents = documentsData.map(doc => {
-                    if (!doc.title) {
-                        throw new Error('Each document must have a title')
-                    }
-                    if (!doc.content) {
-                        throw new Error('Each document must have a content')
-                    }
-                    
-                    return {
-                        title: doc.title,
-                        content: doc.content
-                    }
-                })
-
-                // Xây dựng payload
-                payload = {
-                    roomId: roomId,
-                    documents: documents
-                }
+            if (!userId || !authToken) {
+                throw new Error('Missing credentials: User ID and Auth Token are required')
             }
 
-            // Chuẩn bị headers
-            const requestHeaders: Record<string, string> = {
-                'Content-Type': 'application/json'
+            // Validate inputs
+            if (!selectedRoom) {
+                throw new Error('Please select a room')
             }
+
+            if (!documentsData || !Array.isArray(documentsData) || documentsData.length === 0) {
+                throw new Error('Documents Data is required and must contain at least 1 document')
+            }
+
+            // Build documents array
+            const documents = documentsData.map((doc, index) => {
+                if (!doc.title || (typeof doc.title === 'string' && doc.title.trim() === '')) {
+                    throw new Error(`Document #${index + 1} must have a title`)
+                }
+                if (!doc.content || (typeof doc.content === 'string' && doc.content.trim() === '')) {
+                    throw new Error(`Document #${index + 1} must have content`)
+                }
+                
+                const docPayload: any = {
+                    title: doc.title,
+                    content: doc.content
+                }
+
+                // Add description if provided
+                if (doc.description && typeof doc.description === 'string' && doc.description.trim() !== '') {
+                    docPayload.description = doc.description
+                }
+
+                return docPayload
+            })
+
+            // Build payload
+            const payload = {
+                roomId: selectedRoom,
+                documents: documents
+            }
+
+            const apiUrl = `${baseUrl}/external.documents.batch-create`
 
             console.log('Privos Document Batch Create Request:')
             console.log('URL:', apiUrl)
             console.log('Payload:', JSON.stringify(payload, null, 2))
 
-            // Gửi request
+            // Send request
             const response = await secureAxiosRequest({
                 method: 'POST',
                 url: apiUrl,
-                headers: requestHeaders,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': userId,
+                    'X-Auth-Token': authToken
+                },
                 data: payload
             })
 
@@ -189,21 +246,64 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
             console.log('Status:', response.status)
             console.log('Data:', JSON.stringify(response.data, null, 2))
 
-            // Prepare output
-            const outputData = {
-                roomId: payload.roomId,
-                documentsCreated: payload.documents.length,
-                documents: payload.documents.map((doc: any) => doc.title),
-                response: response.data
+            const createdDocs = response.data?.created || []
+            const errors = response.data?.errors || []
+            const totalCreated = response.data?.totalCreated || createdDocs.length
+            const totalErrors = response.data?.totalErrors || errors.length
+
+            // Format output nicely
+            let documentsSummary = ''
+            if (createdDocs.length > 0) {
+                documentsSummary = createdDocs.map((doc: any, idx: number) => 
+                    `   ${idx + 1}. ${doc.title} (ID: ${doc._id})`
+                ).join('\n')
+            } else {
+                documentsSummary = '   No documents created'
             }
 
-            const outputContent = JSON.stringify(outputData, null, 2)
+            let errorsSummary = ''
+            if (errors.length > 0) {
+                errorsSummary = '\n\n' + '='.repeat(50) + '\n'
+                errorsSummary += 'ERRORS:\n'
+                errorsSummary += '='.repeat(50) + '\n'
+                errorsSummary += errors.map((err: any, idx: number) => 
+                    `   ${idx + 1}. ${err.title}: ${err.error}`
+                ).join('\n')
+            }
 
-            // Return standard agentflow output format
-            const returnOutput = {
+            const outputContent = `DOCUMENTS CREATED SUCCESSFULLY
+${'='.repeat(50)}
+
+ROOM ID: ${selectedRoom}
+TOTAL CREATED: ${totalCreated} / ${payload.documents.length}
+${totalErrors > 0 ? `TOTAL ERRORS: ${totalErrors}\n` : ''}
+${'='.repeat(50)}
+CREATED DOCUMENTS:
+${'='.repeat(50)}
+
+${documentsSummary}${errorsSummary}
+
+${'='.repeat(50)}
+
+The documents have been created successfully.`
+
+            const outputData = {
+                success: true,
+                roomId: selectedRoom,
+                totalCreated: totalCreated,
+                totalErrors: totalErrors,
+                documentsCreated: createdDocs.length,
+                createdDocuments: createdDocs,
+                errors: errors
+            }
+
+            return {
                 id: nodeData.id,
                 name: this.name,
-                input: { roomId: payload.roomId, documentsCount: payload.documents.length },
+                input: { 
+                    roomId: selectedRoom, 
+                    documentsCount: payload.documents.length 
+                },
                 output: {
                     content: outputContent,
                     ...outputData
@@ -211,24 +311,33 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 state
             }
 
-            return returnOutput
-
         } catch (error: any) {
             console.error('Privos Document Batch Create Error:', error)
 
             const errorMessage = error.message || 'Unknown error'
-            const errorOutput = {
-                content: errorMessage,
-                error: errorMessage,
-                details: error.response?.data || null,
-                statusCode: error.response?.status || 500
-            }
+            const errorDetails = error.response?.data || null
+
+            const errorContent = `FAILED TO CREATE DOCUMENTS
+${'='.repeat(50)}
+
+ERROR: ${errorMessage}
+
+${errorDetails ? `DETAILS: ${JSON.stringify(errorDetails, null, 2)}\n\n` : ''}${'='.repeat(50)}`
 
             return {
                 id: nodeData.id,
                 name: this.name,
-                input: { roomId: roomId || 'unknown' },
-                output: errorOutput,
+                input: { 
+                    roomId: selectedRoom || 'unknown',
+                    error: 'Failed to process request'
+                },
+                output: {
+                    content: errorContent,
+                    success: false,
+                    error: errorMessage,
+                    details: errorDetails,
+                    statusCode: error.response?.status || 500
+                },
                 state: state || {}
             }
         }
@@ -236,4 +345,5 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
 }
 
 module.exports = { nodeClass: PrivosDocumentBatchCreate_Agentflow }
+
 
