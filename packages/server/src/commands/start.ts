@@ -2,10 +2,55 @@ import * as Server from '../index'
 import * as DataSource from '../DataSource'
 import logger from '../utils/logger'
 import { BaseCommand } from './base'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execPromise = promisify(exec)
+
+async function killMCPProcesses() {
+    try {
+        if (process.platform === 'win32') {
+            // Windows: kill node processes containing "image-gen-server"
+            const { stdout } = await execPromise('tasklist /FO CSV /NH')
+            const lines = stdout.split('\n')
+            const pids: string[] = []
+
+            for (const line of lines) {
+                if (line.includes('node.exe')) {
+                    const match = line.match(/"(\d+)"/)
+                    if (match) {
+                        pids.push(match[1])
+                    }
+                }
+            }
+
+            // Check each PID for image-gen-server
+            for (const pid of pids) {
+                try {
+                    const { stdout: cmdline } = await execPromise(`wmic process where ProcessId=${pid} get CommandLine /FORMAT:LIST`)
+                    if (cmdline.includes('image-gen-server')) {
+                        await execPromise(`taskkill /F /PID ${pid}`)
+                        logger.info(`🧹 [server]: Killed MCP server process (PID: ${pid})`)
+                    }
+                } catch (e) {
+                    // Process may have already exited, ignore
+                }
+            }
+        } else {
+            // Unix/Linux/Mac
+            await execPromise("pkill -f 'image-gen-server' || true")
+            logger.info('🧹 [server]: Killed all MCP server processes')
+        }
+    } catch (error) {
+        logger.warn('⚠️  [server]: Error cleaning up MCP processes:', error)
+    }
+}
 
 export default class Start extends BaseCommand {
     async run(): Promise<void> {
         logger.info('Starting Flowise...')
+        // Kill old MCP server processes before starting
+        await killMCPProcesses()
         await DataSource.init()
         await Server.start()
     }
@@ -23,6 +68,8 @@ export default class Start extends BaseCommand {
             logger.info(`Shutting down Flowise...`)
             const serverApp = Server.getInstance()
             if (serverApp) await serverApp.stopApp()
+            // Kill all MCP server processes on shutdown
+            await killMCPProcesses()
         } catch (error) {
             logger.error('There was an error shutting down Flowise...', error)
             await this.failExit()

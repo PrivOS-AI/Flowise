@@ -1,4 +1,4 @@
-{
+{ //send api request : 
     "item": {
         "_id": "68f20f56da571b9acf990866",
         "name": "cvb xcvbcvbx",
@@ -73,7 +73,7 @@
     "success": true
 }
 
-{
+{ //respone in list after create item
     "lists": [
         {
             "_id": "68f20f52da571b9acf990864",
