@@ -1,8 +1,8 @@
 <!-- markdownlint-disable MD030 -->
 
 <p align="center">
-<img src="https://github.com/FlowiseAI/Flowise/blob/main/images/flowise_white.svg#gh-light-mode-only">
-<img src="https://github.com/FlowiseAI/Flowise/blob/main/images/flowise_dark.svg#gh-dark-mode-only">
+<img src="./images/privos_flow_white.svg#gh-light-mode-only">
+<img src="./images/privos_flow_dark.svg#gh-dark-mode-only">
 </p>
 
 <div align="center">
@@ -18,8 +18,8 @@ English | [繁體中文](./i18n/README-TW.md) | [简体中文](./i18n/README-ZH.
 </div>
 
 <h3>Build AI Agents, Visually</h3>
-<a href="https://github.com/FlowiseAI/Flowise">
-<img width="100%" src="https://github.com/FlowiseAI/Flowise/blob/main/images/flowise_agentflow.gif?raw=true"></a>
+<a href="https://github.com/YOUR_USERNAME/YOUR_REPO">
+<img width="100%" src="./images/flowise_agentflow.gif"></a>
 
 ## 📚 Table of Contents
 
