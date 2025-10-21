@@ -131,16 +131,30 @@ restart_containers() {
     log_success "Containers restarted"
 }
 
-# Rebuild containers
+# Rebuild containers (zero-downtime approach)
 rebuild_containers() {
     log_info "Rebuilding containers from source (no cache)..."
+    log_info "Building new images (includes pnpm install for dependencies)..."
+    log_info "Current containers are still running - no downtime yet..."
 
     cd "$PROJECT_DIR"
-    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
-    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
-    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
-    log_success "Containers rebuilt and started"
+    # Build new images FIRST (old containers still running - no downtime yet)
+    # This runs: COPY source → pnpm install → rebuild native modules
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
+
+    if [ $? -ne 0 ]; then
+        log_error "Build failed! Old containers are still running."
+        exit 1
+    fi
+
+    log_success "New images built successfully (dependencies installed)"
+    log_info "Swapping to new containers (brief downtime)..."
+
+    # Quick swap: stop old, start new (minimal downtime)
+    docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate --no-build
+
+    log_success "Containers rebuilt and started with minimal downtime"
 }
 
 # View logs
@@ -182,7 +196,7 @@ clean_all() {
     fi
 }
 
-# Git pull and deploy
+# Git pull and deploy (zero-downtime approach)
 pull_and_deploy() {
     log_info "Pulling latest code from git..."
 
@@ -192,13 +206,28 @@ pull_and_deploy() {
         git pull
         log_success "Code updated"
 
-        log_info "Rebuilding and deploying..."
+        log_info "Building new images (includes pnpm install for dependencies)..."
+        log_info "Current containers are still running - no downtime yet..."
         cd "$PROJECT_DIR"
-        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
-        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
-        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
-        log_success "Deployment complete!"
+        # Build new images FIRST (old containers still running)
+        # This runs: COPY source → pnpm install → rebuild native modules
+        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache
+
+        if [ $? -ne 0 ]; then
+            log_error "Build failed! Old containers are still running. Rolling back git changes..."
+            cd "$PROJECT_DIR/.."
+            git reset --hard HEAD@{1}
+            exit 1
+        fi
+
+        log_success "New images built successfully (dependencies installed)"
+        log_info "Swapping to new containers (brief downtime)..."
+
+        # Quick swap: stop old, start new (minimal downtime)
+        docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate --no-build
+
+        log_success "Deployment complete with minimal downtime!"
     else
         log_error "Not a git repository"
         exit 1
@@ -232,10 +261,10 @@ ${GREEN}Commands:${NC}
   ${YELLOW}start${NC}       - Build and start containers
   ${YELLOW}stop${NC}        - Stop containers
   ${YELLOW}restart${NC}     - Restart containers without rebuilding
-  ${YELLOW}rebuild${NC}     - Force rebuild from source (no cache) and restart
+  ${YELLOW}rebuild${NC}     - Force rebuild from source (minimal downtime)
   ${YELLOW}logs${NC}        - View real-time logs (Ctrl+C to exit)
   ${YELLOW}status${NC}      - Check container status
-  ${YELLOW}deploy${NC}      - Git pull + rebuild + restart
+  ${YELLOW}deploy${NC}      - Git pull + rebuild + restart (minimal downtime)
   ${YELLOW}scale <N>${NC}   - Scale workers to N instances
   ${YELLOW}clean${NC}       - Stop and remove containers, volumes, and images
   ${YELLOW}help${NC}        - Show this help message
@@ -260,6 +289,8 @@ ${GREEN}Tips:${NC}
   • Use PostgreSQL for production (not SQLite)
   • Scale workers based on load: $0 scale 5
   • View logs to debug issues: $0 logs
+  • 'rebuild' and 'deploy' build new images BEFORE stopping old containers
+    (minimal downtime - only during container swap)
 
 EOF
 }
