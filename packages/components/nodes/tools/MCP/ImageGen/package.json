@@ -1,0 +1,21 @@
+{
+    "name": "@flowise/image-gen-mcp-server",
+    "version": "1.0.0",
+    "description": "MCP Server for Image Generation using Gemini",
+    "type": "module",
+    "main": "dist/image-gen-server.js",
+    "bin": {
+        "image-gen-server": "./dist/image-gen-server.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/image-gen-server.js"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.10.1",
+        "@google/generative-ai": "^0.24.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0"
+    }
+}
