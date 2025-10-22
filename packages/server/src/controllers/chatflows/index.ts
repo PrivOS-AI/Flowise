@@ -48,6 +48,21 @@ const deleteChatflow = async (req: Request, res: Response, next: NextFunction) =
         if (typeof req.params === 'undefined' || !req.params.id) {
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: chatflowsController.deleteChatflow - id not provided!`)
         }
+
+        // Room isolation: Check if user can delete this chatflow
+        const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        if (!chatflow) {
+            return res.status(404).send(`Chatflow ${req.params.id} not found`)
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: chatflowsController.deleteChatflow - Cannot delete global resources. This chatflow was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const orgId = req.user?.activeOrganizationId
         if (!orgId) {
             throw new InternalFlowiseError(
@@ -77,7 +92,9 @@ const getAllChatflows = async (req: Request, res: Response, next: NextFunction) 
             req.query?.type as ChatflowType,
             req.user?.activeWorkspaceId,
             page,
-            limit
+            limit,
+            req.roomId,
+            req.isRootAdmin
         )
         return res.json(apiResponse)
     } catch (error) {
@@ -146,6 +163,12 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
         const newChatFlow = new ChatFlow()
         Object.assign(newChatFlow, body)
         newChatFlow.workspaceId = workspaceId
+
+        // Room isolation: Only set roomId if user is NOT root admin
+        if (!req.isRootAdmin && req.roomId) {
+            newChatFlow.roomId = req.roomId
+        }
+
         const apiResponse = await chatflowsService.saveChatflow(
             newChatFlow,
             orgId,
@@ -169,6 +192,15 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         if (!chatflow) {
             return res.status(404).send(`Chatflow ${req.params.id} not found`)
         }
+
+        // Room isolation: Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `You don't have permission to edit this resource`
+            )
+        }
+
         const orgId = req.user?.activeOrganizationId
         if (!orgId) {
             throw new InternalFlowiseError(

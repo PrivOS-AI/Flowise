@@ -15,7 +15,15 @@ export const ErrorProvider = ({ children }) => {
     const handleError = async (err) => {
         console.error(err)
         if (err?.response?.status === 403) {
-            navigate('/unauthorized')
+            // Check if this is a "permission to edit" error
+            const errorMessage = err?.response?.data?.message || ''
+            if (errorMessage.includes("don't have permission to edit")) {
+                // Show error instead of redirecting
+                setError(err)
+            } else {
+                // For other 403 errors, redirect to unauthorized page
+                navigate('/unauthorized')
+            }
         } else if (err?.response?.status === 401) {
             if (ErrorMessage.INVALID_MISSING_TOKEN === err?.response?.data?.message) {
                 store.dispatch(logoutSuccess())

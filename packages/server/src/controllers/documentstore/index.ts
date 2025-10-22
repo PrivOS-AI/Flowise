@@ -296,6 +296,15 @@ const updateDocumentStore = async (req: Request, res: Response, next: NextFuncti
                 `Error: documentStoreController.updateDocumentStore - DocumentStore ${req.params.id} not found in the database`
             )
         }
+
+        // Room isolation: Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !store.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: documentStoreController.updateDocumentStore - Cannot edit global resources. This document store was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const body = req.body
         const updateDocStore = new DocumentStore()
         Object.assign(updateDocStore, body)
@@ -314,6 +323,24 @@ const deleteDocumentStore = async (req: Request, res: Response, next: NextFuncti
                 `Error: documentStoreController.deleteDocumentStore - storeId not provided!`
             )
         }
+
+        // Room isolation: Check if user can delete this document store
+        const store = await documentStoreService.getDocumentStoreById(req.params.id)
+        if (!store) {
+            throw new InternalFlowiseError(
+                StatusCodes.NOT_FOUND,
+                `Error: documentStoreController.deleteDocumentStore - DocumentStore ${req.params.id} not found in the database`
+            )
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !store.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: documentStoreController.deleteDocumentStore - Cannot delete global resources. This document store was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const orgId = req.user?.activeOrganizationId
         if (!orgId) {
             throw new InternalFlowiseError(

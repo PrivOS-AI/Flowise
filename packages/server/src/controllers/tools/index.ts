@@ -32,6 +32,21 @@ const deleteTool = async (req: Request, res: Response, next: NextFunction) => {
         if (typeof req.params === 'undefined' || !req.params.id) {
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: toolsController.deleteTool - id not provided!`)
         }
+
+        // Room isolation: Check if user can delete this tool
+        const tool = await toolsService.getToolById(req.params.id)
+        if (!tool) {
+            return res.status(404).send(`Tool ${req.params.id} not found`)
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !tool.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: toolsController.deleteTool - Cannot delete global resources. This tool was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await toolsService.deleteTool(req.params.id)
         return res.json(apiResponse)
     } catch (error) {
@@ -69,6 +84,21 @@ const updateTool = async (req: Request, res: Response, next: NextFunction) => {
         if (!req.body) {
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: toolsController.deleteTool - body not provided!`)
         }
+
+        // Room isolation: Check if user can update this tool
+        const tool = await toolsService.getToolById(req.params.id)
+        if (!tool) {
+            return res.status(404).send(`Tool ${req.params.id} not found`)
+        }
+
+        // Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !tool.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: toolsController.updateTool - Cannot edit global resources. This tool was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await toolsService.updateTool(req.params.id, req.body)
         return res.json(apiResponse)
     } catch (error) {

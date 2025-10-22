@@ -21,6 +21,7 @@ import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
 import { IdentityManager } from './IdentityManager'
 import { verifyExternalAuth } from './middlewares/externalAuth'
+import { extractRoomDataMiddleware } from './middlewares/extractRoomData'
 import { SSEStreamer } from './utils/SSEStreamer'
 import { validateAPIKey } from './utils/validateKey'
 import { LoggedInUser } from './enterprise/Interface.Enterprise'
@@ -183,6 +184,9 @@ export class App {
 
         // Parse cookies
         this.app.use(cookieParser())
+
+        // Extract room isolation data from JWT
+        this.app.use(extractRoomDataMiddleware)
 
         // Allow embedding from specified domains.
         this.app.use((req, res, next) => {
