@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import PropTypes from 'prop-types'
 
 import { styled, alpha } from '@mui/material/styles'
@@ -78,6 +78,15 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
     const { confirm } = useConfirm()
     const dispatch = useDispatch()
     const updateChatflowApi = useApi(chatflowsApi.updateChatflow)
+
+    // Room isolation: Get current user info
+    const currentUser = useSelector((state) => state.auth.user)
+    const isRootAdmin = currentUser?.isRootAdmin
+    const activeRoomId = currentUser?.activeRoomId
+
+    // Check if this is a global resource (created by root admin) that room users cannot edit
+    const isGlobalResource = !chatflow.roomId
+    const canEdit = isRootAdmin || !activeRoomId || !isGlobalResource
 
     useNotifier()
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
@@ -327,6 +336,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
                     onClick={handleFlowRename}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <EditIcon />
                     Rename
@@ -356,6 +366,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
                     onClick={handleFlowStarterPrompts}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <PictureInPictureAltIcon />
                     Starter Prompts
@@ -364,6 +375,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
                     onClick={handleFlowChatFeedback}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <ThumbsUpDownOutlinedIcon />
                     Chat Feedback
@@ -372,6 +384,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:domains' : 'chatflows:domains'}
                     onClick={handleAllowedDomains}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <VpnLockOutlinedIcon />
                     Allowed Domains
@@ -380,6 +393,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:config' : 'chatflows:config'}
                     onClick={handleSpeechToText}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <MicNoneOutlinedIcon />
                     Speech To Text
@@ -388,6 +402,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:update' : 'chatflows:update'}
                     onClick={handleFlowCategory}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <FileCategoryIcon />
                     Update Category
@@ -397,6 +412,7 @@ export default function FlowListMenu({ chatflow, isAgentCanvas, isAgentflowV2, s
                     permissionId={isAgentCanvas ? 'agentflows:delete' : 'chatflows:delete'}
                     onClick={handleDelete}
                     disableRipple
+                    disabled={!canEdit}
                 >
                     <FileDeleteIcon />
                     Delete

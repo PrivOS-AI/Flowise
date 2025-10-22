@@ -13,12 +13,12 @@ const router = express.Router()
  *
  * Usage:
  *   Redirect from external service (Rocket.Chat):
- *   https://flowise.example.com/api/v1/external-sso?token=AUTH_TOKEN&userId=USER_ID&redirect=/chatflows
+ *   https://flowise.example.com/api/v1/external-sso?token=AUTH_TOKEN&userId=USER_ID&roomId=ROOM_ID&redirect=/chatflows
  *
  * Flow:
- *   1. Extract token and userId from query params
+ *   1. Extract token, userId, and roomId (optional) from query params
  *   2. Call EXTERNAL_AUTH_PROFILE_URL with X-Auth-Token and X-User-Id headers
- *   3. Create session cookie
+ *   3. Create session cookie with roomId embedded in JWT
  *   4. Redirect to dashboard or specified redirect path
  */
 router.get('/', async (req: Request, res: Response) => {
@@ -27,12 +27,20 @@ router.get('/', async (req: Request, res: Response) => {
         logger.info(`[ExternalSSO]: Request URL: ${req.url}`)
         logger.info(`[ExternalSSO]: Request query params: ${JSON.stringify(req.query)}`)
 
+        // IMPORTANT: Clear any existing cookies first to prevent stale JWT from persisting
+        // This ensures that when switching rooms, the old JWT is completely removed
+        logger.info('[ExternalSSO]: Clearing any existing authentication cookies')
+        res.clearCookie('token')
+        res.clearCookie('refreshToken')
+
         const token = req.query.token as string
         const requestUserId = req.query.userId as string
+        const roomId = req.query.roomId as string
         const redirectPath = (req.query.redirect as string) || '/'
 
         logger.info(`[ExternalSSO]: Extracted token: ${token ? token.substring(0, 20) + '...' : 'MISSING'}`)
         logger.info(`[ExternalSSO]: Extracted userId: ${requestUserId || 'MISSING'}`)
+        logger.info(`[ExternalSSO]: Extracted roomId: ${roomId || 'NOT PROVIDED'}`)
         logger.info(`[ExternalSSO]: Redirect path: ${redirectPath}`)
 
         if (!token) {
@@ -43,6 +51,11 @@ router.get('/', async (req: Request, res: Response) => {
         if (!requestUserId) {
             logger.error('[ExternalSSO]: Missing userId parameter')
             return res.status(400).json({ error: 'UserId parameter is required' })
+        }
+
+        if (!roomId) {
+            logger.error('[ExternalSSO]: Missing roomId parameter')
+            return res.status(400).json({ error: 'RoomId parameter is required' })
         }
 
         const profileUrl = process.env.EXTERNAL_AUTH_PROFILE_URL
@@ -139,11 +152,14 @@ router.get('/', async (req: Request, res: Response) => {
         logger.info(`[ExternalSSO]: Created encrypted meta field for JWT`)
 
         // Create auth token (matching Flowise native format)
+        // isRootAdmin = false for SSO users (they are scoped to a room)
         const authToken = jwt.sign(
             {
                 id: userId,
                 username: name,
-                meta: encryptedUserInfo
+                meta: encryptedUserInfo,
+                roomId: roomId || undefined,
+                isRootAdmin: false
             },
             process.env.JWT_AUTH_TOKEN_SECRET || 'default-secret',
             {
@@ -160,7 +176,9 @@ router.get('/', async (req: Request, res: Response) => {
             {
                 id: userId,
                 username: name,
-                meta: encryptedUserInfo
+                meta: encryptedUserInfo,
+                roomId: roomId || undefined,
+                isRootAdmin: false
             },
             process.env.JWT_REFRESH_TOKEN_SECRET || process.env.JWT_AUTH_TOKEN_SECRET || 'default-secret',
             {
@@ -174,7 +192,11 @@ router.get('/', async (req: Request, res: Response) => {
             }
         )
 
-        logger.info(`[ExternalSSO]: Created JWT tokens with proper format (id, username, meta)`)
+        logger.info(`[ExternalSSO]: Created JWT tokens with proper format (id, username, meta, roomId)`)
+
+        // Decode and log JWT payload for debugging
+        const decodedToken = jwt.decode(authToken) as any
+        logger.info(`[ExternalSSO]: JWT Payload: ${JSON.stringify(decodedToken)}`)
 
         // Build user object for frontend (matching Flowise format)
         const returnUser = {
@@ -195,7 +217,10 @@ router.get('/', async (req: Request, res: Response) => {
             permissions,
             features: {},
             token: authToken,
-            refreshToken
+            refreshToken,
+            roomId: roomId || undefined,
+            activeRoomId: roomId || undefined,
+            isRootAdmin: false // SSO users are always room-scoped, never root admins
         }
 
         // Determine secure cookie setting
@@ -237,7 +262,10 @@ router.get('/', async (req: Request, res: Response) => {
             assignedWorkspaces: [],
             isApiKeyValidated: false,
             permissions: permissions,
-            features: {}
+            features: {},
+            roomId: roomId || undefined,
+            activeRoomId: roomId || undefined,
+            isRootAdmin: !roomId // If no roomId, user is root admin
         }
 
         // Store user in session

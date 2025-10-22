@@ -26,4 +26,7 @@ export class Credential implements ICredential {
 
     @Column({ nullable: true, type: 'text' })
     workspaceId?: string
+
+    @Column({ nullable: true, type: 'text' })
+    roomId?: string
 }

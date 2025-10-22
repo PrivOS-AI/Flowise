@@ -35,4 +35,7 @@ export class Tool implements ITool {
 
     @Column({ nullable: true, type: 'text' })
     workspaceId?: string
+
+    @Column({ nullable: true, type: 'text' })
+    roomId?: string
 }

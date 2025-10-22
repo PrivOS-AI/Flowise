@@ -81,7 +81,7 @@ const Canvas = () => {
     const canvas = useSelector((state) => state.canvas)
     const [canvasDataStore, setCanvasDataStore] = useState(canvas)
     const [chatflow, setChatflow] = useState(null)
-    const { reactFlowInstance, setReactFlowInstance } = useContext(flowContext)
+    const { reactFlowInstance, setReactFlowInstance} = useContext(flowContext)
 
     // ==============================|| Snackbar ||============================== //
 
@@ -368,7 +368,7 @@ const Canvas = () => {
             options: {
                 key: new Date().getTime() + Math.random(),
                 variant: 'error',
-                persist: true,
+                autoHideDuration: 3000,
                 action: (key) => (
                     <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
                         <IconX />

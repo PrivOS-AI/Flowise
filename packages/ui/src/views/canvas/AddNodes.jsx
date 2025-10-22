@@ -70,7 +70,7 @@ const blacklistForChatflowCanvas = {
     Memory: agentMemoryNodes
 }
 
-const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerated }) => {
+const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerated, disabled = false }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
     const dispatch = useDispatch()
@@ -321,13 +321,22 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
     return (
         <>
             <StyledFab
-                sx={{ left: 20, top: 20 }}
+                sx={{
+                    left: 20,
+                    top: 20,
+                    opacity: disabled ? 0.5 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    '&:hover': disabled ? {
+                        backgroundColor: theme.palette.grey[400]
+                    } : {}
+                }}
                 ref={anchorRef}
                 size='small'
                 color='primary'
                 aria-label='add'
-                title='Add Node'
-                onClick={handleToggle}
+                title={disabled ? 'Read-only: Cannot add nodes to global resources' : 'Add Node'}
+                onClick={disabled ? null : handleToggle}
+                disabled={disabled}
             >
                 {open ? <IconMinus /> : <IconPlus />}
             </StyledFab>
@@ -360,7 +369,7 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
 
             <Popper
                 placement='bottom-end'
-                open={open}
+                open={open && !disabled}
                 anchorEl={anchorRef.current}
                 role={undefined}
                 transition

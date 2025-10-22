@@ -37,6 +37,21 @@ const deleteVariable = async (req: Request, res: Response, next: NextFunction) =
         if (typeof req.params === 'undefined' || !req.params.id) {
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, 'Error: variablesController.deleteVariable - id not provided!')
         }
+
+        // Room isolation: Check if user can delete this variable
+        const variable = await variablesService.getVariableById(req.params.id)
+        if (!variable) {
+            return res.status(404).send(`Variable ${req.params.id} not found`)
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !variable.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: variablesController.deleteVariable - Cannot delete global resources. This variable was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await variablesService.deleteVariable(req.params.id)
         return res.json(apiResponse)
     } catch (error) {
@@ -69,6 +84,15 @@ const updateVariable = async (req: Request, res: Response, next: NextFunction) =
         if (!variable) {
             return res.status(404).send(`Variable ${req.params.id} not found in the database`)
         }
+
+        // Room isolation: Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !variable.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: variablesController.updateVariable - Cannot edit global resources. This variable was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const body = req.body
         const updatedVariable = new Variable()
         Object.assign(updatedVariable, body)

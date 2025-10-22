@@ -47,27 +47,40 @@ const deleteCredentials = async (credentialId: string): Promise<any> => {
     }
 }
 
-const getAllCredentials = async (paramCredentialName: any, workspaceId?: string) => {
+const getAllCredentials = async (paramCredentialName: any, workspaceId?: string, roomId?: string, isRootAdmin?: boolean) => {
     try {
         const appServer = getRunningExpressApp()
         let dbResponse = []
+
+        // Build query with room isolation
+        const buildQuery = (credentialName?: string) => {
+            const qb = appServer.AppDataSource.getRepository(Credential).createQueryBuilder('credential')
+
+            if (credentialName) {
+                qb.andWhere('credential.credentialName = :credentialName', { credentialName })
+            }
+
+            if (workspaceId) {
+                qb.andWhere('credential.workspaceId = :workspaceId', { workspaceId })
+            }
+
+            // Room isolation: Root admin sees all, room users see their room + global resources
+            if (!isRootAdmin && roomId) {
+                qb.andWhere('(credential.roomId = :roomId OR credential.roomId IS NULL)', { roomId })
+            }
+
+            return qb
+        }
+
         if (paramCredentialName) {
             if (Array.isArray(paramCredentialName)) {
                 for (let i = 0; i < paramCredentialName.length; i += 1) {
                     const name = paramCredentialName[i] as string
-                    const searchOptions = {
-                        credentialName: name,
-                        ...getWorkspaceSearchOptions(workspaceId)
-                    }
-                    const credentials = await appServer.AppDataSource.getRepository(Credential).findBy(searchOptions)
+                    const credentials = await buildQuery(name).getMany()
                     dbResponse.push(...credentials)
                 }
             } else {
-                const searchOptions = {
-                    credentialName: paramCredentialName,
-                    ...getWorkspaceSearchOptions(workspaceId)
-                }
-                const credentials = await appServer.AppDataSource.getRepository(Credential).findBy(searchOptions)
+                const credentials = await buildQuery(paramCredentialName).getMany()
                 dbResponse = [...credentials]
             }
             // get shared credentials
@@ -97,7 +110,7 @@ const getAllCredentials = async (paramCredentialName: any, workspaceId?: string)
                 }
             }
         } else {
-            const credentials = await appServer.AppDataSource.getRepository(Credential).findBy(getWorkspaceSearchOptions(workspaceId))
+            const credentials = await buildQuery().getMany()
             for (const credential of credentials) {
                 dbResponse.push(omit(credential, ['encryptedData']))
             }
