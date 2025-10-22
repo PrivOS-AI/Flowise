@@ -518,7 +518,12 @@ export class AgentExecutor extends BaseChain<ChainValues, AgentExecutorOutput> {
                         observation = observationArray[0]
                         try {
                             const artifact = JSON.parse(observationArray[1])
-                            artifacts.push(artifact)
+                            // Handle both single artifact and array of artifacts
+                            if (Array.isArray(artifact)) {
+                                artifacts.push(...artifact) // Spread array
+                            } else {
+                                artifacts.push(artifact)
+                            }
                         } catch (e) {
                             console.error('Error parsing source documents from tool')
                         }

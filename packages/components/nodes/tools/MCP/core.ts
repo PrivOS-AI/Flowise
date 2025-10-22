@@ -5,6 +5,7 @@ import { BaseToolkit, tool, Tool } from '@langchain/core/tools'
 import { z } from 'zod'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { ARTIFACTS_PREFIX } from '../../../src/agents'
 
 export class MCPToolkit extends BaseToolkit {
     tools: Tool[] = []
@@ -141,6 +142,48 @@ export async function MCPTool({
                 const req: CallToolRequest = { method: 'tools/call', params: { name: name, arguments: input as any } }
                 const res = await client.request(req, CallToolResultSchema)
                 const content = res.content
+
+                // Extract text from content array for proper markdown rendering
+                if (Array.isArray(content) && content.length > 0) {
+                    // Find first text content
+                    const textContent = content.find((item) => item.type === 'text')
+                    if (textContent && 'text' in textContent) {
+                        const text = textContent.text
+
+                        // Check if text contains markdown images (data URLs)
+                        // Pattern: ![alt](data:image/...;base64,...)
+                        const markdownImageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g
+                        const matches = [...text.matchAll(markdownImageRegex)]
+
+                        if (matches.length > 0) {
+                            // Extract markdown images and convert to artifacts
+                            let cleanedText = text
+                            const artifacts: any[] = []
+
+                            for (const match of matches) {
+                                const dataUrl = match[2]
+                                // Remove this markdown image from text
+                                cleanedText = cleanedText.replace(match[0], '')
+
+                                // Add to artifacts as markdown type (Flowise will render it)
+                                artifacts.push({
+                                    type: 'markdown',
+                                    data: match[0] // Keep the markdown image syntax
+                                })
+                            }
+
+                            // Return text + artifacts
+                            cleanedText = cleanedText.trim()
+                            if (artifacts.length > 0) {
+                                return cleanedText + ARTIFACTS_PREFIX + JSON.stringify(artifacts)
+                            }
+                        }
+
+                        return text
+                    }
+                }
+
+                // Fallback to JSON string if no text content found
                 const contentString = JSON.stringify(content)
                 return contentString
             } finally {

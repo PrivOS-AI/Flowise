@@ -16,16 +16,19 @@ class ImageGen_MCP implements INode {
     credential: INodeParams
     documentation: string
     inputs: INodeParams[]
+    returnDirect: boolean
 
     constructor() {
-        this.label = 'Image Generation MCP'
+        this.label = '[PrivOS] Image Generation MCP'
         this.name = 'imageGenMCP'
         this.version = 1.0
         this.type = 'ImageGen MCP Tool'
         this.icon = 'image-gen.svg'
         this.category = 'MCP'
-        this.description = 'MCP server for image generation using Google Gemini/Imagen models'
+        this.description =
+            'MCP server for image generation using Google Gemini/Imagen models. Returns images directly without LLM processing.'
         this.documentation = 'https://ai.google.dev/gemini-api/docs'
+        this.returnDirect = true
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
@@ -44,14 +47,19 @@ class ImageGen_MCP implements INode {
                         description: 'Preview model, FREE, good for testing'
                     },
                     {
-                        label: 'Gemini 2.5 Flash Image (FREE)',
+                        label: 'Gemini 2.5 Flash Image',
                         name: 'gemini-2.5-flash-image',
-                        description: 'Latest, fastest, best quality, FREE'
+                        description: 'Latest, fastest, best quality, Paid'
                     },
                     {
-                        label: 'Gemini 2.0 Flash Image (FREE)',
+                        label: 'Gemini 2.0 Flash Image (Paid)',
                         name: 'gemini-2.0-flash-image',
-                        description: 'Previous version, FREE'
+                        description: 'Previous version, Paid'
+                    },
+                    {
+                        label: 'Imagen 3.0 Generate (Paid)',
+                        name: 'imagen-3.0-generate-001',
+                        description: 'Previous generation Imagen model'
                     },
                     {
                         label: 'Imagen 4.0 Fast (Paid)',
@@ -151,6 +159,12 @@ class ImageGen_MCP implements INode {
         await toolkit.initialize()
 
         const tools = toolkit.tools ?? []
+
+        // Set returnDirect = true for all tools to skip LLM processing
+        // This ensures images are displayed directly without Agent LLM interference
+        tools.forEach((tool: any) => {
+            tool.returnDirect = true
+        })
 
         return tools as Tool[]
     }
