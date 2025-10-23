@@ -10,6 +10,22 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { GoogleGenAI } from '@google/genai'
 
+// Type definitions for Google GenAI responses
+interface GeneratedVideo {
+    video?: {
+        uri?: string
+    }
+}
+
+interface VideoOperationResponse {
+    generatedVideos?: GeneratedVideo[]
+}
+
+interface VideoOperation {
+    done: boolean
+    response?: VideoOperationResponse
+}
+
 // Helper function to get and validate API key
 function getGeminiApiKey(): string {
     const apiKey = process.env.GEMINI_API_KEY
@@ -188,7 +204,7 @@ async function generateVideo(args: any) {
     try {
         // Call generateVideos API
         console.error(`[MCP Server] Calling generateVideos API...`)
-        let operation = await ai.models.generateVideos({
+        let operation = (await ai.models.generateVideos({
             model: modelName,
             prompt: fullPrompt,
             config: {
@@ -196,7 +212,7 @@ async function generateVideo(args: any) {
                 personGeneration: personGeneration,
                 durationSeconds: durationSeconds
             }
-        })
+        })) as VideoOperation
 
         console.error(`[MCP Server] Operation started, polling for completion...`)
 
@@ -211,9 +227,9 @@ async function generateVideo(args: any) {
             // Wait 5 seconds before checking again
             await new Promise((resolve) => setTimeout(resolve, 5000))
 
-            operation = await ai.operations.getVideosOperation({
+            operation = (await (ai.operations as any).getVideosOperation({
                 operation: operation
-            })
+            })) as VideoOperation
         }
 
         if (!operation.done) {
@@ -223,11 +239,12 @@ async function generateVideo(args: any) {
         console.error(`[MCP Server] Video generation complete!`)
 
         // Check if we have generated videos
-        if (!operation.response?.generatedVideos || operation.response.generatedVideos.length === 0) {
+        const generatedVideos = operation.response?.generatedVideos || []
+        if (generatedVideos.length === 0) {
             throw new Error('No videos generated in the response')
         }
 
-        const generatedVideo = operation.response.generatedVideos[0]
+        const generatedVideo = generatedVideos[0]
         if (!generatedVideo.video?.uri) {
             throw new Error('Generated video missing URI')
         }
@@ -290,7 +307,7 @@ async function generateVideoFromImage(args: any) {
     try {
         // Call generateVideos API with image
         console.error(`[MCP Server] Calling generateVideos API with image...`)
-        let operation = await ai.models.generateVideos({
+        let operation = (await ai.models.generateVideos({
             model: modelName,
             prompt: fullPrompt,
             image: {
@@ -302,7 +319,7 @@ async function generateVideoFromImage(args: any) {
                 durationSeconds: durationSeconds
                 // Note: personGeneration not allowed for image-to-video
             }
-        })
+        })) as VideoOperation
 
         console.error(`[MCP Server] Operation started, polling for completion...`)
 
@@ -317,9 +334,9 @@ async function generateVideoFromImage(args: any) {
             // Wait 5 seconds before checking again
             await new Promise((resolve) => setTimeout(resolve, 5000))
 
-            operation = await ai.operations.getVideosOperation({
+            operation = (await (ai.operations as any).getVideosOperation({
                 operation: operation
-            })
+            })) as VideoOperation
         }
 
         if (!operation.done) {
@@ -329,11 +346,12 @@ async function generateVideoFromImage(args: any) {
         console.error(`[MCP Server] Video generation complete!`)
 
         // Check if we have generated videos
-        if (!operation.response?.generatedVideos || operation.response.generatedVideos.length === 0) {
+        const generatedVideos = operation.response?.generatedVideos || []
+        if (generatedVideos.length === 0) {
             throw new Error('No videos generated in the response')
         }
 
-        const generatedVideo = operation.response.generatedVideos[0]
+        const generatedVideo = generatedVideos[0]
         if (!generatedVideo.video?.uri) {
             throw new Error('Generated video missing URI')
         }
