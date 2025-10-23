@@ -10,7 +10,7 @@ const execPromise = promisify(exec)
 async function killMCPProcesses() {
     try {
         if (process.platform === 'win32') {
-            // Windows: kill node processes containing "image-gen-server"
+            // Windows: kill node processes containing MCP server names
             const { stdout } = await execPromise('tasklist /FO CSV /NH')
             const lines = stdout.split('\n')
             const pids: string[] = []
@@ -24,13 +24,17 @@ async function killMCPProcesses() {
                 }
             }
 
-            // Check each PID for image-gen-server
+            // Check each PID for MCP servers (image-gen-server, video-gen-server)
+            const mcpServerNames = ['image-gen-server', 'video-gen-server']
             for (const pid of pids) {
                 try {
                     const { stdout: cmdline } = await execPromise(`wmic process where ProcessId=${pid} get CommandLine /FORMAT:LIST`)
-                    if (cmdline.includes('image-gen-server')) {
-                        await execPromise(`taskkill /F /PID ${pid}`)
-                        logger.info(`🧹 [server]: Killed MCP server process (PID: ${pid})`)
+                    for (const serverName of mcpServerNames) {
+                        if (cmdline.includes(serverName)) {
+                            await execPromise(`taskkill /F /PID ${pid}`)
+                            logger.info(`🧹 [server]: Killed ${serverName} MCP process (PID: ${pid})`)
+                            break
+                        }
                     }
                 } catch (e) {
                     // Process may have already exited, ignore
@@ -39,6 +43,7 @@ async function killMCPProcesses() {
         } else {
             // Unix/Linux/Mac
             await execPromise("pkill -f 'image-gen-server' || true")
+            await execPromise("pkill -f 'video-gen-server' || true")
             logger.info('🧹 [server]: Killed all MCP server processes')
         }
     } catch (error) {
