@@ -42,35 +42,35 @@ const getDefaultPermissions = (userData: ExternalUserProfile): string[] => {
     const roles = userData.roles || []
 
     // Admin gets full access
-    if (roles.includes('admin')) {
-        return [
-            'chatflows:view',
-            'chatflows:create',
-            'chatflows:update',
-            'chatflows:delete',
-            'credentials:view',
-            'credentials:create',
-            'credentials:update',
-            'credentials:delete',
-            'tools:view',
-            'tools:create',
-            'assistants:view',
-            'assistants:create'
-        ]
-    }
+    // if (roles.includes('admin')) {
+    return [
+        'chatflows:view',
+        'chatflows:create',
+        'chatflows:update',
+        'chatflows:delete',
+        'credentials:view',
+        'credentials:create',
+        'credentials:update',
+        'credentials:delete',
+        'tools:view',
+        'tools:create',
+        'assistants:view',
+        'assistants:create'
+    ]
+    // }
 
-    // Bot role
-    if (roles.includes('bot')) {
-        return ['chatflows:view', 'chatflows:create', 'credentials:view']
-    }
+    // // Bot role
+    // if (roles.includes('bot')) {
+    //     return ['chatflows:view', 'chatflows:create', 'credentials:view']
+    // }
 
-    // Regular user - read only
-    if (roles.includes('user')) {
-        return ['chatflows:view', 'credentials:view']
-    }
+    // // Regular user - read only
+    // if (roles.includes('user')) {
+    //     return ['chatflows:view', 'credentials:view']
+    // }
 
-    // Default minimal access
-    return ['chatflows:view']
+    // // Default minimal access
+    // return ['chatflows:view']
 }
 
 /**

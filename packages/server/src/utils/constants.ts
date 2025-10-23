@@ -18,6 +18,7 @@ export const WHITELIST_URLS = [
     '/api/v1/openai-assistants-file/download',
     '/api/v1/feedback',
     '/api/v1/leads',
+    '/api/v1/chatmessage',
     '/api/v1/get-upload-file',
     '/api/v1/ip',
     '/api/v1/ping',
