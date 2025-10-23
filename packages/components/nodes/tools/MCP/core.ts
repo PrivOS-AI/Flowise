@@ -150,18 +150,16 @@ export async function MCPTool({
                     if (textContent && 'text' in textContent) {
                         const text = textContent.text
 
+                        let cleanedText = text
+                        const artifacts: any[] = []
+
                         // Check if text contains markdown images (data URLs)
                         // Pattern: ![alt](data:image/...;base64,...)
                         const markdownImageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g
-                        const matches = [...text.matchAll(markdownImageRegex)]
+                        const imageMatches = [...text.matchAll(markdownImageRegex)]
 
-                        if (matches.length > 0) {
-                            // Extract markdown images and convert to artifacts
-                            let cleanedText = text
-                            const artifacts: any[] = []
-
-                            for (const match of matches) {
-                                const dataUrl = match[2]
+                        if (imageMatches.length > 0) {
+                            for (const match of imageMatches) {
                                 // Remove this markdown image from text
                                 cleanedText = cleanedText.replace(match[0], '')
 
@@ -171,12 +169,30 @@ export async function MCPTool({
                                     data: match[0] // Keep the markdown image syntax
                                 })
                             }
+                        }
 
-                            // Return text + artifacts
-                            cleanedText = cleanedText.trim()
-                            if (artifacts.length > 0) {
-                                return cleanedText + ARTIFACTS_PREFIX + JSON.stringify(artifacts)
+                        // Check if text contains HTML video tags
+                        // Pattern: <video src="URL" ...></video>
+                        const videoRegex = /<video\s+[^>]*src="([^"]+)"[^>]*>.*?<\/video>/gi
+                        const videoMatches = [...text.matchAll(videoRegex)]
+
+                        if (videoMatches.length > 0) {
+                            for (const match of videoMatches) {
+                                // Remove this video tag from text
+                                cleanedText = cleanedText.replace(match[0], '')
+
+                                // Add to artifacts as markdown type (Flowise will render HTML)
+                                artifacts.push({
+                                    type: 'markdown',
+                                    data: match[0] // Keep the full video HTML tag
+                                })
                             }
+                        }
+
+                        // Return text + artifacts if any were found
+                        cleanedText = cleanedText.trim()
+                        if (artifacts.length > 0) {
+                            return cleanedText + ARTIFACTS_PREFIX + JSON.stringify(artifacts)
                         }
 
                         return text
