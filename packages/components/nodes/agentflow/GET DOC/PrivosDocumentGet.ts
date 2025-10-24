@@ -3,7 +3,7 @@ import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
 
 // Global cache for rooms (keyed by credentialId)
-const roomsCache: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const roomsCache: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPI(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
@@ -24,7 +24,6 @@ async function fetchRoomsFromAPI(baseUrl: string, userId: string, authToken: str
         const rooms = response.data?.update || []
         console.log('Fetched', rooms.length, 'rooms')
         return rooms
-
     } catch (error: any) {
         console.error('Error fetching rooms:', error.message)
         throw error
@@ -129,7 +128,7 @@ class PrivosDocumentGet_Agentflow implements INode {
 
                 console.log('Credential loaded with keys:', Object.keys(credentialData))
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -151,7 +150,7 @@ class PrivosDocumentGet_Agentflow implements INode {
                 const cached = roomsCache.get(cacheKey)
                 let rooms: any[]
 
-                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                if (cached && now - cached.timestamp < CACHE_TTL) {
                     console.log('Using cached rooms')
                     rooms = cached.rooms
                 } else {
@@ -179,7 +178,6 @@ class PrivosDocumentGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'rooms')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listRooms] Error:', error.message)
                 console.error('Error stack:', error.stack)
@@ -219,7 +217,7 @@ class PrivosDocumentGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -277,7 +275,6 @@ class PrivosDocumentGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'document options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listDocuments] Error:', error.message)
                 console.error('Error details:', error.response?.data || error.stack)
@@ -288,7 +285,7 @@ class PrivosDocumentGet_Agentflow implements INode {
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
         const selectedDocument = nodeData.inputs?.selectedDocument as string
-        const returnFormat = nodeData.inputs?.returnFormat as string || 'content'
+        const returnFormat = (nodeData.inputs?.returnFormat as string) || 'content'
 
         const state = options.agentflowRuntime?.state as ICommonObject
 
@@ -298,7 +295,7 @@ class PrivosDocumentGet_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-dev-web.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
@@ -409,7 +406,6 @@ ${'='.repeat(50)}`
                 },
                 state
             }
-
         } catch (error: any) {
             console.error('Error:', error)
 

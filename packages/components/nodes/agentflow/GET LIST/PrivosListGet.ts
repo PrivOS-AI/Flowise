@@ -3,7 +3,7 @@ import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
 
 // Global cache for rooms (keyed by credentialId)
-const roomsCacheList: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const roomsCacheList: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPIList(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
@@ -24,7 +24,6 @@ async function fetchRoomsFromAPIList(baseUrl: string, userId: string, authToken:
         const rooms = response.data?.update || []
         console.log('Fetched', rooms.length, 'rooms')
         return rooms
-
     } catch (error: any) {
         console.error('Error fetching rooms:', error.message)
         throw error
@@ -139,7 +138,7 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -156,7 +155,7 @@ class PrivosListGet_Agentflow implements INode {
                 const cached = roomsCacheList.get(cacheKey)
                 let rooms: any[]
 
-                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                if (cached && now - cached.timestamp < CACHE_TTL) {
                     console.log('Using cached rooms')
                     rooms = cached.rooms
                 } else {
@@ -184,7 +183,6 @@ class PrivosListGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'rooms')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listRooms] Error:', error.message)
                 return returnData
@@ -217,7 +215,7 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -260,7 +258,6 @@ class PrivosListGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'list options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listLists] Error:', error.message)
                 return returnData
@@ -293,7 +290,7 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -332,7 +329,6 @@ class PrivosListGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'stage options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listStages] Error:', error.message)
                 return returnData
@@ -367,7 +363,7 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -410,7 +406,6 @@ class PrivosListGet_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'item options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listItems] Error:', error.message)
                 return returnData
@@ -422,7 +417,7 @@ class PrivosListGet_Agentflow implements INode {
         const selectedItem = nodeData.inputs?.selectedItem as string
         const selectedList = nodeData.inputs?.selectedList as string
         const selectedStage = nodeData.inputs?.selectedStage as string
-        const returnFormat = nodeData.inputs?.returnFormat as string || 'full'
+        const returnFormat = (nodeData.inputs?.returnFormat as string) || 'full'
 
         const state = options.agentflowRuntime?.state as ICommonObject
 
@@ -432,7 +427,7 @@ class PrivosListGet_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-dev-web.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
@@ -550,13 +545,13 @@ class PrivosListGet_Agentflow implements INode {
                     if (fieldType === 'DATE') {
                         formattedValue = formatDate(cf.value)
                     } else if (fieldType === 'USER') {
-                        formattedValue = Array.isArray(cf.value)
-                            ? cf.value.map((u: any) => formatUser(u)).join(', ')
-                            : formatUser(cf.value)
+                        formattedValue = Array.isArray(cf.value) ? cf.value.map((u: any) => formatUser(u)).join(', ') : formatUser(cf.value)
                     } else if (fieldType === 'DOCUMENT') {
                         formattedValue = Array.isArray(cf.value)
                             ? cf.value.map((d: any) => d.title || 'Untitled').join(', ')
-                            : typeof cf.value === 'object' ? cf.value.title || 'Untitled' : String(cf.value)
+                            : typeof cf.value === 'object'
+                            ? cf.value.title || 'Untitled'
+                            : String(cf.value)
                     } else if (Array.isArray(cf.value)) {
                         formattedValue = cf.value.join(', ')
                     } else if (typeof cf.value === 'object') {
@@ -670,7 +665,6 @@ ${'='.repeat(50)}`
                 },
                 state
             }
-
         } catch (error: any) {
             console.error('Error:', error)
 

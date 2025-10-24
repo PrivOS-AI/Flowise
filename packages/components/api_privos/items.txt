@@ -3,7 +3,7 @@ import { IItem, IList, IStage, ICustomFieldValue } from './interface';
 /**
  * Privos External API - Item Management Endpoints
  *
- * Base URL: https://privos-dev-web.roxane.one/api/v1
+ * Base URL: https://privos-chat-dev.roxane.one/api/v1
  *
  * This module defines the Item Management endpoints for the Privos external API.
  * Items are the individual entries within lists that can be organized across stages.

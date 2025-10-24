@@ -3,7 +3,7 @@ import { IList, IStage, IRoom, IFieldDefinition } from './interface';
 /**
  * Privos External API - List Management Endpoints
  *
- * Base URL: https://privos-dev-web.roxane.one/api/v1
+ * Base URL: https://privos-chat-dev.roxane.one/api/v1
  *
  * This module defines the List Management endpoints for the Privos external API.
  * Lists are customizable containers that organize items into stages with support for custom fields.

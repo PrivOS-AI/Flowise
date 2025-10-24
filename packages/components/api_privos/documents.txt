@@ -3,7 +3,7 @@ import { IDocument, IDocumentVersion } from './interface';
 /**
  * Privos External API Endpoints
  *
- * Base URL: https://privos-dev-web.roxane.one/api/v1
+ * Base URL: https://privos-chat-dev.roxane.one/api/v1
  *
  * This module defines the complete set of REST API endpoints for the Privos external API,
  * organized into the following categories:

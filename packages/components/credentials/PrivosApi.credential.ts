@@ -15,7 +15,7 @@ class PrivosApiCredential implements INodeCredential {
                 label: 'API Base URL',
                 name: 'baseUrl',
                 type: 'string',
-                default: 'https://privos-dev-web.roxane.one/api/v1',
+                default: 'https://privos-chat-dev.roxane.one/api/v1',
                 description: 'Base URL for Privos API'
             },
             {

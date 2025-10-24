@@ -112,7 +112,7 @@ class PrivosDocumentUpdate_Agentflow implements INode {
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        const updateType = nodeData.inputs?.updateType as string || 'form'
+        const updateType = (nodeData.inputs?.updateType as string) || 'form'
         const documentId = nodeData.inputs?.documentId as string
         const title = nodeData.inputs?.title as string
         const content = nodeData.inputs?.content as string
@@ -131,16 +131,15 @@ class PrivosDocumentUpdate_Agentflow implements INode {
                 if (!jsonPayload) {
                     throw new Error('JSON Payload is required when using JSON Object mode')
                 }
-                
+
                 payload = typeof jsonPayload === 'string' ? parseJsonBody(jsonPayload) : jsonPayload
-                
+
                 // Validate payload has documentId
                 if (!payload.documentId) {
                     throw new Error('JSON payload must have "documentId" field')
                 }
-                
+
                 targetDocumentId = payload.documentId
-                
             } else {
                 // Form mode: Build from form fields
                 if (!documentId) {
@@ -167,7 +166,7 @@ class PrivosDocumentUpdate_Agentflow implements INode {
             }
 
             // Build API URL with documentId
-            const apiUrl = `https://privos-dev-web.roxane.one/api/v1/external.documents/${targetDocumentId}`
+            const apiUrl = `https://privos-chat-dev.roxane.one/api/v1/external.documents/${targetDocumentId}`
 
             // Prepare headers
             const requestHeaders: Record<string, string> = {
@@ -220,7 +219,6 @@ class PrivosDocumentUpdate_Agentflow implements INode {
             }
 
             return returnOutput
-
         } catch (error: any) {
             console.error('Privos Document Update Error:', error)
 
@@ -244,4 +242,3 @@ class PrivosDocumentUpdate_Agentflow implements INode {
 }
 
 module.exports = { nodeClass: PrivosDocumentUpdate_Agentflow }
-

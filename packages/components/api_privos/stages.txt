@@ -3,7 +3,7 @@ import { IStage, IList, IItem } from './interface';
 /**
  * Privos External API - Stage Management Endpoints
  *
- * Base URL: https://privos-dev-web.roxane.one/api/v1
+ * Base URL: https://privos-chat-dev.roxane.one/api/v1
  *
  * This module defines the Stage Management endpoints for the Privos external API.
  * Stages represent workflow steps or columns within lists where items can be organized.

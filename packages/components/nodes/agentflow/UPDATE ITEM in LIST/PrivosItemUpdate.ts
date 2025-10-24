@@ -6,7 +6,7 @@ import * as path from 'path'
 import FormData from 'form-data'
 
 // Global cache for rooms
-const roomsCacheUpdateItem: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const roomsCacheUpdateItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPI(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
@@ -178,41 +178,79 @@ class PrivosItemUpdate_Agentflow implements INode {
                                 ]
 
                                 // Filter out the 7 hardcoded fields, keep only additional fields
-                                const additionalFields = value.filter((field: any) =>
-                                    !excludedFieldIds.includes(field.fieldId)
-                                )
+                                const additionalFields = value.filter((field: any) => !excludedFieldIds.includes(field.fieldId))
 
                                 // Transform to Additional Custom Fields format
                                 return additionalFields.map((field: any) => {
                                     let fieldValue = field.value
                                     let fieldType = 'TEXT' // Default type
+                                    let fieldName = field.fieldId || 'Unknown Field' // Use fieldId as name
 
-                                    // Detect field type based on value
+                                    // Try to get human-readable name from fieldId (convert snake_case to Title Case)
+                                    if (field.fieldId) {
+                                        fieldName = field.fieldId.replace(/_/g, ' ').replace(/\b\w/g, (char: string) => char.toUpperCase())
+                                    }
+
+                                    // Create result object with fieldName and fieldType
+                                    const result: any = {
+                                        fieldType: fieldType,
+                                        fieldName: fieldName
+                                    }
+
+                                    // Detect field type and set appropriate value field
                                     if (typeof fieldValue === 'object' && fieldValue !== null) {
-                                        fieldValue = JSON.stringify(fieldValue)
-                                        fieldType = 'TEXT'
+                                        // Check if it's an array (could be USER, MULTI_SELECT, DOCUMENT, FILE_MULTIPLE)
+                                        if (Array.isArray(fieldValue)) {
+                                            // Check if it's users
+                                            if (fieldValue.length > 0 && fieldValue[0]._id && fieldValue[0].username) {
+                                                fieldType = 'USER'
+                                                result.fieldType = 'USER'
+                                                result.userValue = fieldValue.map((u: any) =>
+                                                    JSON.stringify({ _id: u._id, username: u.username })
+                                                )
+                                            } else {
+                                                // Generic array - use MULTI_SELECT or convert to JSON
+                                                fieldType = 'MULTI_SELECT'
+                                                result.fieldType = 'MULTI_SELECT'
+                                                result.multiSelectValue = JSON.stringify(fieldValue)
+                                            }
+                                        } else {
+                                            // Single object - convert to JSON string
+                                            fieldType = 'TEXT'
+                                            result.fieldType = 'TEXT'
+                                            result.textValue = JSON.stringify(fieldValue)
+                                        }
                                     } else if (typeof fieldValue === 'number') {
-                                        fieldValue = String(fieldValue)
                                         fieldType = 'NUMBER'
+                                        result.fieldType = 'NUMBER'
+                                        result.numberValue = fieldValue
                                     } else if (typeof fieldValue === 'boolean') {
-                                        fieldValue = String(fieldValue)
                                         fieldType = 'CHECKBOX'
+                                        result.fieldType = 'CHECKBOX'
+                                        result.checkboxValue = fieldValue ? 'true' : 'false'
                                     } else if (typeof fieldValue === 'string') {
                                         // Check if it's a date
-                                        if (/^\d{4}-\d{2}-\d{2}/.test(fieldValue)) {
+                                        if (/^\d{4}-\d{2}-\d{2}T/.test(fieldValue)) {
                                             fieldType = 'DATE'
+                                            result.fieldType = 'DATE'
+                                            // Convert ISO date to YYYY-MM-DD format for date input
+                                            result.dateValue = fieldValue.split('T')[0]
                                         } else if (fieldValue.length > 100) {
                                             fieldType = 'TEXTAREA'
+                                            result.fieldType = 'TEXTAREA'
+                                            result.textareaValue = fieldValue
                                         } else {
                                             fieldType = 'TEXT'
+                                            result.fieldType = 'TEXT'
+                                            result.textValue = fieldValue
                                         }
+                                    } else {
+                                        // Default to empty text
+                                        result.fieldType = 'TEXT'
+                                        result.textValue = ''
                                     }
 
-                                    return {
-                                        fieldType: fieldType,
-                                        fieldKey: field.fieldId,
-                                        fieldValue: fieldValue || ''
-                                    }
+                                    return result
                                 })
                             }
                         }
@@ -528,7 +566,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData || Object.keys(credentialData).length === 0) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -539,7 +577,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const cached = roomsCacheUpdateItem.get(cacheKey)
 
                 let rooms: any[]
-                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                if (cached && now - cached.timestamp < CACHE_TTL) {
                     rooms = cached.rooms
                 } else {
                     rooms = await fetchRoomsFromAPI(baseUrl, userId, authToken)
@@ -558,7 +596,6 @@ class PrivosItemUpdate_Agentflow implements INode {
                 }
 
                 return returnData
-
             } catch (error: any) {
                 console.error('[listRooms] Error:', error.message)
                 return returnData
@@ -591,7 +628,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -632,7 +669,6 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 console.log('[listLists] Returning', returnData.length, 'list options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listLists] Error:', error.message)
                 console.error('[listLists] Error details:', error.response?.data || 'No response data')
@@ -676,7 +712,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -712,7 +748,6 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 console.log('[listStages] Returning', returnData.length, 'stage options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listStages] Error:', error.message)
                 console.error('[listStages] Error details:', error.response?.data || 'No response data')
@@ -760,7 +795,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -876,14 +911,15 @@ class PrivosItemUpdate_Agentflow implements INode {
                     }
 
                     // Count other custom fields
-                    const otherFields = customFields.filter((f: any) =>
-                        f.fieldId !== 'marketing_campaign_assignees_field' &&
-                        f.fieldId !== 'marketing_campaign_due_date_field' &&
-                        f.fieldId !== 'marketing_campaign_start_date_field' &&
-                        f.fieldId !== 'marketing_campaign_end_date_field' &&
-                        f.fieldId !== 'marketing_campaign_file_link_field' &&
-                        f.fieldId !== 'marketing_campaign_documents_field' &&
-                        f.fieldId !== 'marketing_campaign_note_field'
+                    const otherFields = customFields.filter(
+                        (f: any) =>
+                            f.fieldId !== 'marketing_campaign_assignees_field' &&
+                            f.fieldId !== 'marketing_campaign_due_date_field' &&
+                            f.fieldId !== 'marketing_campaign_start_date_field' &&
+                            f.fieldId !== 'marketing_campaign_end_date_field' &&
+                            f.fieldId !== 'marketing_campaign_file_link_field' &&
+                            f.fieldId !== 'marketing_campaign_documents_field' &&
+                            f.fieldId !== 'marketing_campaign_note_field'
                     )
                     if (otherFields.length > 0) {
                         formattedInfo += `\n+${otherFields.length} additional custom field(s)`
@@ -914,7 +950,6 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 console.log('[listItems] Returning', returnData.length, 'item options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listItems] Error:', error.message)
                 return returnData
@@ -965,7 +1000,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -979,7 +1014,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const cached = roomsCacheUpdateItem.get(cacheKey)
                 let rooms: any[] = []
 
-                if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
                     rooms = cached.rooms
                 } else {
                     rooms = await fetchRoomsFromAPI(baseUrl, userId, authToken)
@@ -1042,7 +1077,6 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 console.log('[listUsers] Returning', returnData.length, 'user options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listUsers] Error:', error.message)
                 console.error('[listUsers] Error details:', error.response?.data || error.response || 'No response data')
@@ -1103,7 +1137,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(credentialId, options)
-            const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+            const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
             const userId = credentialData.userId
             const authToken = credentialData.authToken
 
@@ -1125,7 +1159,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             // Get list field definitions to validate which fields exist
             const currentListId = currentItem.listId
             let listFieldIds: string[] = []
-            
+
             if (currentListId) {
                 try {
                     const listApiUrl = `${baseUrl}/external.lists/${currentListId}`
@@ -1294,7 +1328,7 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             // 6. Documents
             if (field_documents && field_documents.length > 0 && listFieldIds.includes('marketing_campaign_documents_field')) {
-                const documentsValue = field_documents.map(doc => ({
+                const documentsValue = field_documents.map((doc) => ({
                     title: doc.title,
                     content: doc.content
                 }))
@@ -1317,18 +1351,20 @@ class PrivosItemUpdate_Agentflow implements INode {
                 for (const field of customFields) {
                     const fieldType = field.fieldType || 'TEXT'
                     const fieldName = field.fieldName
-                    
+
                     if (!fieldName) {
                         console.warn('Skipping custom field without fieldName')
                         continue
                     }
 
                     // Auto-generate unique fieldId from fieldName
-                    const fieldId = fieldName
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '_')
-                        .replace(/^_+|_+$/g, '')
-                        + '_' + Math.random().toString(36).substring(2, 9)
+                    const fieldId =
+                        fieldName
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '') +
+                        '_' +
+                        Math.random().toString(36).substring(2, 9)
 
                     let fieldValue: any = null
 
@@ -1364,9 +1400,10 @@ class PrivosItemUpdate_Agentflow implements INode {
                         case 'MULTI_SELECT':
                             if (field.multiSelectValue) {
                                 try {
-                                    fieldValue = typeof field.multiSelectValue === 'string' 
-                                        ? JSON.parse(field.multiSelectValue)
-                                        : field.multiSelectValue
+                                    fieldValue =
+                                        typeof field.multiSelectValue === 'string'
+                                            ? JSON.parse(field.multiSelectValue)
+                                            : field.multiSelectValue
                                 } catch (e) {
                                     fieldValue = []
                                 }
@@ -1393,16 +1430,18 @@ class PrivosItemUpdate_Agentflow implements INode {
                                     }
                                 } else if (Array.isArray(field.userValue)) {
                                     // Already array - map to proper format
-                                    fieldValue = field.userValue.map((userStr: any) => {
-                                        if (typeof userStr === 'string') {
-                                            try {
-                                                return JSON.parse(userStr)
-                                            } catch {
-                                                return null
+                                    fieldValue = field.userValue
+                                        .map((userStr: any) => {
+                                            if (typeof userStr === 'string') {
+                                                try {
+                                                    return JSON.parse(userStr)
+                                                } catch {
+                                                    return null
+                                                }
                                             }
-                                        }
-                                        return userStr
-                                    }).filter((u: any) => u !== null)
+                                            return userStr
+                                        })
+                                        .filter((u: any) => u !== null)
                                 } else if (typeof field.userValue === 'object') {
                                     // Single user object
                                     fieldValue = [field.userValue]
@@ -1488,9 +1527,10 @@ class PrivosItemUpdate_Agentflow implements INode {
                         case 'FILE_MULTIPLE':
                             if (field.fileMultipleValue) {
                                 try {
-                                    fieldValue = typeof field.fileMultipleValue === 'string'
-                                        ? JSON.parse(field.fileMultipleValue)
-                                        : field.fileMultipleValue
+                                    fieldValue =
+                                        typeof field.fileMultipleValue === 'string'
+                                            ? JSON.parse(field.fileMultipleValue)
+                                            : field.fileMultipleValue
                                 } catch (e) {
                                     fieldValue = []
                                 }
@@ -1502,9 +1542,8 @@ class PrivosItemUpdate_Agentflow implements INode {
                         case 'DOCUMENT':
                             if (field.documentValue) {
                                 try {
-                                    fieldValue = typeof field.documentValue === 'string'
-                                        ? JSON.parse(field.documentValue)
-                                        : field.documentValue
+                                    fieldValue =
+                                        typeof field.documentValue === 'string' ? JSON.parse(field.documentValue) : field.documentValue
                                 } catch (e) {
                                     fieldValue = []
                                 }
@@ -1578,11 +1617,11 @@ class PrivosItemUpdate_Agentflow implements INode {
             // === MOVE TO STAGE (if specified) ===
             let movedToStage = false
             let newStageName = ''
-            
+
             if (moveToStage) {
                 try {
                     console.log('[UPDATE ITEM] Moving item to new stage:', moveToStage)
-                    
+
                     const moveApiUrl = `${baseUrl}/external.items.move`
                     const moveResponse = await secureAxiosRequest({
                         method: 'POST',
@@ -1621,7 +1660,6 @@ class PrivosItemUpdate_Agentflow implements INode {
                     } catch (e) {
                         newStageName = moveToStage
                     }
-
                 } catch (moveError: any) {
                     console.error('[UPDATE ITEM] Error moving stage:', moveError.message)
                     // Don't fail the whole operation, just log the error
@@ -1629,30 +1667,33 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // Format custom fields summary
-            const customFieldsSummary = allCustomFields && allCustomFields.length > 0
-                ? allCustomFields.map((cf: any) => {
-                    const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
-                    const fieldName = fieldDef?.name || cf.fieldId
-                    
-                    // Format value based on type
-                    let displayValue = cf.value
-                    if (Array.isArray(cf.value)) {
-                        if (cf.value.length > 0 && cf.value[0]._id && cf.value[0].username) {
-                            // User array
-                            displayValue = cf.value.map((u: any) => `@${u.username}`).join(', ')
-                        } else {
-                            displayValue = JSON.stringify(cf.value)
-                        }
-                    } else if (typeof cf.value === 'object') {
-                        displayValue = JSON.stringify(cf.value)
-                    } else if (typeof cf.value === 'string' && cf.value.includes('T') && cf.value.includes('Z')) {
-                        // Date
-                        displayValue = new Date(cf.value).toLocaleString('en-GB')
-                    }
-                    
-                    return `   ${fieldName}: ${displayValue}`
-                }).join('\n')
-                : '   No fields updated'
+            const customFieldsSummary =
+                allCustomFields && allCustomFields.length > 0
+                    ? allCustomFields
+                          .map((cf: any) => {
+                              const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
+                              const fieldName = fieldDef?.name || cf.fieldId
+
+                              // Format value based on type
+                              let displayValue = cf.value
+                              if (Array.isArray(cf.value)) {
+                                  if (cf.value.length > 0 && cf.value[0]._id && cf.value[0].username) {
+                                      // User array
+                                      displayValue = cf.value.map((u: any) => `@${u.username}`).join(', ')
+                                  } else {
+                                      displayValue = JSON.stringify(cf.value)
+                                  }
+                              } else if (typeof cf.value === 'object') {
+                                  displayValue = JSON.stringify(cf.value)
+                              } else if (typeof cf.value === 'string' && cf.value.includes('T') && cf.value.includes('Z')) {
+                                  // Date
+                                  displayValue = new Date(cf.value).toLocaleString('en-GB')
+                              }
+
+                              return `   ${fieldName}: ${displayValue}`
+                          })
+                          .join('\n')
+                    : '   No fields updated'
 
             const outputContent = `ITEM UPDATED SUCCESSFULLY
 ${'='.repeat(50)}
@@ -1680,10 +1721,10 @@ The item has been updated successfully.${movedToStage ? ' Item moved to new stag
                 listName: listData.name || '',
                 updatedFieldsCount: allCustomFields.length,
                 updatedItem: updatedItem,
-                ...(movedToStage && { 
-                    movedToStage: true, 
+                ...(movedToStage && {
+                    movedToStage: true,
                     newStageId: moveToStage,
-                    newStageName: newStageName 
+                    newStageName: newStageName
                 })
             }
 
@@ -1697,7 +1738,6 @@ The item has been updated successfully.${movedToStage ? ' Item moved to new stag
                 },
                 state: options.agentflowRuntime?.state || {}
             }
-
         } catch (error: any) {
             console.error('Update Item Error:', error)
 

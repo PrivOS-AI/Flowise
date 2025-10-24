@@ -1,12 +1,12 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
-import { getCredentialData, getCredentialParam, parseJsonBody } from '../../../src/utils'
+import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
 import * as fs from 'fs'
 import * as path from 'path'
 import FormData from 'form-data'
 
 // Global cache for rooms and fields
-const roomsCachePostItem: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const roomsCachePostItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const fieldDefinitionsCache: Map<string, any[]> = new Map() // Cache field definitions by list ID
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -28,7 +28,6 @@ async function fetchRoomsFromAPIPostItem(baseUrl: string, userId: string, authTo
         const rooms = response.data?.update || []
         console.log('Fetched', rooms.length, 'rooms')
         return rooms
-
     } catch (error: any) {
         console.error('Error fetching rooms:', error.message)
         throw error
@@ -252,7 +251,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -267,7 +266,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                 const cached = roomsCachePostItem.get(cacheKey)
 
                 let rooms: any[]
-                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                if (cached && now - cached.timestamp < CACHE_TTL) {
                     console.log('Using cached rooms')
                     rooms = cached.rooms
                 } else {
@@ -289,7 +288,6 @@ class PrivosBatchCreate_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'rooms')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listRooms] Error:', error.message)
                 return returnData
@@ -320,7 +318,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -386,7 +384,6 @@ class PrivosBatchCreate_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'list options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listLists] Error:', error.message)
                 return returnData
@@ -417,7 +414,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -463,7 +460,6 @@ class PrivosBatchCreate_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'stage options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listStages] Error:', error.message)
                 return returnData
@@ -494,7 +490,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -508,7 +504,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                 const cached = roomsCachePostItem.get(cacheKey)
                 let rooms: any[] = []
 
-                if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+                if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
                     rooms = cached.rooms
                 } else {
                     rooms = await fetchRoomsFromAPIPostItem(baseUrl, userId, authToken)
@@ -574,7 +570,6 @@ class PrivosBatchCreate_Agentflow implements INode {
 
                 console.log('[listUsers] Returning', returnData.length, 'user options')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listUsers] Error:', error.message)
                 console.error('[listUsers] Error details:', error.response?.data || 'No response data')
@@ -642,7 +637,6 @@ class PrivosBatchCreate_Agentflow implements INode {
 
                 console.log('[listFieldDefinitions] Returning', returnData.length, 'field options from all cached lists')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listFieldDefinitions] Error:', error.message)
                 return []
@@ -656,7 +650,7 @@ class PrivosBatchCreate_Agentflow implements INode {
         try {
             // Get credentials
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-dev-web.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
@@ -701,14 +695,14 @@ class PrivosBatchCreate_Agentflow implements INode {
             const allCustomFields: any[] = []
 
             // Map of fixed field names to their IDs (from fieldDefinitions)
-            const fieldMapping: {[key: string]: string} = {
-                'field_assignees': 'marketing_campaign_assignees_field',
-                'field_due_date': 'marketing_campaign_due_date_field',
-                'field_start_date': 'marketing_campaign_start_date_field',
-                'field_end_date': 'marketing_campaign_end_date_field',
-                'field_file': 'marketing_campaign_file_link_field',
-                'field_documents': 'marketing_campaign_documents_field',
-                'field_note': 'marketing_campaign_note_field'
+            const fieldMapping: { [key: string]: string } = {
+                field_assignees: 'marketing_campaign_assignees_field',
+                field_due_date: 'marketing_campaign_due_date_field',
+                field_start_date: 'marketing_campaign_start_date_field',
+                field_end_date: 'marketing_campaign_end_date_field',
+                field_file: 'marketing_campaign_file_link_field',
+                field_documents: 'marketing_campaign_documents_field',
+                field_note: 'marketing_campaign_note_field'
             }
 
             // Process Assignees (USER type)
@@ -896,16 +890,18 @@ class PrivosBatchCreate_Agentflow implements INode {
                     _id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
                     title: doc.title || 'Untitled',
                     content: doc.content || '',
-                    versions: [{
-                        version: 1,
-                        content: doc.content || '',
-                        createdAt: new Date().toISOString(),
-                        createdBy: {
-                            _id: userId,
-                            username: 'system',
-                            name: 'System'
+                    versions: [
+                        {
+                            version: 1,
+                            content: doc.content || '',
+                            createdAt: new Date().toISOString(),
+                            createdBy: {
+                                _id: userId,
+                                username: 'system',
+                                name: 'System'
+                            }
                         }
-                    }],
+                    ],
                     currentVersion: 1,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
@@ -959,7 +955,10 @@ class PrivosBatchCreate_Agentflow implements INode {
                             }
                         } else if (field.fieldType === 'DOCUMENT') {
                             // Parse document JSON
-                            if (typeof field.fieldValue === 'string' && (field.fieldValue.includes('{') || field.fieldValue.includes('['))) {
+                            if (
+                                typeof field.fieldValue === 'string' &&
+                                (field.fieldValue.includes('{') || field.fieldValue.includes('['))
+                            ) {
                                 try {
                                     processedValue = JSON.parse(field.fieldValue)
                                 } catch (e) {
@@ -1037,13 +1036,16 @@ class PrivosBatchCreate_Agentflow implements INode {
             const originalItem = requestBody.items[0]
 
             // Format custom fields summary
-            const customFieldsSummary = originalItem.customFields && originalItem.customFields.length > 0
-                ? originalItem.customFields.map((cf: any) => {
-                    const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
-                    const fieldName = fieldDef?.name || cf.fieldId
-                    return `   ${fieldName}: ${JSON.stringify(cf.value)}`
-                }).join('\n')
-                : '   No custom fields'
+            const customFieldsSummary =
+                originalItem.customFields && originalItem.customFields.length > 0
+                    ? originalItem.customFields
+                          .map((cf: any) => {
+                              const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
+                              const fieldName = fieldDef?.name || cf.fieldId
+                              return `   ${fieldName}: ${JSON.stringify(cf.value)}`
+                          })
+                          .join('\n')
+                    : '   No custom fields'
 
             const outputContent = `ITEM CREATED SUCCESSFULLY
 ${'='.repeat(50)}
@@ -1085,7 +1087,6 @@ The item has been created and is now visible in the selected stage.`
                 },
                 state
             }
-
         } catch (error: any) {
             console.error('Error creating items:', error)
 

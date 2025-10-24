@@ -1,9 +1,9 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
-import { getCredentialData, getCredentialParam, parseJsonBody } from '../../../src/utils'
+import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
 
 // Global cache for rooms
-const roomsCachePostDoc: Map<string, { rooms: any[], timestamp: number }> = new Map()
+const roomsCachePostDoc: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPIPostDoc(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
@@ -24,7 +24,6 @@ async function fetchRoomsFromAPIPostDoc(baseUrl: string, userId: string, authTok
         const rooms = response.data?.update || []
         console.log('Fetched', rooms.length, 'rooms')
         return rooms
-
     } catch (error: any) {
         console.error('Error fetching rooms:', error.message)
         throw error
@@ -125,7 +124,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-dev-web.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -140,7 +139,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 const cached = roomsCachePostDoc.get(cacheKey)
 
                 let rooms: any[]
-                if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                if (cached && now - cached.timestamp < CACHE_TTL) {
                     console.log('Using cached rooms')
                     rooms = cached.rooms
                 } else {
@@ -162,7 +161,6 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
 
                 console.log('Returning', returnData.length, 'rooms')
                 return returnData
-
             } catch (error: any) {
                 console.error('[listRooms] Error:', error.message)
                 return returnData
@@ -179,7 +177,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
         try {
             // Get credentials
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-dev-web.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
@@ -204,7 +202,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 if (!doc.content || (typeof doc.content === 'string' && doc.content.trim() === '')) {
                     throw new Error(`Document #${index + 1} must have content`)
                 }
-                
+
                 const docPayload: any = {
                     title: doc.title,
                     content: doc.content
@@ -254,9 +252,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
             // Format output nicely
             let documentsSummary = ''
             if (createdDocs.length > 0) {
-                documentsSummary = createdDocs.map((doc: any, idx: number) => 
-                    `   ${idx + 1}. ${doc.title} (ID: ${doc._id})`
-                ).join('\n')
+                documentsSummary = createdDocs.map((doc: any, idx: number) => `   ${idx + 1}. ${doc.title} (ID: ${doc._id})`).join('\n')
             } else {
                 documentsSummary = '   No documents created'
             }
@@ -266,9 +262,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 errorsSummary = '\n\n' + '='.repeat(50) + '\n'
                 errorsSummary += 'ERRORS:\n'
                 errorsSummary += '='.repeat(50) + '\n'
-                errorsSummary += errors.map((err: any, idx: number) => 
-                    `   ${idx + 1}. ${err.title}: ${err.error}`
-                ).join('\n')
+                errorsSummary += errors.map((err: any, idx: number) => `   ${idx + 1}. ${err.title}: ${err.error}`).join('\n')
             }
 
             const outputContent = `DOCUMENTS CREATED SUCCESSFULLY
@@ -300,9 +294,9 @@ The documents have been created successfully.`
             return {
                 id: nodeData.id,
                 name: this.name,
-                input: { 
-                    roomId: selectedRoom, 
-                    documentsCount: payload.documents.length 
+                input: {
+                    roomId: selectedRoom,
+                    documentsCount: payload.documents.length
                 },
                 output: {
                     content: outputContent,
@@ -310,7 +304,6 @@ The documents have been created successfully.`
                 },
                 state
             }
-
         } catch (error: any) {
             console.error('Privos Document Batch Create Error:', error)
 
@@ -327,7 +320,7 @@ ${errorDetails ? `DETAILS: ${JSON.stringify(errorDetails, null, 2)}\n\n` : ''}${
             return {
                 id: nodeData.id,
                 name: this.name,
-                input: { 
+                input: {
                     roomId: selectedRoom || 'unknown',
                     error: 'Failed to process request'
                 },
@@ -345,5 +338,3 @@ ${errorDetails ? `DETAILS: ${JSON.stringify(errorDetails, null, 2)}\n\n` : ''}${
 }
 
 module.exports = { nodeClass: PrivosDocumentBatchCreate_Agentflow }
-
-
