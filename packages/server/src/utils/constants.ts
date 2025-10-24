@@ -116,3 +116,44 @@ export const LICENSE_QUOTAS = {
     STORAGE_LIMIT: 'quota:storage',
     ADDITIONAL_SEATS_LIMIT: 'quota:additionalSeats'
 } as const
+
+/**
+ * Default permissions for external SSO users
+ * Used in both external-sso route and externalAuth middleware to ensure consistency
+ */
+export const EXTERNAL_SSO_DEFAULT_PERMISSIONS = [
+    'chatflows:view',
+    'chatflows:create',
+    'chatflows:update',
+    'chatflows:delete',
+    'agentflows:view',
+    'agentflows:create',
+    'agentflows:update',
+    'agentflows:delete',
+    'credentials:view',
+    'credentials:create',
+    'credentials:update',
+    'credentials:delete',
+    'tools:view',
+    'tools:create',
+    'tools:update',
+    'tools:delete',
+    'assistants:view',
+    'assistants:create',
+    'assistants:update',
+    'assistants:delete',
+    'variables:view',
+    'variables:create',
+    'variables:update',
+    'variables:delete',
+    'documentStores:view',
+    'documentStores:create',
+    'documentStores:update',
+    'documentStores:delete',
+    'documentStores:add-loader',
+    'executions:view',
+    'executions:delete',
+    'apikeys:view',
+    'templates:marketplace',
+    'templates:custom'
+]

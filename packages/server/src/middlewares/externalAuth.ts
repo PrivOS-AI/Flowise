@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import axios from 'axios'
 import logger from '../utils/logger'
 import { LoggedInUser } from '../enterprise/Interface.Enterprise'
+import { EXTERNAL_SSO_DEFAULT_PERMISSIONS } from '../utils/constants'
 
 /**
  * External Authentication Middleware
@@ -37,40 +38,11 @@ interface ExternalUserProfile {
 
 /**
  * Default permission mapping based on user roles
+ * Uses shared constant to ensure consistency with external-sso route
  */
-const getDefaultPermissions = (userData: ExternalUserProfile): string[] => {
-    const roles = userData.roles || []
-
-    // Admin gets full access
-    // if (roles.includes('admin')) {
-    return [
-        'chatflows:view',
-        'chatflows:create',
-        'chatflows:update',
-        'chatflows:delete',
-        'credentials:view',
-        'credentials:create',
-        'credentials:update',
-        'credentials:delete',
-        'tools:view',
-        'tools:create',
-        'assistants:view',
-        'assistants:create'
-    ]
-    // }
-
-    // // Bot role
-    // if (roles.includes('bot')) {
-    //     return ['chatflows:view', 'chatflows:create', 'credentials:view']
-    // }
-
-    // // Regular user - read only
-    // if (roles.includes('user')) {
-    //     return ['chatflows:view', 'credentials:view']
-    // }
-
-    // // Default minimal access
-    // return ['chatflows:view']
+const getDefaultPermissions = (_userData: ExternalUserProfile): string[] => {
+    // Return shared default permissions for all SSO users
+    return EXTERNAL_SSO_DEFAULT_PERMISSIONS
 }
 
 /**

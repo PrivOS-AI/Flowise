@@ -5,6 +5,7 @@ import logger from '../../utils/logger'
 import { v4 as uuidv4 } from 'uuid'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { encryptToken } from '../../enterprise/utils/tempTokenUtils'
+import { EXTERNAL_SSO_DEFAULT_PERMISSIONS } from '../../utils/constants'
 
 const router = express.Router()
 
@@ -109,29 +110,9 @@ router.get('/', async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Invalid user data' })
         }
 
-        // Map roles to permissions
-        let permissions: string[] = ['chatflows:view']
-        if (roles.includes('admin')) {
-            permissions = [
-                'chatflows:view',
-                'chatflows:create',
-                'chatflows:update',
-                'chatflows:delete',
-                'credentials:view',
-                'credentials:create',
-                'credentials:update',
-                'credentials:delete'
-            ]
-            logger.info('[ExternalSSO]: User has admin role - granted full permissions')
-        } else if (roles.includes('bot')) {
-            permissions = ['chatflows:view', 'chatflows:create', 'credentials:view']
-            logger.info('[ExternalSSO]: User has bot role - granted create permissions')
-        } else if (roles.includes('user')) {
-            permissions = ['chatflows:view', 'credentials:view']
-            logger.info('[ExternalSSO]: User has user role - granted read-only permissions')
-        } else {
-            logger.info('[ExternalSSO]: User has no recognized role - granted minimal permissions')
-        }
+        // Use shared default permissions for SSO users
+        const permissions = EXTERNAL_SSO_DEFAULT_PERMISSIONS
+        logger.info('[ExternalSSO]: Granted full permissions to SSO user')
         logger.info(`[ExternalSSO]: Final permissions: ${JSON.stringify(permissions)}`)
 
         // Check if workspace exists in database - redirect to setup if not
