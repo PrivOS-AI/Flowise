@@ -88,7 +88,8 @@ export class MCPToolkit extends BaseToolkit {
         if (this._tools === null) {
             this.client = await this.createClient()
 
-            this._tools = await this.client.request({ method: 'tools/list' }, ListToolsResultSchema)
+            // Increased timeout for initialization
+            this._tools = await this.client.request({ method: 'tools/list' }, ListToolsResultSchema, { timeout: 300000 })
 
             this.tools = await this.get_tools()
 
@@ -140,7 +141,8 @@ export async function MCPTool({
 
             try {
                 const req: CallToolRequest = { method: 'tools/call', params: { name: name, arguments: input as any } }
-                const res = await client.request(req, CallToolResultSchema)
+                // 5 minutes timeout for long-running operations like image/video generation
+                const res = await client.request(req, CallToolResultSchema, { timeout: 300000 })
                 const content = res.content
 
                 // Extract text from content array for proper markdown rendering

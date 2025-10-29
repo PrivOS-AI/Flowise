@@ -1,10 +1,3 @@
-#!/usr/bin/env node
-
-/**
- * MCP Server for Video Generation using Google Veo 2.0
- * This is a proper MCP server that exposes video generation as a tool
- */
-
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, Tool } from '@modelcontextprotocol/sdk/types.js'

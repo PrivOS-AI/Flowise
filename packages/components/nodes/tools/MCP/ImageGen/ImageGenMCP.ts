@@ -19,66 +19,151 @@ class ImageGen_MCP implements INode {
     returnDirect: boolean
 
     constructor() {
-        this.label = '[PrivOS] Image Generation MCP'
+        this.label = 'Image Generation'
         this.name = 'imageGenMCP'
-        this.version = 1.0
+        this.version = 2.0
         this.type = 'ImageGen MCP Tool'
         this.icon = 'image-gen.svg'
         this.category = 'MCP'
         this.description =
-            'MCP server for image generation using Google Gemini/Imagen models. Returns images directly without LLM processing.'
-        this.documentation = 'https://ai.google.dev/gemini-api/docs'
+            'Unified image generation: Choose Paid API (Google Gemini/Imagen) or Self-Hosted (FLUX, Stable Diffusion on ComfyUI). Returns images directly.'
+        this.documentation = 'https://docs.flowiseai.com'
         this.returnDirect = true
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
             type: 'credential',
-            credentialNames: ['googleGenerativeAI']
+            credentialNames: ['googleGenerativeAI'],
+            optional: true,
+            description: 'Required only for Paid API provider'
         }
         this.inputs = [
             {
-                label: 'Default Model',
-                name: 'defaultModel',
+                label: 'Provider',
+                name: 'provider',
                 type: 'options',
                 options: [
                     {
-                        label: 'Gemini 2.0 Flash Preview Image (FREE, Recommended)',
+                        label: 'Paid API (Google)',
+                        name: 'google',
+                        description: 'Cloud-based, fast, pay-per-use'
+                    },
+                    {
+                        label: 'Self-Hosted (ComfyUI)',
+                        name: 'comfyui',
+                        description: 'Local models, free, private'
+                    }
+                ],
+                default: 'google',
+                description: 'Choose between paid cloud API or self-hosted models'
+            },
+            {
+                label: 'Google Model',
+                name: 'googleModel',
+                type: 'options',
+                options: [
+                    {
+                        label: 'Gemini 2.0 Flash Preview (FREE)',
                         name: 'gemini-2.0-flash-preview-image-generation',
-                        description: 'Preview model, FREE, good for testing'
+                        description: 'FREE, good for testing'
                     },
                     {
                         label: 'Gemini 2.5 Flash Image',
                         name: 'gemini-2.5-flash-image',
-                        description: 'Latest, fastest, best quality, Paid'
+                        description: 'Latest, fastest, best'
                     },
                     {
-                        label: 'Gemini 2.0 Flash Image (Paid)',
+                        label: 'Gemini 2.0 Flash Image',
                         name: 'gemini-2.0-flash-image',
-                        description: 'Previous version, Paid'
+                        description: 'Previous version'
                     },
                     {
-                        label: 'Imagen 3.0 Generate (Paid)',
+                        label: 'Imagen 3.0',
                         name: 'imagen-3.0-generate-001',
-                        description: 'Previous generation Imagen model'
+                        description: 'Previous generation'
                     },
                     {
-                        label: 'Imagen 4.0 Fast (Paid)',
+                        label: 'Imagen 4.0 Fast',
                         name: 'imagen-4.0-fast-generate-001',
-                        description: 'Fastest generation, good quality'
+                        description: 'Fastest'
                     },
                     {
-                        label: 'Imagen 4.0 Generate (Paid)',
+                        label: 'Imagen 4.0',
                         name: 'imagen-4.0-generate-001',
-                        description: 'Balanced speed and quality'
+                        description: 'Balanced'
                     },
                     {
-                        label: 'Imagen 4.0 Ultra (Paid)',
+                        label: 'Imagen 4.0 Ultra',
                         name: 'imagen-4.0-ultra-generate-001',
-                        description: 'Best quality, slowest'
+                        description: 'Best quality'
                     }
                 ],
                 default: 'gemini-2.0-flash-preview-image-generation',
-                description: 'Select default image generation model'
+                description: 'Select Google model (Paid API only)',
+                show: {
+                    provider: ['google']
+                }
+            },
+            {
+                label: 'ComfyUI Server URL',
+                name: 'comfyuiEndpoint',
+                type: 'string',
+                default: 'http://localhost:8188',
+                placeholder: 'https://your-app.ngrok-free.app',
+                description:
+                    'Your ComfyUI endpoint. Examples: http://localhost:8188 (local), http://192.168.1.100:8188 (LAN), https://abc123.ngrok-free.app (ngrok)',
+                show: {
+                    provider: ['comfyui']
+                }
+            },
+            {
+                label: 'Self-Hosted Model',
+                name: 'selfHostedModel',
+                type: 'options',
+                options: [
+                    {
+                        label: 'FLUX Schnell FP8 (Recommended)',
+                        name: 'flux1-schnell-fp8.safetensors',
+                        description: 'Fast, FREE, Apache 2.0'
+                    },
+                    {
+                        label: 'FLUX Dev FP8',
+                        name: 'flux1-dev-fp8.safetensors',
+                        description: 'Better quality, need license'
+                    },
+                    {
+                        label: 'SD XL Base',
+                        name: 'sd_xl_base_1.0.safetensors',
+                        description: 'Classic SD XL, FREE'
+                    },
+                    {
+                        label: 'SD 1.5',
+                        name: 'v1-5-pruned-emaonly.safetensors',
+                        description: 'Fastest, FREE'
+                    },
+                    {
+                        label: 'Custom Model',
+                        name: 'custom',
+                        description: 'Enter custom filename below'
+                    }
+                ],
+                default: 'flux1-schnell-fp8.safetensors',
+                description: 'Select model (Self-Hosted only)',
+                show: {
+                    provider: ['comfyui']
+                }
+            },
+            {
+                label: 'Custom Model Filename',
+                name: 'customModelFilename',
+                type: 'string',
+                placeholder: 'qwen-vl.safetensors',
+                description: 'Enter .safetensors filename (if Custom Model selected)',
+                optional: true,
+                show: {
+                    provider: ['comfyui'],
+                    selfHostedModel: ['custom']
+                }
             },
             {
                 label: 'Available Actions',
@@ -132,17 +217,29 @@ class ImageGen_MCP implements INode {
         return tools.filter((tool: any) => mcpActions.includes(tool.name))
     }
 
-    async getTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
+    async getTools(nodeData: INodeData, _options: ICommonObject): Promise<Tool[]> {
+        const provider = (nodeData.inputs?.provider as string) || 'google'
+
+        if (provider === 'google') {
+            return this.getGoogleTools(nodeData, _options)
+        } else if (provider === 'comfyui') {
+            return this.getComfyUITools(nodeData, _options)
+        } else {
+            throw new Error(`Unknown provider: ${provider}`)
+        }
+    }
+
+    async getGoogleTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
         const geminiApiKey = getCredentialParam('googleGenerativeAPIKey', credentialData, nodeData)
-        const defaultModel = (nodeData.inputs?.defaultModel as string) || 'gemini-2.0-flash-preview-image-generation'
+        const defaultModel = (nodeData.inputs?.googleModel as string) || 'gemini-2.0-flash-preview-image-generation'
 
         if (!geminiApiKey) {
-            throw new Error('No Google AI API key provided')
+            throw new Error('Google AI API key is required for Paid API provider')
         }
 
         // Path to the compiled MCP server
-        const serverPath = path.join(__dirname, 'image-gen-server.js')
+        const serverPath = path.join(__dirname, 'image-gen-server.mjs')
 
         // Server parameters for STDIO transport
         const serverParams = {
@@ -150,7 +247,7 @@ class ImageGen_MCP implements INode {
             args: [serverPath],
             env: {
                 GEMINI_API_KEY: geminiApiKey,
-                DEFAULT_MODEL: defaultModel // Pass default model to server
+                DEFAULT_MODEL: defaultModel
             }
         }
 
@@ -161,7 +258,51 @@ class ImageGen_MCP implements INode {
         const tools = toolkit.tools ?? []
 
         // Set returnDirect = true for all tools to skip LLM processing
-        // This ensures images are displayed directly without Agent LLM interference
+        tools.forEach((tool: any) => {
+            tool.returnDirect = true
+        })
+
+        return tools as Tool[]
+    }
+
+    async getComfyUITools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
+        const comfyuiEndpoint = (nodeData.inputs?.comfyuiEndpoint as string) || 'http://localhost:8188'
+        let model = (nodeData.inputs?.selfHostedModel as string) || 'flux1-schnell-fp8.safetensors'
+
+        // If custom model selected, use custom filename
+        if (model === 'custom') {
+            const customFilename = nodeData.inputs?.customModelFilename as string
+            if (customFilename) {
+                model = customFilename
+            } else {
+                throw new Error('Custom model filename is required when using Custom Model option')
+            }
+        }
+
+        // Path to the ComfyUI MCP server
+        const serverPath = path.join(__dirname, 'flux-gen-server.mjs')
+
+        // Server parameters for STDIO transport
+        const serverParams = {
+            command: 'node',
+            args: [serverPath],
+            env: {
+                COMFYUI_ENDPOINT: comfyuiEndpoint,
+                MODEL: model,
+                // Hardcoded optimal settings (user doesn't configure these)
+                IMAGE_SIZE: '480',
+                STEPS: '20',
+                GUIDANCE: '3.5'
+            }
+        }
+
+        // Create MCPToolkit with STDIO transport
+        const toolkit = new MCPToolkit(serverParams, 'stdio')
+        await toolkit.initialize()
+
+        const tools = toolkit.tools ?? []
+
+        // Set returnDirect = true for all tools to skip LLM processing
         tools.forEach((tool: any) => {
             tool.returnDirect = true
         })

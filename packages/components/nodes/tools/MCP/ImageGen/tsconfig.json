@@ -11,6 +11,6 @@
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true
     },
-    "include": ["image-gen-server.ts"],
+    "include": ["image-gen-server.ts", "flux-gen-server.ts"],
     "exclude": ["node_modules", "dist"]
 }
