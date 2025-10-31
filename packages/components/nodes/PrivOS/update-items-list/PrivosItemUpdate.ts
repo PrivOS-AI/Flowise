@@ -1,24 +1,35 @@
-import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
+import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue, IFileUpload } from '../../../src/Interface'
 import { getCredentialData } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
-import * as fs from 'fs'
-import * as path from 'path'
-import FormData from 'form-data'
+import { getFileFromStorage } from '../../../src/storageUtils'
+import {
+    CACHE_TTL,
+    PRIVOS_ENDPOINTS,
+    PRIVOS_HEADERS,
+    CONTENT_TYPES,
+    DEFAULT_PRIVOS_API_BASE_URL,
+    REQUEST_CONFIG,
+    ROOM_TYPES,
+    PRIVOS_FIELD_IDS
+} from '../constants'
+import { uploadFileToPrivos } from '../utils'
 
 // Global cache for rooms
 const roomsCacheUpdateItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Global cache for field definitions
+const fieldDefinitionsCache: Map<string, any[]> = new Map()
 
 async function fetchRoomsFromAPI(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
     try {
-        const apiUrl = `${baseUrl}/rooms.get`
+        const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS_GET}`
         const response = await secureAxiosRequest({
             method: 'GET',
             url: apiUrl,
             headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': userId,
-                'X-Auth-Token': authToken
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
         })
         return response.data?.update || []
@@ -99,66 +110,6 @@ class PrivosItemUpdate_Agentflow implements INode {
                         {
                             targetField: 'itemDescription',
                             sourcePath: 'description'
-                        },
-                        {
-                            targetField: 'field_assignees',
-                            sourcePath: 'customFields[marketing_campaign_assignees_field].value',
-                            transform: (value: any) => {
-                                if (Array.isArray(value)) {
-                                    // Transform to array of JSON strings as expected by AsyncDropdown list
-                                    return value.map((u: any) => JSON.stringify({ _id: u._id, username: u.username }))
-                                }
-                                return []
-                            }
-                        },
-                        {
-                            targetField: 'field_due_date',
-                            sourcePath: 'customFields[marketing_campaign_due_date_field].value',
-                            transform: (value: any) => {
-                                // Convert ISO date string to YYYY-MM-DD format for date input
-                                if (value) {
-                                    return new Date(value).toISOString().split('T')[0]
-                                }
-                                return ''
-                            }
-                        },
-                        {
-                            targetField: 'field_start_date',
-                            sourcePath: 'customFields[marketing_campaign_start_date_field].value',
-                            transform: (value: any) => {
-                                if (value) {
-                                    return new Date(value).toISOString().split('T')[0]
-                                }
-                                return ''
-                            }
-                        },
-                        {
-                            targetField: 'field_end_date',
-                            sourcePath: 'customFields[marketing_campaign_end_date_field].value',
-                            transform: (value: any) => {
-                                if (value) {
-                                    return new Date(value).toISOString().split('T')[0]
-                                }
-                                return ''
-                            }
-                        },
-                        {
-                            targetField: 'field_documents',
-                            sourcePath: 'customFields[marketing_campaign_documents_field].value',
-                            transform: (value: any) => {
-                                if (Array.isArray(value)) {
-                                    // Extract only title and content from each document
-                                    return value.map((doc: any) => ({
-                                        title: doc.title || '',
-                                        content: doc.content || (doc.versions && doc.versions[0] ? doc.versions[0].content : '')
-                                    }))
-                                }
-                                return []
-                            }
-                        },
-                        {
-                            targetField: 'field_note',
-                            sourcePath: 'customFields[marketing_campaign_note_field].value'
                         }
                     ]
                 }
@@ -182,51 +133,81 @@ class PrivosItemUpdate_Agentflow implements INode {
                 optional: true,
                 description: 'Update item description (leave empty to keep current)'
             },
-            // === 7 HARDCODED FIELD DEFINITIONS ===
+            // === MARKETING LIST FIELDS (7 fields) ===
             {
-                label: '1. Assignees (USER type)',
-                name: 'field_assignees',
+                label: '1. Assignees',
+                name: 'field_marketing_assignees',
                 type: 'asyncOptions',
                 loadMethod: 'listUsers',
                 list: true,
                 optional: true,
-                description: 'Update assignees (leave empty to keep current) - fieldId: marketing_campaign_assignees_field'
+                description: 'Update assigned users (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '2. Due Date (DATE type)',
-                name: 'field_due_date',
+                label: '2. Due Date',
+                name: 'field_marketing_due_date',
                 type: 'date',
                 optional: true,
-                description: 'Update due date (leave empty to keep current) - fieldId: marketing_campaign_due_date_field'
+                description: 'Update due date (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '3. Start Date (DATE type)',
-                name: 'field_start_date',
+                label: '3. Start Date',
+                name: 'field_marketing_start_date',
                 type: 'date',
                 optional: true,
-                description: 'Update start date (leave empty to keep current) - fieldId: marketing_campaign_start_date_field'
+                description: 'Update start date (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '4. End Date (DATE type)',
-                name: 'field_end_date',
+                label: '4. End Date',
+                name: 'field_marketing_end_date',
                 type: 'date',
                 optional: true,
-                description: 'Update end date (leave empty to keep current) - fieldId: marketing_campaign_end_date_field'
+                description: 'Update end date (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '5. File (FILE type)',
-                name: 'field_file',
+                label: '5a. Current File Info',
+                name: 'current_marketing_file_info',
+                type: 'string',
+                rows: 3,
+                optional: true,
+                placeholder: 'Current file will be displayed here after selecting an item...',
+                description: 'READ-ONLY: Current file information. Click the URL to view the file.',
+                show: {
+                    selectedList: 'marketing'
+                }
+            },
+            {
+                label: '5b. Upload New File (Optional)',
+                name: 'field_marketing_file',
                 type: 'file',
                 optional: true,
-                description: 'Update file (leave empty to keep current) - fieldId: marketing_campaign_file_link_field'
+                description: 'Upload a new file to replace the current one (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
                 label: '6. Documents',
-                name: 'field_documents',
+                name: 'field_marketing_documents',
                 type: 'array',
                 acceptVariable: true,
                 optional: true,
-                description: 'Update documents (leave empty to keep current) - fieldId: marketing_campaign_documents_field',
+                description: 'Update documents with title and content (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                },
                 array: [
                     {
                         label: 'Title',
@@ -246,14 +227,141 @@ class PrivosItemUpdate_Agentflow implements INode {
                 ]
             },
             {
-                label: '7. Note (TEXTAREA type)',
-                name: 'field_note',
+                label: '7. Note',
+                name: 'field_marketing_note',
                 type: 'string',
                 rows: 4,
-                placeholder: 'Enter your notes here...',
-                acceptVariable: true,
                 optional: true,
-                description: 'Update note (leave empty to keep current) - fieldId: marketing_campaign_note_field'
+                placeholder: 'Enter updated notes',
+                description: 'Update notes (leave empty to keep current)',
+                show: {
+                    selectedList: 'marketing'
+                }
+            },
+            // === HR/RECRUITMENT LIST FIELDS (10 fields) ===
+            {
+                label: '1a. Current CV Info',
+                name: 'current_recruitment_cv_info',
+                type: 'string',
+                rows: 3,
+                optional: true,
+                placeholder: 'Current CV will be displayed here after selecting an item...',
+                description: 'READ-ONLY: Current CV file information. Click the URL to view the file.',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '1b. Upload New CV (Optional)',
+                name: 'field_recruitment_cv',
+                type: 'file',
+                optional: true,
+                description: 'Upload a new CV to replace the current one (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '2. AI Summary',
+                name: 'field_recruitment_ai_summary',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'Enter updated AI summary',
+                description: 'Update AI summary (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '3. AI Score',
+                name: 'field_recruitment_ai_score',
+                type: 'number',
+                optional: true,
+                placeholder: 'Enter updated AI score',
+                description: 'Update AI score (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '4. Interview Time',
+                name: 'field_recruitment_interview_time',
+                type: 'date',
+                optional: true,
+                description: 'Update interview time (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '5. Interviewer',
+                name: 'field_recruitment_interviewer',
+                type: 'asyncOptions',
+                loadMethod: 'listUsers',
+                list: true,
+                optional: true,
+                description: 'Update interviewer(s) (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '6. Interview Questions',
+                name: 'field_recruitment_interview_questions',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'Enter updated interview questions',
+                description: 'Update interview questions (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '7. Interview Notes',
+                name: 'field_recruitment_interview_notes',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'Enter updated interview notes',
+                description: 'Update interview notes (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '8. Interview Score',
+                name: 'field_recruitment_interview_score',
+                type: 'number',
+                optional: true,
+                placeholder: 'Enter updated interview score',
+                description: 'Update interview score (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '9. Trial Time',
+                name: 'field_recruitment_trial_time',
+                type: 'date',
+                optional: true,
+                description: 'Update trial time (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '10. CV Content',
+                name: 'field_recruitment_cv_content',
+                type: 'string',
+                rows: 6,
+                optional: true,
+                placeholder: 'Enter updated CV content',
+                description: 'Update CV content (leave empty to keep current)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
             },
             // === MOVE TO STAGE ===
             {
@@ -279,7 +387,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData || Object.keys(credentialData).length === 0) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -341,7 +449,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -350,34 +458,48 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const apiUrl = `${baseUrl}/external.lists.byRoomId`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LISTS_BY_ROOM_ID}`
                 console.log('[listLists] API URL:', apiUrl, 'roomId:', selectedRoom)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: {
                         roomId: selectedRoom,
-                        offset: 0,
-                        count: 100
+                        offset: REQUEST_CONFIG.DEFAULT_OFFSET,
+                        count: REQUEST_CONFIG.DEFAULT_COUNT
                     }
                 })
 
                 const lists = response.data?.lists || []
                 console.log('[listLists] Found', lists.length, 'lists')
 
-                // Store roomId in each list option for later use
+                // Store roomId, listName and templateKey in each list option and cache fieldDefinitions
                 for (const list of lists) {
                     returnData.push({
                         label: list.name || list._id,
-                        name: JSON.stringify({ listId: list._id, roomId: list.roomId || selectedRoom }), // Store both listId and roomId
+                        name: JSON.stringify({
+                            listId: list._id,
+                            listName: list.name,
+                            templateKey: list.templateKey || '',
+                            roomId: list.roomId || selectedRoom
+                        }),
                         description: list.description || `${list.stageCount || 0} stages, ${list.itemCount || 0} items`
                     })
+
+                    // Cache field definitions directly from response (no need for extra API call!)
+                    if (list.fieldDefinitions && list.fieldDefinitions.length > 0) {
+                        fieldDefinitionsCache.set(list._id, list.fieldDefinitions)
+                        console.log('[listLists] Cached', list.fieldDefinitions.length, 'field definitions for list', list._id, list.name)
+                        console.log('[listLists] Field types:', list.fieldDefinitions.map((f: any) => `${f.name}(${f.type})`).join(', '))
+                    } else {
+                        console.log('[listLists] No fieldDefinitions for list', list._id, list.name)
+                    }
                 }
 
                 console.log('[listLists] Returning', returnData.length, 'list options')
@@ -425,23 +547,23 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) return returnData
 
                 // Get list details to fetch stages
-                const apiUrl = `${baseUrl}/external.lists/${listId}`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${listId}`
                 console.log('[listStages] Fetching list details from:', apiUrl)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     }
                 })
 
@@ -508,7 +630,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData) return returnData
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -523,7 +645,7 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                 if (selectedStage) {
                     // Use byStageId endpoint to get items in specific stage
-                    apiUrl = `${baseUrl}/external.items.byStageId`
+                    apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_BY_STAGE_ID}`
                     apiParams = {
                         stageId: selectedStage,
                         limit: 100
@@ -531,7 +653,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                     console.log('[listItems] Fetching items by stageId:', selectedStage)
                 } else {
                     // Use byListId endpoint to get all items in list
-                    apiUrl = `${baseUrl}/external.items.byListId`
+                    apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_BY_LIST_ID}`
                     apiParams = {
                         listId: listId,
                         offset: 0,
@@ -544,9 +666,9 @@ class PrivosItemUpdate_Agentflow implements INode {
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: apiParams
                 })
@@ -649,8 +771,8 @@ class PrivosItemUpdate_Agentflow implements INode {
                     // Build compact description for dropdown
                     const shortDesc = [
                         assigneesField?.value && Array.isArray(assigneesField.value) ? `👥 ${assigneesField.value.length}` : '👥 0',
-                        dueDateField?.value ? `📅 ${new Date(dueDateField.value).toLocaleDateString('en-GB')}` : '📅 -',
-                        fileField?.value ? '📎 ✓' : '📎 ✗',
+                        dueDateField?.value ? `${new Date(dueDateField.value).toLocaleDateString('en-GB')}` : '📅 -',
+                        fileField?.value ? ' ✓' : ' ✗',
                         documentsField?.value && Array.isArray(documentsField.value) ? `📄 ${documentsField.value.length}` : '📄 0'
                     ].join(' | ')
 
@@ -713,7 +835,7 @@ class PrivosItemUpdate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -744,17 +866,17 @@ class PrivosItemUpdate_Agentflow implements INode {
                 let apiEndpoint: string
 
                 switch (roomType) {
-                    case 'p': // Private group
-                        apiEndpoint = `${baseUrl}/groups.members`
+                    case ROOM_TYPES.PRIVATE: // Private group
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.GROUPS_MEMBERS}`
                         console.log('[listUsers] Using groups.members for private group')
                         break
-                    case 'd': // Direct message
-                        apiEndpoint = `${baseUrl}/im.members`
+                    case ROOM_TYPES.DIRECT: // Direct message
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.IM_MEMBERS}`
                         console.log('[listUsers] Using im.members for direct message')
                         break
-                    case 'c': // Public channel
+                    case ROOM_TYPES.CHANNEL: // Public channel
                     default:
-                        apiEndpoint = `${baseUrl}/channels.members`
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.CHANNELS_MEMBERS}`
                         console.log('[listUsers] Using channels.members for public channel')
                         break
                 }
@@ -765,9 +887,9 @@ class PrivosItemUpdate_Agentflow implements INode {
                     method: 'GET',
                     url: apiEndpoint,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: {
                         roomId: roomId,
@@ -796,6 +918,99 @@ class PrivosItemUpdate_Agentflow implements INode {
                 console.error('[listUsers] Error status:', error.response?.status || 'No status')
                 return returnData
             }
+        },
+
+        async listFieldDefinitions(nodeData: INodeData): Promise<INodeOptionsValue[]> {
+            const returnData: INodeOptionsValue[] = []
+
+            try {
+                console.log('[listFieldDefinitions] ========== START ==========')
+                console.log('[listFieldDefinitions] nodeData.inputs:', JSON.stringify(nodeData.inputs, null, 2))
+
+                // Try to get selectedList from nodeData.inputs
+                let selectedListStr = nodeData.inputs?.selectedList as string
+                let selectedListId: string | undefined
+
+                if (selectedListStr) {
+                    try {
+                        // Parse selectedList if it's JSON (contains listId and roomId)
+                        const parsed = JSON.parse(selectedListStr)
+                        selectedListId = parsed.listId
+                        console.log('[listFieldDefinitions] ✓ Selected list ID:', selectedListId)
+                    } catch (e) {
+                        // Not JSON, use as is
+                        selectedListId = selectedListStr
+                        console.log('[listFieldDefinitions] ✓ Selected list (plain):', selectedListId)
+                    }
+                }
+
+                if (selectedListId) {
+                    // Check cache for this specific list
+                    const cached = fieldDefinitionsCache.get(selectedListId)
+                    if (cached && cached.length > 0) {
+                        console.log('[listFieldDefinitions] Using cached fields for selected list:', cached.length)
+                        cached.forEach((field: any) => {
+                            // Store field metadata in name as JSON for later use
+                            const fieldData = {
+                                fieldId: field._id,
+                                fieldName: field.name,
+                                fieldType: field.type,
+                                order: field.order
+                            }
+
+                            returnData.push({
+                                label: `${field.name} (${field.type})`,
+                                name: JSON.stringify(fieldData),
+                                description: `Type: ${field.type} | Order: ${field.order}`
+                            })
+                        })
+                        return returnData
+                    }
+                }
+
+                // If no selectedList or not in cache, return ALL cached fields from all lists
+                // This handles the case when asyncOptions is inside an array and can't access parent inputs
+                console.log('[listFieldDefinitions] No specific list or not cached, returning all cached fields')
+                console.log('[listFieldDefinitions] Cache has', fieldDefinitionsCache.size, 'lists')
+
+                const fieldsMap = new Map<string, any>() // Use map to avoid duplicates
+
+                // Collect all fields from all cached lists
+                for (const [listId, fields] of fieldDefinitionsCache.entries()) {
+                    console.log('[listFieldDefinitions] Adding', fields.length, 'fields from list', listId)
+                    for (const field of fields) {
+                        // Use field._id as key to avoid duplicates
+                        if (!fieldsMap.has(field._id)) {
+                            fieldsMap.set(field._id, field)
+                        }
+                    }
+                }
+
+                // Convert to array and sort
+                const allFields = Array.from(fieldsMap.values())
+                allFields.sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+
+                for (const field of allFields) {
+                    const fieldData = {
+                        fieldId: field._id,
+                        fieldName: field.name,
+                        fieldType: field.type,
+                        order: field.order
+                    }
+
+                    returnData.push({
+                        label: `${field.name} (${field.type})`,
+                        name: JSON.stringify(fieldData),
+                        description: `Type: ${field.type} | Order: ${field.order || 'N/A'}`
+                    })
+                }
+
+                console.log('[listFieldDefinitions] Returning', returnData.length, 'field options from all cached lists')
+                return returnData
+            } catch (error: any) {
+                console.error('[listFieldDefinitions] Error:', error.message)
+                return []
+            }
         }
     }
 
@@ -804,18 +1019,6 @@ class PrivosItemUpdate_Agentflow implements INode {
         const itemName = nodeData.inputs?.itemName as string
         const itemDescription = nodeData.inputs?.itemDescription as string
         const moveToStage = nodeData.inputs?.moveToStage as string
-
-        // 7 hardcoded fields
-        const field_assignees = nodeData.inputs?.field_assignees as any // Can be string, array, or object
-        const field_due_date = nodeData.inputs?.field_due_date as string
-        const field_start_date = nodeData.inputs?.field_start_date as string
-        const field_end_date = nodeData.inputs?.field_end_date as string
-        const field_file = nodeData.inputs?.field_file as string
-        const field_documents = nodeData.inputs?.field_documents as ICommonObject[]
-        const field_note = nodeData.inputs?.field_note as string
-
-        // Additional custom fields
-        const customFields = nodeData.inputs?.customFields as ICommonObject[]
 
         try {
             if (!selectedItemStr) {
@@ -838,7 +1041,7 @@ class PrivosItemUpdate_Agentflow implements INode {
             // Display formatted info if available
             if (currentItem.__formattedInfo) {
                 console.log('\n' + '='.repeat(60))
-                console.log('📊 CURRENT ITEM INFORMATION')
+                console.log('CURRENT ITEM INFORMATION')
                 console.log('='.repeat(60))
                 console.log(currentItem.__formattedInfo)
                 console.log('='.repeat(60) + '\n')
@@ -850,9 +1053,35 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(credentialId, options)
-            const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+            const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
             const userId = credentialData.userId
             const authToken = credentialData.authToken
+
+            // Extract current file info from customFields for read-only display
+            let currentMarketingFileInfo = ''
+            let currentRecruitmentCVInfo = ''
+
+            if (currentItem.customFields && Array.isArray(currentItem.customFields)) {
+                // Find Marketing File
+                const marketingFileField = currentItem.customFields.find((cf: any) => cf.fieldId === PRIVOS_FIELD_IDS.MARKETING.FILE)
+                if (marketingFileField && marketingFileField.value && marketingFileField.value.url) {
+                    const file = marketingFileField.value
+                    const fullUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
+                    currentMarketingFileInfo = `📎 File: ${file.name}\n🔗 URL: ${fullUrl}\n📊 Size: ${(file.size / 1024).toFixed(
+                        2
+                    )} KB\n📄 Type: ${file.type}`
+                }
+
+                // Find Recruitment CV
+                const recruitmentCVField = currentItem.customFields.find((cf: any) => cf.fieldId === PRIVOS_FIELD_IDS.RECRUITMENT.CV)
+                if (recruitmentCVField && recruitmentCVField.value && recruitmentCVField.value.url) {
+                    const file = recruitmentCVField.value
+                    const fullUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
+                    currentRecruitmentCVInfo = `📎 CV: ${file.name}\n🔗 URL: ${fullUrl}\n📊 Size: ${(file.size / 1024).toFixed(
+                        2
+                    )} KB\n📄 Type: ${file.type}`
+                }
+            }
 
             // Build update payload
             const payload: any = {
@@ -875,14 +1104,14 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             if (currentListId) {
                 try {
-                    const listApiUrl = `${baseUrl}/external.lists/${currentListId}`
+                    const listApiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${currentListId}`
                     const listResponse = await secureAxiosRequest({
                         method: 'GET',
                         url: listApiUrl,
                         headers: {
-                            'Content-Type': 'application/json',
-                            'X-User-Id': userId,
-                            'X-Auth-Token': authToken
+                            [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                            [PRIVOS_HEADERS.USER_ID]: userId,
+                            [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                         }
                     })
                     const fieldDefinitions = listResponse.data?.list?.fieldDefinitions || []
@@ -893,174 +1122,141 @@ class PrivosItemUpdate_Agentflow implements INode {
                 }
             }
 
-            // Build customFields array for the 7 hardcoded fields + additional custom fields
+            // Map input field names to Privos field IDs based on selected list
+            // Using centralized constants from PRIVOS_FIELD_IDS
+            const fieldMapping: { [key: string]: string } = {
+                // Marketing Campaign Template fields
+                field_marketing_assignees: PRIVOS_FIELD_IDS.MARKETING.ASSIGNEES,
+                field_marketing_due_date: PRIVOS_FIELD_IDS.MARKETING.DUE_DATE,
+                field_marketing_start_date: PRIVOS_FIELD_IDS.MARKETING.START_DATE,
+                field_marketing_end_date: PRIVOS_FIELD_IDS.MARKETING.END_DATE,
+                field_marketing_file: PRIVOS_FIELD_IDS.MARKETING.FILE,
+                field_marketing_documents: PRIVOS_FIELD_IDS.MARKETING.DOCUMENTS,
+                field_marketing_note: PRIVOS_FIELD_IDS.MARKETING.NOTE,
+                // HR/Recruitment Template fields
+                field_recruitment_cv: PRIVOS_FIELD_IDS.RECRUITMENT.CV,
+                field_recruitment_ai_summary: PRIVOS_FIELD_IDS.RECRUITMENT.AI_SUMMARY,
+                field_recruitment_ai_score: PRIVOS_FIELD_IDS.RECRUITMENT.AI_SCORE,
+                field_recruitment_interview_time: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_TIME,
+                field_recruitment_interviewer: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEWER,
+                field_recruitment_interview_questions: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_QUESTIONS,
+                field_recruitment_interview_notes: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_NOTES,
+                field_recruitment_interview_score: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_SCORE,
+                field_recruitment_trial_time: PRIVOS_FIELD_IDS.RECRUITMENT.TRIAL_TIME,
+                field_recruitment_cv_content: PRIVOS_FIELD_IDS.RECRUITMENT.CV_CONTENT
+            }
+
+            // Process individual custom fields
             const allCustomFields: any[] = []
 
-            // 1. Assignees - Process same way as POST LIST
-            if (field_assignees && listFieldIds.includes('marketing_campaign_assignees_field')) {
-                try {
-                    let assigneesValue: any[] = []
+            console.log('[UPDATE ITEM] Processing custom fields for list:', currentListId)
 
-                    if (typeof field_assignees === 'string') {
-                        if (field_assignees.trim().startsWith('[')) {
-                            assigneesValue = JSON.parse(field_assignees)
-                        } else {
-                            assigneesValue = [JSON.parse(field_assignees)]
-                        }
-                    } else if (Array.isArray(field_assignees)) {
-                        assigneesValue = (field_assignees as any[]).map((user: any) => {
-                            if (typeof user === 'string') {
-                                return JSON.parse(user)
-                            }
-                            return user
-                        })
-                    } else {
-                        assigneesValue = [field_assignees]
+            for (const [inputName, fieldId] of Object.entries(fieldMapping)) {
+                const fieldValue = nodeData.inputs?.[inputName]
+
+                // Only process fields that have values (user wants to update)
+                // Empty fields mean "keep current value"
+                if (fieldValue !== null && fieldValue !== undefined && fieldValue !== '') {
+                    console.log(`[UPDATE ITEM] Found field ${inputName}:`, fieldValue)
+
+                    // Validate field exists in list (only update fields that exist)
+                    if (listFieldIds.length > 0 && !listFieldIds.includes(fieldId)) {
+                        console.warn(`[UPDATE ITEM] Field ${fieldId} not in list, skipping`)
+                        continue
                     }
 
-                    const validatedValue = assigneesValue.map((user: any) => ({
-                        _id: user._id || user.id || user,
-                        username: user.username || user.name || 'Unknown'
-                    }))
+                    // Handle different field types
+                    let processedValue = fieldValue
 
-                    allCustomFields.push({
-                        fieldId: 'marketing_campaign_assignees_field',
-                        value: validatedValue
-                    })
-                } catch (e) {
-                    console.error('Failed to parse assignees:', e)
-                    throw new Error('Invalid assignees format')
-                }
-            }
-
-            // 2. Due Date
-            if (field_due_date && listFieldIds.includes('marketing_campaign_due_date_field')) {
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_due_date_field',
-                    value: field_due_date
-                })
-            }
-
-            // 3. Start Date
-            if (field_start_date && listFieldIds.includes('marketing_campaign_start_date_field')) {
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_start_date_field',
-                    value: field_start_date
-                })
-            }
-
-            // 4. End Date
-            if (field_end_date && listFieldIds.includes('marketing_campaign_end_date_field')) {
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_end_date_field',
-                    value: field_end_date
-                })
-            }
-
-            // 5. File - Handle file upload if provided
-            if (field_file && listFieldIds.includes('marketing_campaign_file_link_field')) {
-                let fileValue: any
-
-                if (typeof field_file === 'string') {
-                    try {
-                        // Try parsing as JSON first (already uploaded file object)
-                        fileValue = JSON.parse(field_file)
-                    } catch (e) {
-                        // Not JSON, treat as file path or base64
+                    // For FILE fields - upload file first and get file object
+                    if (typeof fieldValue === 'string' && (inputName === 'field_marketing_file' || inputName === 'field_recruitment_cv')) {
                         try {
-                            let fileData: Buffer
+                            let fileBuffer: Buffer
                             let fileName: string
+                            let mimeType: string
 
-                            // Check if it's base64 data URI
-                            if (field_file.startsWith('data:')) {
-                                const matches = field_file.match(/^data:(.+);base64,(.+)$/)
-                                if (matches) {
-                                    const mimeType = matches[1]
-                                    const base64Data = matches[2]
-                                    fileData = Buffer.from(base64Data, 'base64')
-                                    fileName = `file_${Date.now()}.${mimeType.split('/')[1]}`
-                                } else {
-                                    throw new Error('Invalid base64 format')
+                            // Check if it's a base64 data URI (e.g., "data:application/pdf;base64,JVBERi0x...")
+                            if (fieldValue.startsWith('data:')) {
+                                console.log(`[UPDATE ITEM] Processing base64 data URI for ${inputName}`)
+
+                                // Parse data URI: data:mime/type;base64,<data>
+                                const matches = fieldValue.match(/^data:([^;]+);base64,(.+)$/)
+                                if (!matches) {
+                                    throw new Error('Invalid data URI format')
                                 }
-                            } else {
-                                // Treat as file path
-                                fileData = fs.readFileSync(field_file)
-                                fileName = path.basename(field_file)
+
+                                mimeType = matches[1]
+                                const base64Data = matches[2]
+
+                                // Convert base64 to buffer
+                                fileBuffer = Buffer.from(base64Data, 'base64')
+
+                                // Generate filename from mime type
+                                const ext = mimeType.split('/')[1] || 'bin'
+                                fileName = `file_${Date.now()}.${ext}`
+
+                                console.log(`[UPDATE ITEM] Parsed base64 file: ${fileName} (${mimeType}, ${fileBuffer.length} bytes)`)
+                            }
+                            // Check if it's stored-file JSON format
+                            else {
+                                const parsed = JSON.parse(fieldValue)
+                                const uploads: IFileUpload[] = Array.isArray(parsed) ? parsed : [parsed]
+
+                                if (uploads.length === 0 || uploads[0].type !== 'stored-file') {
+                                    console.warn(`[UPDATE ITEM] Skipping file field ${inputName}: not a stored-file`)
+                                    continue
+                                }
+
+                                const upload = uploads[0]
+                                console.log(`[UPDATE ITEM] Processing stored file for ${inputName}:`, upload.name)
+
+                                // Get file buffer from storage
+                                fileBuffer = await getFileFromStorage(upload.name, options.orgId, options.chatflowid, options.chatId)
+
+                                fileName = upload.name
+                                mimeType = upload.mime
                             }
 
                             // Upload file to Privos
-                            const formData = new FormData()
-                            formData.append('file', fileData, fileName)
+                            const fileObject = await uploadFileToPrivos(fileBuffer, fileName, mimeType, baseUrl, userId, authToken)
 
-                            console.log('[UPDATE ITEM] Uploading file to Privos:', fileName)
-
-                            const uploadResponse = await secureAxiosRequest({
-                                method: 'POST',
-                                url: `${baseUrl}/files.upload`,
-                                headers: {
-                                    ...formData.getHeaders(),
-                                    'X-User-Id': userId,
-                                    'X-Auth-Token': authToken
-                                },
-                                data: formData
-                            })
-
-                            const uploadedFile = uploadResponse.data?.file
-
-                            if (!uploadedFile || !uploadedFile._id || !uploadedFile.url) {
-                                throw new Error('Upload response missing file data')
-                            }
-
-                            fileValue = {
-                                _id: uploadedFile._id,
-                                name: uploadedFile.name || fileName,
-                                size: uploadedFile.size || fileData.length,
-                                type: uploadedFile.type || 'application/octet-stream',
-                                url: uploadedFile.url,
-                                uploadedAt: uploadedFile.uploadedAt || new Date().toISOString()
-                            }
-
-                            console.log('[UPDATE ITEM] File uploaded successfully:', fileValue)
-                        } catch (uploadError: any) {
-                            console.error('[UPDATE ITEM] Error uploading file:', uploadError.message)
-                            throw new Error(`Failed to upload file: ${uploadError.message}`)
+                            console.log(`[UPDATE ITEM] File uploaded successfully:`, fileObject)
+                            processedValue = fileObject
+                        } catch (e) {
+                            console.error(`[UPDATE ITEM] Failed to upload file for ${inputName}:`, e)
+                            throw new Error(`Failed to upload file: ${e.message}`)
                         }
                     }
-                } else if (typeof field_file === 'object') {
-                    // Already a file object
-                    fileValue = field_file
-                }
+                    // For asyncOptions (USER fields), keep the full object with _id and username
+                    else if (typeof fieldValue === 'string' && (fieldValue.startsWith('[{') || fieldValue.startsWith('{'))) {
+                        try {
+                            const parsed = JSON.parse(fieldValue)
+                            if (Array.isArray(parsed)) {
+                                // Multiple users - keep objects with _id and username
+                                processedValue = parsed.map((u: any) => ({
+                                    _id: u._id,
+                                    username: u.username
+                                }))
+                            } else if (parsed._id) {
+                                // Single user - wrap in array with _id and username
+                                processedValue = [{ _id: parsed._id, username: parsed.username }]
+                            }
+                            console.log(`[UPDATE ITEM] Parsed USER field ${inputName}:`, processedValue)
+                        } catch (e) {
+                            console.warn(`[UPDATE ITEM] Failed to parse ${inputName}, using as-is`)
+                        }
+                    }
 
-                if (fileValue) {
                     allCustomFields.push({
-                        fieldId: 'marketing_campaign_file_link_field',
-                        value: fileValue
+                        fieldId: fieldId,
+                        value: processedValue
                     })
+
+                    console.log(`[UPDATE ITEM] ✓ Will update field: ${fieldId} = ${JSON.stringify(processedValue).substring(0, 100)}`)
                 }
             }
 
-            // 6. Documents
-            if (field_documents && field_documents.length > 0 && listFieldIds.includes('marketing_campaign_documents_field')) {
-                const documentsValue = field_documents.map((doc) => ({
-                    title: doc.title,
-                    content: doc.content
-                }))
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_documents_field',
-                    value: documentsValue
-                })
-            }
-
-            // 7. Note
-            if (field_note && listFieldIds.includes('marketing_campaign_note_field')) {
-                allCustomFields.push({
-                    fieldId: 'marketing_campaign_note_field',
-                    value: field_note
-                })
-            }
-
-            // Additional custom fields logic removed - only 7 fixed fields supported
-            // To prevent sending invalid fieldIds that don't exist in list
+            console.log('[UPDATE ITEM] Total custom fields to update:', allCustomFields.length)
 
             // Add customFields to payload if any
             if (allCustomFields.length > 0) {
@@ -1076,14 +1272,14 @@ class PrivosItemUpdate_Agentflow implements INode {
 
             if (listId) {
                 try {
-                    const listApiUrl = `${baseUrl}/external.lists/${listId}`
+                    const listApiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${listId}`
                     const listResponse = await secureAxiosRequest({
                         method: 'GET',
                         url: listApiUrl,
                         headers: {
-                            'Content-Type': 'application/json',
-                            'X-User-Id': userId,
-                            'X-Auth-Token': authToken
+                            [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                            [PRIVOS_HEADERS.USER_ID]: userId,
+                            [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                         }
                     })
                     listData = listResponse.data?.list || listResponse.data
@@ -1094,14 +1290,14 @@ class PrivosItemUpdate_Agentflow implements INode {
             }
 
             // Send update request
-            const apiUrl = `${baseUrl}/external.items.update`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_UPDATE}`
             const response = await secureAxiosRequest({
                 method: 'PUT',
                 url: apiUrl,
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-User-Id': userId,
-                    'X-Auth-Token': authToken
+                    [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                    [PRIVOS_HEADERS.USER_ID]: userId,
+                    [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                 },
                 data: payload
             })
@@ -1118,14 +1314,14 @@ class PrivosItemUpdate_Agentflow implements INode {
                 try {
                     console.log('[UPDATE ITEM] Moving item to new stage:', moveToStage)
 
-                    const moveApiUrl = `${baseUrl}/external.items.move`
+                    const moveApiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_MOVE}`
                     const moveResponse = await secureAxiosRequest({
                         method: 'POST',
                         url: moveApiUrl,
                         headers: {
-                            'Content-Type': 'application/json',
-                            'X-User-Id': userId,
-                            'X-Auth-Token': authToken
+                            [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                            [PRIVOS_HEADERS.USER_ID]: userId,
+                            [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                         },
                         data: {
                             itemId: itemId,
@@ -1138,14 +1334,14 @@ class PrivosItemUpdate_Agentflow implements INode {
 
                     // Get stage name for display
                     try {
-                        const stagesApiUrl = `${baseUrl}/external.stages.byListId`
+                        const stagesApiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.STAGES_BY_LIST_ID}`
                         const stagesResponse = await secureAxiosRequest({
                             method: 'GET',
                             url: stagesApiUrl,
                             headers: {
-                                'Content-Type': 'application/json',
-                                'X-User-Id': userId,
-                                'X-Auth-Token': authToken
+                                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                                [PRIVOS_HEADERS.USER_ID]: userId,
+                                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                             },
                             params: { listId: listId }
                         })
@@ -1171,19 +1367,41 @@ class PrivosItemUpdate_Agentflow implements INode {
                               const fieldName = fieldDef?.name || cf.fieldId
 
                               // Format value based on type
-                              let displayValue = cf.value
-                              if (Array.isArray(cf.value)) {
+                              let displayValue: string
+
+                              // Special formatting for FILE fields
+                              if (cf.value && typeof cf.value === 'object' && cf.value.url && cf.value._id) {
+                                  // This is a file object - format with full URL
+                                  const fileUrl = cf.value.url.startsWith('http')
+                                      ? cf.value.url
+                                      : `${baseUrl.replace('/api/v1', '')}${cf.value.url}`
+
+                                  return `   ${fieldName}:
+      📎 File: ${cf.value.name}
+      🔗 URL: ${fileUrl}
+      📊 Size: ${(cf.value.size / 1024).toFixed(2)} KB
+      📄 Type: ${cf.value.type}`
+                              }
+                              // Array formatting
+                              else if (Array.isArray(cf.value)) {
                                   if (cf.value.length > 0 && cf.value[0]._id && cf.value[0].username) {
                                       // User array
                                       displayValue = cf.value.map((u: any) => `@${u.username}`).join(', ')
                                   } else {
                                       displayValue = JSON.stringify(cf.value)
                                   }
-                              } else if (typeof cf.value === 'object') {
+                              }
+                              // Object formatting
+                              else if (typeof cf.value === 'object') {
                                   displayValue = JSON.stringify(cf.value)
-                              } else if (typeof cf.value === 'string' && cf.value.includes('T') && cf.value.includes('Z')) {
-                                  // Date
+                              }
+                              // Date formatting
+                              else if (typeof cf.value === 'string' && cf.value.includes('T') && cf.value.includes('Z')) {
                                   displayValue = new Date(cf.value).toLocaleString('en-GB')
+                              }
+                              // Default
+                              else {
+                                  displayValue = cf.value
                               }
 
                               return `   ${fieldName}: ${displayValue}`
@@ -1198,7 +1416,7 @@ ITEM ID: ${itemId}
 ITEM NAME: ${payload.name || currentItem.name}
 
 LIST: ${listData.name || listId || 'Unknown'}
-${movedToStage ? `MOVED TO STAGE: ${newStageName} ✅\n` : ''}${payload.description ? `\nDESCRIPTION:\n${payload.description}\n` : ''}
+${movedToStage ? `MOVED TO STAGE: ${newStageName}\n` : ''}${payload.description ? `\nDESCRIPTION:\n${payload.description}\n` : ''}
 ${'='.repeat(50)}
 UPDATED FIELDS:
 ${'='.repeat(50)}
@@ -1217,6 +1435,9 @@ The item has been updated successfully.${movedToStage ? ' Item moved to new stag
                 listName: listData.name || '',
                 updatedFieldsCount: allCustomFields.length,
                 updatedItem: updatedItem,
+                // Populate read-only file info fields for UI display
+                current_marketing_file_info: currentMarketingFileInfo,
+                current_recruitment_cv_info: currentRecruitmentCVInfo,
                 ...(movedToStage && {
                     movedToStage: true,
                     newStageId: moveToStage,

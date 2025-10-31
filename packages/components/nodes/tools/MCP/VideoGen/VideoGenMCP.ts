@@ -3,6 +3,17 @@ import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeParams } from 
 import { getCredentialData, getCredentialParam } from '../../../../src/utils'
 import { MCPToolkit } from '../core'
 import path from 'path'
+import {
+    VIDEO_MODELS,
+    CREDENTIALS,
+    DEFAULTS,
+    DOCUMENTATION_URL,
+    ERROR_MESSAGES,
+    SERVER_FILES,
+    ENV_VARS,
+    TRANSPORT_TYPE,
+    BASE_CLASS
+} from './constants'
 
 class VideoGen_MCP implements INode {
     label: string
@@ -19,7 +30,7 @@ class VideoGen_MCP implements INode {
     returnDirect: boolean
 
     constructor() {
-        this.label = '[PrivOS] Video Generation MCP'
+        this.label = 'Video Generation'
         this.name = 'videoGenMCP'
         this.version = 1.0
         this.type = 'VideoGen MCP Tool'
@@ -27,13 +38,13 @@ class VideoGen_MCP implements INode {
         this.category = 'MCP'
         this.description =
             'MCP server for video generation using Google Veo 2.0. Generates high-quality videos from text or images. Returns video URLs directly without LLM processing.'
-        this.documentation = 'https://ai.google.dev/gemini-api/docs/veo'
+        this.documentation = DOCUMENTATION_URL
         this.returnDirect = true
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
             type: 'credential',
-            credentialNames: ['googleGenerativeAI']
+            credentialNames: [CREDENTIALS.GOOGLE_GENERATIVE_AI]
         }
         this.inputs = [
             {
@@ -43,11 +54,11 @@ class VideoGen_MCP implements INode {
                 options: [
                     {
                         label: 'Veo 2.0 Generate (Recommended)',
-                        name: 'veo-2.0-generate-001',
+                        name: VIDEO_MODELS.VEO_2_0,
                         description: 'Latest Veo model, high-quality video generation up to 10 seconds'
                     }
                 ],
-                default: 'veo-2.0-generate-001',
+                default: DEFAULTS.MODEL,
                 description: 'Select default video generation model'
             },
             {
@@ -58,7 +69,7 @@ class VideoGen_MCP implements INode {
                 refresh: true
             }
         ]
-        this.baseClasses = ['Tool']
+        this.baseClasses = [BASE_CLASS]
     }
 
     //@ts-ignore
@@ -79,7 +90,7 @@ class VideoGen_MCP implements INode {
                     {
                         label: 'No Available Actions',
                         name: 'error',
-                        description: 'No available actions, please check your Google AI API key and refresh'
+                        description: ERROR_MESSAGES.NO_ACTIONS
                     }
                 ]
             }
@@ -104,28 +115,28 @@ class VideoGen_MCP implements INode {
 
     async getTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-        const geminiApiKey = getCredentialParam('googleGenerativeAPIKey', credentialData, nodeData)
-        const defaultModel = (nodeData.inputs?.defaultModel as string) || 'veo-2.0-generate-001'
+        const geminiApiKey = getCredentialParam(CREDENTIALS.GOOGLE_API_KEY_PARAM, credentialData, nodeData)
+        const defaultModel = (nodeData.inputs?.defaultModel as string) || DEFAULTS.MODEL
 
         if (!geminiApiKey) {
-            throw new Error('No Google AI API key provided')
+            throw new Error(ERROR_MESSAGES.NO_API_KEY)
         }
 
         // Path to the compiled MCP server
-        const serverPath = path.join(__dirname, 'video-gen-server.js')
+        const serverPath = path.join(__dirname, SERVER_FILES.VIDEOGEN)
 
         // Server parameters for STDIO transport
         const serverParams = {
             command: 'node',
             args: [serverPath],
             env: {
-                GEMINI_API_KEY: geminiApiKey,
-                DEFAULT_MODEL: defaultModel // Pass default model to server
+                [ENV_VARS.GEMINI_API_KEY]: geminiApiKey,
+                [ENV_VARS.DEFAULT_MODEL]: defaultModel // Pass default model to server
             }
         }
 
         // Create MCPToolkit with STDIO transport
-        const toolkit = new MCPToolkit(serverParams, 'stdio')
+        const toolkit = new MCPToolkit(serverParams, TRANSPORT_TYPE)
         await toolkit.initialize()
 
         const tools = toolkit.tools ?? []

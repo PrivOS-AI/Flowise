@@ -22,6 +22,7 @@ export type NodeParamsType =
     | 'file'
     | 'folder'
     | 'tabs'
+    | 'dynamicCustomFields'
 
 export type CommonType = string | number | boolean | undefined | null
 

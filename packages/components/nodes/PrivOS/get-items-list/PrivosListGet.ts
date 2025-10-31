@@ -1,23 +1,31 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
 import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+import {
+    CACHE_TTL,
+    PRIVOS_ENDPOINTS,
+    PRIVOS_HEADERS,
+    CONTENT_TYPES,
+    DEFAULT_PRIVOS_API_BASE_URL,
+    ERROR_MESSAGES,
+    REQUEST_CONFIG
+} from '../constants'
 
 // Global cache for rooms (keyed by credentialId)
 const roomsCacheList: Map<string, { rooms: any[]; timestamp: number }> = new Map()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPIList(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
     try {
-        const apiUrl = `${baseUrl}/rooms.get`
+        const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS_GET}`
         console.log('Fetching rooms from:', apiUrl)
 
         const response = await secureAxiosRequest({
             method: 'GET',
             url: apiUrl,
             headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': userId,
-                'X-Auth-Token': authToken
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
         })
 
@@ -138,12 +146,12 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken in credential')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
@@ -215,16 +223,16 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
-                const apiUrl = `${baseUrl}/external.lists.byRoomId`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LISTS_BY_ROOM_ID}`
                 console.log('Fetching lists from:', apiUrl)
 
                 const response = await secureAxiosRequest({
@@ -237,8 +245,8 @@ class PrivosListGet_Agentflow implements INode {
                     },
                     params: {
                         roomId: selectedRoom,
-                        offset: 0,
-                        count: 100
+                        offset: REQUEST_CONFIG.DEFAULT_OFFSET,
+                        count: REQUEST_CONFIG.DEFAULT_COUNT
                     }
                 })
 
@@ -290,17 +298,17 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
                 // Get list details to fetch stages
-                const apiUrl = `${baseUrl}/external.lists/${selectedList}`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${selectedList}`
                 console.log('Fetching list details from:', apiUrl)
 
                 const response = await secureAxiosRequest({
@@ -363,17 +371,17 @@ class PrivosListGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
                 // Get items by stageId
-                const apiUrl = `${baseUrl}/external.items.byStageId`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_BY_STAGE_ID}`
                 console.log('Fetching items from:', apiUrl)
 
                 const response = await secureAxiosRequest({
@@ -427,16 +435,16 @@ class PrivosListGet_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || DEFAULT_PRIVOS_API_BASE_URL
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
             if (!userId || !authToken) {
-                throw new Error('Missing credentials: User ID and Auth Token are required')
+                throw new Error(ERROR_MESSAGES.MISSING_CREDENTIALS)
             }
 
             // Fetch item details
-            const apiUrl = `${baseUrl}/external.items.info`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_INFO}`
             console.log('Fetching item details:', selectedItem)
 
             const response = await secureAxiosRequest({
@@ -465,7 +473,7 @@ class PrivosListGet_Agentflow implements INode {
             if (listName === 'Unknown List' || stageName === 'Unknown Stage') {
                 try {
                     console.log('Fetching list details for names...')
-                    const listApiUrl = `${baseUrl}/external.lists/${selectedList}`
+                    const listApiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${selectedList}`
                     const listResponse = await secureAxiosRequest({
                         method: 'GET',
                         url: listApiUrl,
@@ -542,21 +550,39 @@ class PrivosListGet_Agentflow implements INode {
 
                     // Format value based on type
                     let formattedValue: string
-                    if (fieldType === 'DATE') {
+
+                    // Special formatting for FILE fields
+                    if (fieldType === 'FILE' && cf.value && typeof cf.value === 'object' && cf.value.url && cf.value._id) {
+                        const file = cf.value
+                        const fileUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
+                        formattedValue = `${file.name}\n      🔗 URL: ${fileUrl}`
+                    }
+                    // DATE formatting
+                    else if (fieldType === 'DATE') {
                         formattedValue = formatDate(cf.value)
-                    } else if (fieldType === 'USER') {
+                    }
+                    // USER formatting
+                    else if (fieldType === 'USER') {
                         formattedValue = Array.isArray(cf.value) ? cf.value.map((u: any) => formatUser(u)).join(', ') : formatUser(cf.value)
-                    } else if (fieldType === 'DOCUMENT') {
+                    }
+                    // DOCUMENT formatting
+                    else if (fieldType === 'DOCUMENT') {
                         formattedValue = Array.isArray(cf.value)
                             ? cf.value.map((d: any) => d.title || 'Untitled').join(', ')
                             : typeof cf.value === 'object'
                             ? cf.value.title || 'Untitled'
                             : String(cf.value)
-                    } else if (Array.isArray(cf.value)) {
+                    }
+                    // Array formatting
+                    else if (Array.isArray(cf.value)) {
                         formattedValue = cf.value.join(', ')
-                    } else if (typeof cf.value === 'object') {
+                    }
+                    // Object formatting (fallback)
+                    else if (typeof cf.value === 'object') {
                         formattedValue = JSON.stringify(cf.value)
-                    } else {
+                    }
+                    // Default string
+                    else {
                         formattedValue = String(cf.value)
                     }
 

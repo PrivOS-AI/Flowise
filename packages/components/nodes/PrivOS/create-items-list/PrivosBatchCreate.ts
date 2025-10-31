@@ -1,27 +1,36 @@
-import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
+import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue, IFileUpload } from '../../../src/Interface'
 import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
-import * as fs from 'fs'
-import * as path from 'path'
-import FormData from 'form-data'
+import { getFileFromStorage } from '../../../src/storageUtils'
+import {
+    CACHE_TTL,
+    PRIVOS_ENDPOINTS,
+    PRIVOS_HEADERS,
+    CONTENT_TYPES,
+    DEFAULT_PRIVOS_API_BASE_URL,
+    ERROR_MESSAGES,
+    REQUEST_CONFIG,
+    ROOM_TYPES,
+    PRIVOS_FIELD_IDS
+} from '../constants'
+import { uploadFileToPrivos } from '../utils'
 
 // Global cache for rooms and fields
 const roomsCachePostItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
 const fieldDefinitionsCache: Map<string, any[]> = new Map() // Cache field definitions by list ID
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPIPostItem(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
     try {
-        const apiUrl = `${baseUrl}/rooms.get`
+        const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS_GET}`
         console.log('Fetching rooms from:', apiUrl)
 
         const response = await secureAxiosRequest({
             method: 'GET',
             url: apiUrl,
             headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': userId,
-                'X-Auth-Token': authToken
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
         })
 
@@ -107,52 +116,69 @@ class PrivosBatchCreate_Agentflow implements INode {
                 optional: true,
                 description: 'Description of the item'
             },
-            // === 7 HARDCODED FIELD DEFINITIONS (MUST ALWAYS SHOW) ===
-            // These match exactly the Privos API fieldDefinitions structure
+            // === MARKETING LIST FIELDS (7 fields) ===
             {
-                label: '1. Assignees (USER type)',
-                name: 'field_assignees',
+                label: '1. Assignees',
+                name: 'field_marketing_assignees',
                 type: 'asyncOptions',
                 loadMethod: 'listUsers',
                 list: true,
                 optional: true,
-                description: 'Select users from room - fieldId: marketing_campaign_assignees_field'
+                description: 'Select users to assign this marketing task to',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '2. Due Date (DATE type)',
-                name: 'field_due_date',
+                label: '2. Due Date',
+                name: 'field_marketing_due_date',
                 type: 'date',
                 optional: true,
-                description: 'Select due date - fieldId: marketing_campaign_due_date_field'
+                description: 'Due date for this marketing task',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '3. Start Date (DATE type)',
-                name: 'field_start_date',
+                label: '3. Start Date',
+                name: 'field_marketing_start_date',
                 type: 'date',
                 optional: true,
-                description: 'Select start date - fieldId: marketing_campaign_start_date_field'
+                description: 'Start date for this marketing campaign',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '4. End Date (DATE type)',
-                name: 'field_end_date',
+                label: '4. End Date',
+                name: 'field_marketing_end_date',
                 type: 'date',
                 optional: true,
-                description: 'Select end date - fieldId: marketing_campaign_end_date_field'
+                description: 'End date for this marketing campaign',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '5. File (FILE type)',
-                name: 'field_file',
+                label: '5. File',
+                name: 'field_marketing_file',
                 type: 'file',
                 optional: true,
-                description: 'Upload file - fieldId: marketing_campaign_file_link_field (v1/file.upload)'
+                description: 'Upload a file for this marketing task',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
             {
-                label: '6. Documents ',
-                name: 'field_documents',
+                label: '6. Documents',
+                name: 'field_marketing_documents',
                 type: 'array',
                 acceptVariable: true,
                 optional: true,
                 description: 'Documents with title and content - fieldId: marketing_campaign_documents_field',
+                show: {
+                    selectedList: 'marketing'
+                },
                 array: [
                     {
                         label: 'Title',
@@ -172,61 +198,129 @@ class PrivosBatchCreate_Agentflow implements INode {
                 ]
             },
             {
-                label: '7. Note (TEXTAREA type)',
-                name: 'field_note',
+                label: '7. Note',
+                name: 'field_marketing_note',
                 type: 'string',
                 rows: 4,
-                placeholder: 'Enter your notes here...',
-                acceptVariable: true,
                 optional: true,
-                description: 'Multi-line text - fieldId: marketing_campaign_note_field'
+                placeholder: 'Enter notes for this marketing task',
+                description: 'Additional notes for this marketing task',
+                show: {
+                    selectedList: 'marketing'
+                }
             },
-            // === CUSTOM FIELDS SECTION (Dynamic) ===
+            // === HR/RECRUITMENT LIST FIELDS (10 fields) ===
             {
-                label: 'Additional Custom Fields',
-                name: 'customFields',
-                type: 'array',
-                acceptVariable: true,
+                label: '1. CV',
+                name: 'field_recruitment_cv',
+                type: 'file',
                 optional: true,
-                description: 'Add custom fields beyond the 7 fixed fields above',
-                array: [
-                    {
-                        label: 'Field Type',
-                        name: 'fieldType',
-                        type: 'options',
-                        options: [
-                            { label: 'Text', name: 'TEXT' },
-                            { label: 'Text Area', name: 'TEXTAREA' },
-                            { label: 'Number', name: 'NUMBER' },
-                            { label: 'Date', name: 'DATE' },
-                            { label: 'Date Time', name: 'DATE_TIME' },
-                            { label: 'Select', name: 'SELECT' },
-                            { label: 'Multi Select', name: 'MULTI_SELECT' },
-                            { label: 'User', name: 'USER' },
-                            { label: 'Checkbox', name: 'CHECKBOX' },
-                            { label: 'URL', name: 'URL' },
-                            { label: 'File', name: 'FILE' },
-                            { label: 'Multiple Files', name: 'FILE_MULTIPLE' },
-                            { label: 'Document', name: 'DOCUMENT' }
-                        ],
-                        default: 'TEXT'
-                    },
-                    {
-                        label: 'Field Key/ID',
-                        name: 'fieldKey',
-                        type: 'string',
-                        placeholder: 'custom_field_key',
-                        acceptVariable: true
-                    },
-                    {
-                        label: 'Field Value',
-                        name: 'fieldValue',
-                        type: 'string',
-                        placeholder: 'Enter value based on field type',
-                        acceptVariable: true,
-                        rows: 2
-                    }
-                ]
+                description: 'Upload candidate CV',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '2. AI Summary',
+                name: 'field_recruitment_ai_summary',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'AI-generated summary of the CV',
+                description: 'AI-generated summary of the candidate',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '3. AI Score',
+                name: 'field_recruitment_ai_score',
+                type: 'number',
+                optional: true,
+                placeholder: 'Enter AI score (0-100)',
+                description: 'AI-generated score for the candidate',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '4. Interview Time',
+                name: 'field_recruitment_interview_time',
+                type: 'date',
+                optional: true,
+                description: 'Schedule interview date and time',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '5. Interviewer',
+                name: 'field_recruitment_interviewer',
+                type: 'asyncOptions',
+                loadMethod: 'listUsers',
+                list: true,
+                optional: true,
+                description: 'Select interviewer(s)',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '6. Interview Questions',
+                name: 'field_recruitment_interview_questions',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'Enter interview questions',
+                description: 'Questions to ask during the interview',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '7. Interview Notes',
+                name: 'field_recruitment_interview_notes',
+                type: 'string',
+                rows: 4,
+                optional: true,
+                placeholder: 'Enter interview notes',
+                description: 'Notes from the interview',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '8. Interview Score',
+                name: 'field_recruitment_interview_score',
+                type: 'number',
+                optional: true,
+                placeholder: 'Enter interview score (0-100)',
+                description: 'Score from the interview',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '9. Trial Time',
+                name: 'field_recruitment_trial_time',
+                type: 'date',
+                optional: true,
+                description: 'Trial period date',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
+            },
+            {
+                label: '10. CV Content',
+                name: 'field_recruitment_cv_content',
+                type: 'string',
+                rows: 6,
+                optional: true,
+                placeholder: 'Enter CV content text',
+                description: 'Text content extracted from CV',
+                show: {
+                    selectedList: 'personnel-recruitment'
+                }
             }
         ]
     }
@@ -251,12 +345,12 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
@@ -318,67 +412,60 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
-                const apiUrl = `${baseUrl}/external.lists.byRoomId`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LISTS_BY_ROOM_ID}`
                 console.log('Fetching lists from:', apiUrl)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: {
                         roomId: selectedRoom,
-                        offset: 0,
-                        count: 100
+                        offset: REQUEST_CONFIG.DEFAULT_OFFSET,
+                        count: REQUEST_CONFIG.DEFAULT_COUNT
                     }
                 })
 
                 const lists = response.data?.lists || []
                 console.log('Lists found:', lists.length)
 
-                // Pre-fetch field definitions for each list to populate cache
+                // Process each list and cache field definitions (already in response!)
                 for (const list of lists) {
                     const stageCount = list.stageCount || 0
                     const itemCount = list.itemCount || 0
 
+                    // Store listId and templateKey in the value
+                    // templateKey is more stable than name (e.g., "marketing", "personnel-recruitment")
                     returnData.push({
                         label: list.name,
-                        name: list._id,
+                        name: JSON.stringify({
+                            listId: list._id,
+                            listName: list.name,
+                            templateKey: list.templateKey || ''
+                        }),
                         description: `${stageCount} stages, ${itemCount} items`
                     })
 
-                    // Fetch list details to cache field definitions
-                    try {
-                        const listDetailUrl = `${baseUrl}/external.lists/${list._id}`
-                        const listDetailResponse = await secureAxiosRequest({
-                            method: 'GET',
-                            url: listDetailUrl,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-User-Id': userId,
-                                'X-Auth-Token': authToken
-                            }
-                        })
-
-                        const listData = listDetailResponse.data?.list || listDetailResponse.data
-                        if (listData.fieldDefinitions && listData.fieldDefinitions.length > 0) {
-                            fieldDefinitionsCache.set(list._id, listData.fieldDefinitions)
-                            console.log('[listLists] Cached', listData.fieldDefinitions.length, 'field definitions for list', list._id)
-                        }
-                    } catch (err) {
-                        console.error('[listLists] Error caching fields for list', list._id, ':', err)
+                    // Cache field definitions directly from response (no need for extra API call!)
+                    if (list.fieldDefinitions && list.fieldDefinitions.length > 0) {
+                        fieldDefinitionsCache.set(list._id, list.fieldDefinitions)
+                        console.log('[listLists] Cached', list.fieldDefinitions.length, 'field definitions for list', list._id, list.name)
+                        console.log('[listLists] Field types:', list.fieldDefinitions.map((f: any) => `${f.name}(${f.type})`).join(', '))
+                    } else {
+                        console.log('[listLists] No fieldDefinitions for list', list._id, list.name)
                     }
                 }
 
@@ -396,10 +483,20 @@ class PrivosBatchCreate_Agentflow implements INode {
             try {
                 console.log('[listStages] START')
 
-                const selectedList = nodeData.inputs?.selectedList as string
-                if (!selectedList) {
+                const selectedListStr = nodeData.inputs?.selectedList as string
+                if (!selectedListStr) {
                     console.log('No list selected yet')
                     return returnData
+                }
+
+                // Parse list data from JSON
+                let selectedList: string
+                try {
+                    const parsed = JSON.parse(selectedListStr)
+                    selectedList = parsed.listId
+                } catch (e) {
+                    // Fallback for old format
+                    selectedList = selectedListStr
                 }
 
                 const credentialId = nodeData.credential || ''
@@ -414,26 +511,26 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
                 // Get list details to fetch stages
-                const apiUrl = `${baseUrl}/external.lists/${selectedList}`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.LIST_DETAIL}/${selectedList}`
                 console.log('Fetching list details from:', apiUrl)
 
                 const response = await secureAxiosRequest({
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     }
                 })
 
@@ -490,12 +587,12 @@ class PrivosBatchCreate_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
@@ -519,20 +616,19 @@ class PrivosBatchCreate_Agentflow implements INode {
                 // Determine correct endpoint based on room type
                 // c = channel (public), p = private group, d = direct message
                 let apiEndpoint: string
-                let memberPath: string = 'members' // Path to members in response
 
                 switch (roomType) {
-                    case 'p': // Private group
-                        apiEndpoint = `${baseUrl}/groups.members`
+                    case ROOM_TYPES.PRIVATE: // Private group
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.GROUPS_MEMBERS}`
                         console.log('[listUsers] Using groups.members for private group')
                         break
-                    case 'd': // Direct message
-                        apiEndpoint = `${baseUrl}/im.members`
+                    case ROOM_TYPES.DIRECT: // Direct message
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.IM_MEMBERS}`
                         console.log('[listUsers] Using im.members for direct message')
                         break
-                    case 'c': // Public channel
+                    case ROOM_TYPES.CHANNEL: // Public channel
                     default:
-                        apiEndpoint = `${baseUrl}/channels.members`
+                        apiEndpoint = `${baseUrl}${PRIVOS_ENDPOINTS.CHANNELS_MEMBERS}`
                         console.log('[listUsers] Using channels.members for public channel')
                         break
                 }
@@ -543,14 +639,14 @@ class PrivosBatchCreate_Agentflow implements INode {
                     method: 'GET',
                     url: apiEndpoint,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: {
                         roomId: selectedRoom,
-                        offset: 0,
-                        count: 100
+                        offset: REQUEST_CONFIG.DEFAULT_OFFSET,
+                        count: REQUEST_CONFIG.DEFAULT_COUNT
                     }
                 })
 
@@ -585,20 +681,38 @@ class PrivosBatchCreate_Agentflow implements INode {
                 console.log('[listFieldDefinitions] nodeData.inputs:', JSON.stringify(nodeData.inputs, null, 2))
 
                 // Try to get selectedList from nodeData.inputs
-                const selectedList = nodeData.inputs?.selectedList as string
+                const selectedListStr = nodeData.inputs?.selectedList as string
 
-                if (selectedList) {
-                    console.log('[listFieldDefinitions] ✓ Selected list:', selectedList)
+                if (selectedListStr) {
+                    console.log('[listFieldDefinitions] ✓ Selected list string:', selectedListStr)
+
+                    // Parse list data from JSON
+                    let selectedList: string
+                    try {
+                        const parsed = JSON.parse(selectedListStr)
+                        selectedList = parsed.listId
+                    } catch (e) {
+                        // Fallback for old format
+                        selectedList = selectedListStr
+                    }
 
                     // Check cache for this specific list
                     const cached = fieldDefinitionsCache.get(selectedList)
                     if (cached && cached.length > 0) {
                         console.log('[listFieldDefinitions] Using cached fields for selected list:', cached.length)
                         cached.forEach((field: any) => {
+                            // Store field metadata in name as JSON for later use
+                            const fieldData = {
+                                fieldId: field._id,
+                                fieldName: field.name,
+                                fieldType: field.type,
+                                order: field.order
+                            }
+
                             returnData.push({
                                 label: `${field.name} (${field.type})`,
-                                name: field._id,
-                                description: `Type: ${field.type}`
+                                name: JSON.stringify(fieldData),
+                                description: `Type: ${field.type} | Order: ${field.order}`
                             })
                         })
                         return returnData
@@ -628,10 +742,17 @@ class PrivosBatchCreate_Agentflow implements INode {
                 allFields.sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
 
                 for (const field of allFields) {
+                    const fieldData = {
+                        fieldId: field._id,
+                        fieldName: field.name,
+                        fieldType: field.type,
+                        order: field.order
+                    }
+
                     returnData.push({
                         label: `${field.name} (${field.type})`,
-                        name: field._id,
-                        description: `Type: ${field.type}`
+                        name: JSON.stringify(fieldData),
+                        description: `Type: ${field.type} | Order: ${field.order || 'N/A'}`
                     })
                 }
 
@@ -650,332 +771,170 @@ class PrivosBatchCreate_Agentflow implements INode {
         try {
             // Get credentials
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || DEFAULT_PRIVOS_API_BASE_URL
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
             if (!userId || !authToken) {
-                throw new Error('Missing credentials: User ID and Auth Token are required')
+                throw new Error(ERROR_MESSAGES.MISSING_CREDENTIALS)
             }
 
             // Build from form inputs
-            const selectedList = nodeData.inputs?.selectedList as string
+            const selectedListStr = nodeData.inputs?.selectedList as string
             const selectedStage = nodeData.inputs?.selectedStage as string
             const itemName = nodeData.inputs?.itemName as string
             const itemDescription = nodeData.inputs?.itemDescription as string
 
-            // Fixed field definitions from UI
-            const field_assignees = nodeData.inputs?.field_assignees as string
-            const field_due_date = nodeData.inputs?.field_due_date as string
-            const field_start_date = nodeData.inputs?.field_start_date as string
-            const field_end_date = nodeData.inputs?.field_end_date as string
-            const field_file = nodeData.inputs?.field_file as any
-            const field_documents = nodeData.inputs?.field_documents as any[]
-            const field_note = nodeData.inputs?.field_note as string
-
-            // Additional custom fields from array
-            const customFieldsArray = nodeData.inputs?.customFields as any[]
-
             // Form validation
-            if (!selectedList) {
-                throw new Error('Please select a list')
+            if (!selectedListStr) {
+                throw new Error(ERROR_MESSAGES.MISSING_LIST_SELECTION)
             }
 
             if (!selectedStage) {
-                throw new Error('Please select a stage')
+                throw new Error(ERROR_MESSAGES.MISSING_STAGE_SELECTION)
             }
 
             if (!itemName || itemName.trim() === '') {
-                throw new Error('Item name is required')
+                throw new Error(ERROR_MESSAGES.MISSING_ITEM_NAME)
             }
 
-            const listIdToUse = selectedList
+            // Parse list data from JSON
+            let listIdToUse: string
+            try {
+                const parsed = JSON.parse(selectedListStr)
+                listIdToUse = parsed.listId
+            } catch (e) {
+                // Fallback for old format
+                listIdToUse = selectedListStr
+            }
 
-            // Build customFields array from fixed fields and additional custom fields
+            // Map input field names to Privos field IDs based on selected list
+            // Using centralized constants from PRIVOS_FIELD_IDS
+            const fieldMapping: { [key: string]: string } = {
+                // Marketing Campaign Template fields
+                field_marketing_assignees: PRIVOS_FIELD_IDS.MARKETING.ASSIGNEES,
+                field_marketing_due_date: PRIVOS_FIELD_IDS.MARKETING.DUE_DATE,
+                field_marketing_start_date: PRIVOS_FIELD_IDS.MARKETING.START_DATE,
+                field_marketing_end_date: PRIVOS_FIELD_IDS.MARKETING.END_DATE,
+                field_marketing_file: PRIVOS_FIELD_IDS.MARKETING.FILE,
+                field_marketing_documents: PRIVOS_FIELD_IDS.MARKETING.DOCUMENTS,
+                field_marketing_note: PRIVOS_FIELD_IDS.MARKETING.NOTE,
+                // HR/Recruitment Template fields
+                field_recruitment_cv: PRIVOS_FIELD_IDS.RECRUITMENT.CV,
+                field_recruitment_ai_summary: PRIVOS_FIELD_IDS.RECRUITMENT.AI_SUMMARY,
+                field_recruitment_ai_score: PRIVOS_FIELD_IDS.RECRUITMENT.AI_SCORE,
+                field_recruitment_interview_time: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_TIME,
+                field_recruitment_interviewer: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEWER,
+                field_recruitment_interview_questions: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_QUESTIONS,
+                field_recruitment_interview_notes: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_NOTES,
+                field_recruitment_interview_score: PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_SCORE,
+                field_recruitment_trial_time: PRIVOS_FIELD_IDS.RECRUITMENT.TRIAL_TIME,
+                field_recruitment_cv_content: PRIVOS_FIELD_IDS.RECRUITMENT.CV_CONTENT
+            }
+
+            // Process individual custom fields
             const allCustomFields: any[] = []
 
-            // Map of fixed field names to their IDs (from fieldDefinitions)
-            const fieldMapping: { [key: string]: string } = {
-                field_assignees: 'marketing_campaign_assignees_field',
-                field_due_date: 'marketing_campaign_due_date_field',
-                field_start_date: 'marketing_campaign_start_date_field',
-                field_end_date: 'marketing_campaign_end_date_field',
-                field_file: 'marketing_campaign_file_link_field',
-                field_documents: 'marketing_campaign_documents_field',
-                field_note: 'marketing_campaign_note_field'
-            }
+            console.log('[CREATE ITEM] Processing custom fields for list:', listIdToUse)
 
-            // Process Assignees (USER type)
-            if (field_assignees) {
-                try {
-                    let assigneesValue: any[] = []
+            for (const [inputName, fieldId] of Object.entries(fieldMapping)) {
+                const fieldValue = nodeData.inputs?.[inputName]
 
-                    if (typeof field_assignees === 'string') {
-                        if (field_assignees.trim().startsWith('[')) {
-                            assigneesValue = JSON.parse(field_assignees)
-                        } else {
-                            assigneesValue = [JSON.parse(field_assignees)]
-                        }
-                    } else if (Array.isArray(field_assignees)) {
-                        assigneesValue = (field_assignees as any[]).map((user: any) => {
-                            if (typeof user === 'string') {
-                                return JSON.parse(user)
-                            }
-                            return user
-                        })
-                    } else {
-                        assigneesValue = [field_assignees]
-                    }
+                if (fieldValue !== null && fieldValue !== undefined && fieldValue !== '') {
+                    console.log(`[CREATE ITEM] Found field ${inputName}:`, fieldValue)
 
-                    const validatedValue = assigneesValue.map((user: any) => ({
-                        _id: user._id || user.id || user,
-                        username: user.username || user.name || 'Unknown'
-                    }))
+                    // Handle different field types
+                    let processedValue = fieldValue
 
-                    allCustomFields.push({ fieldId: fieldMapping['field_assignees'], value: validatedValue })
-                } catch (e) {
-                    console.error('Failed to parse assignees:', e)
-                    throw new Error('Invalid assignees format')
-                }
-            }
-
-            // Process Date fields (DATE type) - Due Date, Start Date, End Date
-            const processDateField = (fieldValue: string, fieldName: string) => {
-                if (!fieldValue) return null
-
-                try {
-                    let isoDate: string
-                    const dateInput = fieldValue
-
-                    console.log(`Processing ${fieldName} - Raw input:`, dateInput)
-
-                    if (typeof dateInput === 'string') {
-                        // Check if already in ISO format
-                        if (dateInput.includes('Z') && dateInput.includes('T') && dateInput.includes('.')) {
-                            // Already in full ISO format
-                            isoDate = dateInput
-                        } else if (dateInput.includes('T')) {
-                            // Has T separator but might be missing Z or milliseconds
-                            if (dateInput.includes('Z')) {
-                                // Has Z but might be missing milliseconds
-                                if (!dateInput.includes('.')) {
-                                    // Add milliseconds before Z
-                                    isoDate = dateInput.replace('Z', '.000Z')
-                                } else {
-                                    isoDate = dateInput
-                                }
-                            } else {
-                                // No Z, treat as local time and convert to UTC
-                                const date = new Date(dateInput)
-                                isoDate = date.toISOString()
-                            }
-                        } else {
-                            // Just a date without time
-                            isoDate = new Date(dateInput + 'T00:00:00.000Z').toISOString()
-                        }
-                    } else {
-                        isoDate = new Date(dateInput).toISOString()
-                    }
-
-                    // Ensure format has milliseconds
-                    if (!isoDate.includes('.')) {
-                        isoDate = isoDate.replace('Z', '.000Z')
-                    }
-
-                    console.log(`${fieldName} - Converted output:`, isoDate)
-                    return isoDate
-                } catch (e) {
-                    console.error(`Invalid date format for ${fieldName}:`, fieldValue, 'Error:', e)
-                    throw new Error(`Invalid date format for ${fieldName}. Expected ISO format like: 2025-10-31T00:00:00.000Z`)
-                }
-            }
-
-            if (field_due_date) {
-                const isoDate = processDateField(field_due_date, 'Due Date')
-                if (isoDate) {
-                    allCustomFields.push({ fieldId: fieldMapping['field_due_date'], value: isoDate })
-                }
-            }
-
-            if (field_start_date) {
-                const isoDate = processDateField(field_start_date, 'Start Date')
-                if (isoDate) {
-                    allCustomFields.push({ fieldId: fieldMapping['field_start_date'], value: isoDate })
-                }
-            }
-
-            if (field_end_date) {
-                const isoDate = processDateField(field_end_date, 'End Date')
-                if (isoDate) {
-                    allCustomFields.push({ fieldId: fieldMapping['field_end_date'], value: isoDate })
-                }
-            }
-
-            // Process File (FILE type)
-            if (field_file) {
-                let fileValue: any
-
-                if (typeof field_file === 'string') {
-                    try {
-                        fileValue = JSON.parse(field_file)
-                    } catch (e) {
+                    // For FILE fields - upload file first and get file object
+                    if (typeof fieldValue === 'string' && (inputName === 'field_marketing_file' || inputName === 'field_recruitment_cv')) {
                         try {
-                            let fileData: Buffer
+                            let fileBuffer: Buffer
                             let fileName: string
+                            let mimeType: string
 
-                            if (field_file.startsWith('data:')) {
-                                const matches = field_file.match(/^data:(.+);base64,(.+)$/)
-                                if (matches) {
-                                    const mimeType = matches[1]
-                                    const base64Data = matches[2]
-                                    fileData = Buffer.from(base64Data, 'base64')
-                                    fileName = `file_${Date.now()}.${mimeType.split('/')[1]}`
-                                } else {
-                                    throw new Error('Invalid base64 format')
+                            // Check if it's a base64 data URI (e.g., "data:application/pdf;base64,JVBERi0x...")
+                            if (fieldValue.startsWith('data:')) {
+                                console.log(`[CREATE ITEM] Processing base64 data URI for ${inputName}`)
+
+                                // Parse data URI: data:mime/type;base64,<data>
+                                const matches = fieldValue.match(/^data:([^;]+);base64,(.+)$/)
+                                if (!matches) {
+                                    throw new Error('Invalid data URI format')
                                 }
-                            } else {
-                                fileData = fs.readFileSync(field_file)
-                                fileName = path.basename(field_file)
+
+                                mimeType = matches[1]
+                                const base64Data = matches[2]
+
+                                // Convert base64 to buffer
+                                fileBuffer = Buffer.from(base64Data, 'base64')
+
+                                // Generate filename from mime type
+                                const ext = mimeType.split('/')[1] || 'bin'
+                                fileName = `file_${Date.now()}.${ext}`
+
+                                console.log(`[CREATE ITEM] Parsed base64 file: ${fileName} (${mimeType}, ${fileBuffer.length} bytes)`)
+                            }
+                            // Check if it's stored-file JSON format
+                            else {
+                                const parsed = JSON.parse(fieldValue)
+                                const uploads: IFileUpload[] = Array.isArray(parsed) ? parsed : [parsed]
+
+                                if (uploads.length === 0 || uploads[0].type !== 'stored-file') {
+                                    console.warn(`[CREATE ITEM] Skipping file field ${inputName}: not a stored-file`)
+                                    continue
+                                }
+
+                                const upload = uploads[0]
+                                console.log(`[CREATE ITEM] Processing stored file for ${inputName}:`, upload.name)
+
+                                // Get file buffer from storage
+                                fileBuffer = await getFileFromStorage(upload.name, options.orgId, options.chatflowid, options.chatId)
+
+                                fileName = upload.name
+                                mimeType = upload.mime
                             }
 
-                            const formData = new FormData()
-                            formData.append('file', fileData, fileName)
+                            // Upload file to Privos
+                            const fileObject = await uploadFileToPrivos(fileBuffer, fileName, mimeType, baseUrl, userId, authToken)
 
-                            console.log('Uploading file to Privos:', fileName)
-
-                            const uploadResponse = await secureAxiosRequest({
-                                method: 'POST',
-                                url: `${baseUrl}/files.upload`,
-                                headers: {
-                                    ...formData.getHeaders(),
-                                    'X-User-Id': userId,
-                                    'X-Auth-Token': authToken
-                                },
-                                data: formData
-                            })
-
-                            const uploadedFile = uploadResponse.data?.file
-
-                            if (!uploadedFile || !uploadedFile._id || !uploadedFile.url) {
-                                throw new Error('Upload response missing file data')
-                            }
-
-                            fileValue = {
-                                _id: uploadedFile._id,
-                                name: uploadedFile.name || fileName,
-                                size: uploadedFile.size || fileData.length,
-                                type: uploadedFile.type || 'application/octet-stream',
-                                url: uploadedFile.url,
-                                uploadedAt: uploadedFile.uploadedAt || new Date().toISOString()
-                            }
-
-                            console.log('File uploaded successfully:', fileValue)
-                        } catch (uploadError: any) {
-                            console.error('Error uploading file:', uploadError.message)
-                            throw new Error(`Failed to upload file: ${uploadError.message}`)
+                            console.log(`[CREATE ITEM] File uploaded successfully:`, fileObject)
+                            processedValue = fileObject
+                        } catch (e) {
+                            console.error(`[CREATE ITEM] Failed to upload file for ${inputName}:`, e)
+                            throw new Error(`Failed to upload file: ${e.message}`)
                         }
                     }
-                } else if (typeof field_file === 'object') {
-                    fileValue = field_file
-                }
-
-                if (fileValue) {
-                    allCustomFields.push({ fieldId: fieldMapping['field_file'], value: fileValue })
-                }
-            }
-
-            // Process Documents (DOCUMENT type) - from array of documents
-            if (field_documents && Array.isArray(field_documents) && field_documents.length > 0) {
-                const documentValue = field_documents.map((doc: any) => ({
-                    _id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-                    title: doc.title || 'Untitled',
-                    content: doc.content || '',
-                    versions: [
-                        {
-                            version: 1,
-                            content: doc.content || '',
-                            createdAt: new Date().toISOString(),
-                            createdBy: {
-                                _id: userId,
-                                username: 'system',
-                                name: 'System'
+                    // For asyncOptions (USER fields), keep the full object with _id and username
+                    else if (typeof fieldValue === 'string' && (fieldValue.startsWith('[{') || fieldValue.startsWith('{'))) {
+                        try {
+                            const parsed = JSON.parse(fieldValue)
+                            if (Array.isArray(parsed)) {
+                                // Multiple users - keep objects with _id and username
+                                processedValue = parsed.map((u: any) => ({
+                                    _id: u._id,
+                                    username: u.username
+                                }))
+                            } else if (parsed._id) {
+                                // Single user - wrap in array with _id and username
+                                processedValue = [{ _id: parsed._id, username: parsed.username }]
                             }
+                            console.log(`[CREATE ITEM] Parsed USER field ${inputName}:`, processedValue)
+                        } catch (e) {
+                            console.warn(`[CREATE ITEM] Failed to parse ${inputName}, using as-is`)
                         }
-                    ],
-                    currentVersion: 1,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                }))
-
-                allCustomFields.push({
-                    fieldId: fieldMapping['field_documents'],
-                    value: documentValue
-                })
-            }
-
-            // Process Note (TEXTAREA type)
-            if (field_note && field_note.trim()) {
-                allCustomFields.push({ fieldId: fieldMapping['field_note'], value: field_note })
-            }
-
-            // Process additional custom fields from array
-            if (customFieldsArray && Array.isArray(customFieldsArray)) {
-                for (const field of customFieldsArray) {
-                    if (field.fieldKey && field.fieldValue) {
-                        // Handle different field types
-                        let processedValue = field.fieldValue
-
-                        // Process based on field type
-                        if (field.fieldType === 'DATE' || field.fieldType === 'DATE_TIME') {
-                            // Convert date to ISO format
-                            processedValue = processDateField(field.fieldValue, `Custom field ${field.fieldKey}`)
-                        } else if (field.fieldType === 'NUMBER') {
-                            processedValue = Number(field.fieldValue)
-                        } else if (field.fieldType === 'CHECKBOX') {
-                            processedValue = field.fieldValue === 'true' || field.fieldValue === true
-                        } else if (field.fieldType === 'USER') {
-                            // Parse user if it's a string
-                            if (typeof field.fieldValue === 'string' && field.fieldValue.includes('{')) {
-                                try {
-                                    processedValue = JSON.parse(field.fieldValue)
-                                } catch (e) {
-                                    // If parse fails, use as is
-                                    processedValue = field.fieldValue
-                                }
-                            }
-                        } else if (field.fieldType === 'MULTI_SELECT' || field.fieldType === 'FILE_MULTIPLE') {
-                            // Parse array if it's a string
-                            if (typeof field.fieldValue === 'string' && field.fieldValue.startsWith('[')) {
-                                try {
-                                    processedValue = JSON.parse(field.fieldValue)
-                                } catch (e) {
-                                    // If parse fails, use as is
-                                    processedValue = field.fieldValue
-                                }
-                            }
-                        } else if (field.fieldType === 'DOCUMENT') {
-                            // Parse document JSON
-                            if (
-                                typeof field.fieldValue === 'string' &&
-                                (field.fieldValue.includes('{') || field.fieldValue.includes('['))
-                            ) {
-                                try {
-                                    processedValue = JSON.parse(field.fieldValue)
-                                } catch (e) {
-                                    processedValue = field.fieldValue
-                                }
-                            }
-                        }
-
-                        allCustomFields.push({
-                            fieldId: field.fieldKey,
-                            value: processedValue
-                        })
                     }
+
+                    allCustomFields.push({
+                        fieldId: fieldId,
+                        value: processedValue
+                    })
+
+                    console.log(`[CREATE ITEM] ✓ Added field: ${fieldId} = ${JSON.stringify(processedValue).substring(0, 100)}`)
                 }
             }
 
-            console.log('All custom fields to send:', allCustomFields)
+            console.log('[CREATE ITEM] Total custom fields to send:', allCustomFields.length)
 
             // Create single item object
             const itemToCreate: any = {
@@ -992,27 +951,15 @@ class PrivosBatchCreate_Agentflow implements INode {
             }
 
             const requestBody = {
-                listId: selectedList,
+                listId: listIdToUse,
                 items: [itemToCreate]
             }
 
-            // Get list details for field definitions (for output formatting)
-            const listApiUrl = `${baseUrl}/external.lists/${listIdToUse}`
-            const listResponse = await secureAxiosRequest({
-                method: 'GET',
-                url: listApiUrl,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-User-Id': userId,
-                    'X-Auth-Token': authToken
-                }
-            })
-
-            const listData = listResponse.data?.list || listResponse.data
-            const fieldDefinitions = listData.fieldDefinitions || []
+            // Note: fieldDefinitions and listData already fetched above for dynamic field mapping
+            // No need to fetch again
 
             // Call batch-create API
-            const apiUrl = `${baseUrl}/external.items.batch-create`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_BATCH_CREATE}`
             console.log('Creating', requestBody.items.length, 'item(s) via batch-create API')
             console.log('Request body:', JSON.stringify(requestBody, null, 2))
 
@@ -1020,9 +967,9 @@ class PrivosBatchCreate_Agentflow implements INode {
                 method: 'POST',
                 url: apiUrl,
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-User-Id': userId,
-                    'X-Auth-Token': authToken
+                    [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                    [PRIVOS_HEADERS.USER_ID]: userId,
+                    [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                 },
                 data: requestBody
             })
@@ -1040,9 +987,7 @@ class PrivosBatchCreate_Agentflow implements INode {
                 originalItem.customFields && originalItem.customFields.length > 0
                     ? originalItem.customFields
                           .map((cf: any) => {
-                              const fieldDef = fieldDefinitions.find((f: any) => f._id === cf.fieldId)
-                              const fieldName = fieldDef?.name || cf.fieldId
-                              return `   ${fieldName}: ${JSON.stringify(cf.value)}`
+                              return `   ${cf.fieldId}: ${JSON.stringify(cf.value)}`
                           })
                           .join('\n')
                     : '   No custom fields'
@@ -1053,7 +998,7 @@ ${'='.repeat(50)}
 ITEM ID: ${createdItem._id}
 ITEM NAME: ${createdItem.name}
 
-LIST: ${listData.name || listIdToUse}
+LIST ID: ${listIdToUse}
 STAGE: ${createdItem.stageId || originalItem.stageId}
 
 ${originalItem.description ? `DESCRIPTION:\n${originalItem.description}\n\n` : ''}${'='.repeat(50)}
@@ -1071,7 +1016,6 @@ The item has been created and is now visible in the selected stage.`
                 itemId: createdItem._id,
                 itemName: createdItem.name,
                 listId: listIdToUse,
-                listName: listData.name || '',
                 stageId: originalItem.stageId,
                 customFieldsCount: originalItem.customFields ? originalItem.customFields.length : 0,
                 createdItem: createdItem

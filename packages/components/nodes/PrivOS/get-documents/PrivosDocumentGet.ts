@@ -1,23 +1,23 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
 import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+import { CACHE_TTL, PRIVOS_ENDPOINTS, PRIVOS_HEADERS, CONTENT_TYPES, DEFAULT_PRIVOS_API_BASE_URL, ERROR_MESSAGES } from '../constants'
 
 // Global cache for rooms (keyed by credentialId)
 const roomsCache: Map<string, { rooms: any[]; timestamp: number }> = new Map()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPI(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
     try {
-        const apiUrl = `${baseUrl}/rooms.get`
+        const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS_GET}`
         console.log('Fetching rooms from:', apiUrl)
 
         const response = await secureAxiosRequest({
             method: 'GET',
             url: apiUrl,
             headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': userId,
-                'X-Auth-Token': authToken
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
         })
 
@@ -128,7 +128,7 @@ class PrivosDocumentGet_Agentflow implements INode {
 
                 console.log('Credential loaded with keys:', Object.keys(credentialData))
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -138,7 +138,7 @@ class PrivosDocumentGet_Agentflow implements INode {
                 console.log('- authToken:', authToken ? 'EXISTS' : 'MISSING')
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken in credential')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
@@ -217,7 +217,7 @@ class PrivosDocumentGet_Agentflow implements INode {
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
@@ -227,11 +227,11 @@ class PrivosDocumentGet_Agentflow implements INode {
                 console.log('- authToken:', authToken ? 'EXISTS' : 'MISSING')
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
-                const apiUrl = `${baseUrl}/external.documents.byRoomId`
+                const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.DOCUMENTS_BY_ROOM_ID}`
                 console.log('Fetching documents from:', apiUrl)
                 console.log('Params:', { roomId: selectedRoom, offset: 0, count: 100 })
 
@@ -239,9 +239,9 @@ class PrivosDocumentGet_Agentflow implements INode {
                     method: 'GET',
                     url: apiUrl,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'X-Auth-Token': authToken
+                        [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                        [PRIVOS_HEADERS.USER_ID]: userId,
+                        [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                     },
                     params: {
                         roomId: selectedRoom,
@@ -295,15 +295,15 @@ class PrivosDocumentGet_Agentflow implements INode {
             }
 
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || DEFAULT_PRIVOS_API_BASE_URL
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
             if (!userId || !authToken) {
-                throw new Error('Missing credentials: User ID and Auth Token are required')
+                throw new Error(ERROR_MESSAGES.MISSING_CREDENTIALS)
             }
 
-            const apiUrl = `${baseUrl}/external.documents/${selectedDocument}`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.DOCUMENTS_GET}/${selectedDocument}`
 
             console.log('Fetching document:', selectedDocument)
 
@@ -311,9 +311,9 @@ class PrivosDocumentGet_Agentflow implements INode {
                 method: 'GET',
                 url: apiUrl,
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-User-Id': userId,
-                    'X-Auth-Token': authToken
+                    [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                    [PRIVOS_HEADERS.USER_ID]: userId,
+                    [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                 }
             })
 
@@ -363,7 +363,7 @@ class PrivosDocumentGet_Agentflow implements INode {
                 outputContent = `📄 DOCUMENT INFORMATION
 ${'='.repeat(50)}
 
-📌 Title: ${title}
+Title: ${title}
 
 📝 Description: ${description || 'No description'}
 

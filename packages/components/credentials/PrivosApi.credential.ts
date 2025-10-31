@@ -1,4 +1,5 @@
 import { INodeParams, INodeCredential } from '../src/Interface'
+import { DEFAULT_PRIVOS_API_BASE_URL } from '../nodes/PrivOS/constants'
 
 class PrivosApiCredential implements INodeCredential {
     label: string
@@ -15,7 +16,7 @@ class PrivosApiCredential implements INodeCredential {
                 label: 'API Base URL',
                 name: 'baseUrl',
                 type: 'string',
-                default: 'https://privos-chat-dev.roxane.one/api/v1',
+                default: DEFAULT_PRIVOS_API_BASE_URL,
                 description: 'Base URL for Privos API'
             },
             {

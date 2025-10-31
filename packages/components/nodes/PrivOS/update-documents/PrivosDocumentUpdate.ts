@@ -1,6 +1,7 @@
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
-import { parseJsonBody } from '../../../src/utils'
+import { parseJsonBody, getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+import { PRIVOS_ENDPOINTS, PRIVOS_HEADERS, CONTENT_TYPES, ERROR_MESSAGES, DEFAULT_PRIVOS_API_BASE_URL } from '../constants'
 
 class PrivosDocumentUpdate_Agentflow implements INode {
     label: string
@@ -12,6 +13,7 @@ class PrivosDocumentUpdate_Agentflow implements INode {
     color: string
     category: string
     baseClasses: string[]
+    credential: INodeParams
     inputs: INodeParams[]
 
     constructor() {
@@ -24,6 +26,12 @@ class PrivosDocumentUpdate_Agentflow implements INode {
         this.color = '#E91E63'
         this.description = 'Update document in PrivOS'
         this.baseClasses = [this.type]
+        this.credential = {
+            label: 'Privos API Credential',
+            name: 'credential',
+            type: 'credential',
+            credentialNames: ['privosApi']
+        }
         this.inputs = [
             {
                 label: 'Update Type',
@@ -122,6 +130,16 @@ class PrivosDocumentUpdate_Agentflow implements INode {
         const state = options.agentflowRuntime?.state as ICommonObject
 
         try {
+            // Get credentials
+            const credentialData = await getCredentialData(nodeData.credential ?? '', options)
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || DEFAULT_PRIVOS_API_BASE_URL
+            const userId = getCredentialParam('userId', credentialData, nodeData)
+            const authToken = getCredentialParam('authToken', credentialData, nodeData)
+
+            if (!userId || !authToken) {
+                throw new Error(ERROR_MESSAGES.MISSING_CREDENTIALS)
+            }
+
             let payload: any
             let targetDocumentId: string
 
@@ -129,21 +147,21 @@ class PrivosDocumentUpdate_Agentflow implements INode {
             if (updateType === 'json') {
                 // JSON mode: Parse JSON payload
                 if (!jsonPayload) {
-                    throw new Error('JSON Payload is required when using JSON Object mode')
+                    throw new Error(ERROR_MESSAGES.INVALID_JSON_PAYLOAD)
                 }
 
                 payload = typeof jsonPayload === 'string' ? parseJsonBody(jsonPayload) : jsonPayload
 
                 // Validate payload has documentId
                 if (!payload.documentId) {
-                    throw new Error('JSON payload must have "documentId" field')
+                    throw new Error(ERROR_MESSAGES.JSON_MISSING_DOCUMENT_ID)
                 }
 
                 targetDocumentId = payload.documentId
             } else {
                 // Form mode: Build from form fields
                 if (!documentId) {
-                    throw new Error('Document ID is required')
+                    throw new Error(ERROR_MESSAGES.MISSING_DOCUMENT_ID)
                 }
 
                 targetDocumentId = documentId
@@ -166,11 +184,13 @@ class PrivosDocumentUpdate_Agentflow implements INode {
             }
 
             // Build API URL with documentId
-            const apiUrl = `https://privos-chat-dev.roxane.one/api/v1/external.documents/${targetDocumentId}`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.DOCUMENTS_UPDATE}/${targetDocumentId}`
 
             // Prepare headers
             const requestHeaders: Record<string, string> = {
-                'Content-Type': 'application/json'
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
 
             console.log('Privos Document Update Request:')

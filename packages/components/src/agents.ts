@@ -25,10 +25,10 @@ import {
 import { formatLogToString } from 'langchain/agents/format_scratchpad/log'
 import { IUsedTool } from './Interface'
 import { getErrorMessage } from './error'
+import { SOURCE_DOCUMENTS_PREFIX, ARTIFACTS_PREFIX, TOOL_ARGS_PREFIX, AGENT_ERROR_MESSAGES } from './agent-constants'
 
-export const SOURCE_DOCUMENTS_PREFIX = '\n\n----FLOWISE_SOURCE_DOCUMENTS----\n\n'
-export const ARTIFACTS_PREFIX = '\n\n----FLOWISE_ARTIFACTS----\n\n'
-export const TOOL_ARGS_PREFIX = '\n\n----FLOWISE_TOOL_ARGS----\n\n'
+// Re-export for backward compatibility
+export { SOURCE_DOCUMENTS_PREFIX, ARTIFACTS_PREFIX, TOOL_ARGS_PREFIX }
 
 /**
  * Utility function to format tool error messages with parameters for debugging
@@ -471,12 +471,12 @@ export class AgentExecutor extends BaseChain<ChainValues, AgentExecutorOutput> {
                                 toolOutput
                             })
                         } else {
-                            observation = `${action.tool} is not a valid tool, try another one.`
+                            observation = AGENT_ERROR_MESSAGES.INVALID_TOOL(action.tool)
                         }
                     } catch (e) {
                         if (e instanceof ToolInputParsingException) {
                             if (this.handleParsingErrors === true) {
-                                observation = 'Invalid or incomplete tool input. Please try again.'
+                                observation = AGENT_ERROR_MESSAGES.INVALID_TOOL_INPUT
                             } else if (typeof this.handleParsingErrors === 'string') {
                                 observation = this.handleParsingErrors
                             } else if (typeof this.handleParsingErrors === 'function') {

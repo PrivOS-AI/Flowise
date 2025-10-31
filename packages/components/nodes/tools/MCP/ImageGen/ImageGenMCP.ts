@@ -3,6 +3,20 @@ import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeParams } from 
 import { getCredentialData, getCredentialParam } from '../../../../src/utils'
 import { MCPToolkit } from '../core'
 import path from 'path'
+import {
+    PROVIDERS,
+    PROVIDER_LABELS,
+    GOOGLE_MODELS,
+    COMFYUI_MODELS,
+    CREDENTIALS,
+    DEFAULTS,
+    DOCUMENTATION_URL,
+    ERROR_MESSAGES,
+    SERVER_FILES,
+    ENV_VARS,
+    TRANSPORT_TYPE,
+    BASE_CLASS
+} from './constants'
 
 class ImageGen_MCP implements INode {
     label: string
@@ -27,13 +41,13 @@ class ImageGen_MCP implements INode {
         this.category = 'MCP'
         this.description =
             'Unified image generation: Choose Paid API (Google Gemini/Imagen) or Self-Hosted (FLUX, Stable Diffusion on ComfyUI). Returns images directly.'
-        this.documentation = 'https://docs.flowiseai.com'
+        this.documentation = DOCUMENTATION_URL
         this.returnDirect = true
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
             type: 'credential',
-            credentialNames: ['googleGenerativeAI'],
+            credentialNames: [CREDENTIALS.GOOGLE_GENERATIVE_AI],
             optional: true,
             description: 'Required only for Paid API provider'
         }
@@ -44,17 +58,17 @@ class ImageGen_MCP implements INode {
                 type: 'options',
                 options: [
                     {
-                        label: 'Paid API (Google)',
-                        name: 'google',
+                        label: PROVIDER_LABELS[PROVIDERS.GOOGLE],
+                        name: PROVIDERS.GOOGLE,
                         description: 'Cloud-based, fast, pay-per-use'
                     },
                     {
-                        label: 'Self-Hosted (ComfyUI)',
-                        name: 'comfyui',
+                        label: PROVIDER_LABELS[PROVIDERS.COMFYUI],
+                        name: PROVIDERS.COMFYUI,
                         description: 'Local models, free, private'
                     }
                 ],
-                default: 'google',
+                default: DEFAULTS.PROVIDER,
                 description: 'Choose between paid cloud API or self-hosted models'
             },
             {
@@ -64,56 +78,56 @@ class ImageGen_MCP implements INode {
                 options: [
                     {
                         label: 'Gemini 2.0 Flash Preview (FREE)',
-                        name: 'gemini-2.0-flash-preview-image-generation',
+                        name: GOOGLE_MODELS.GEMINI_2_0_FLASH_PREVIEW,
                         description: 'FREE, good for testing'
                     },
                     {
                         label: 'Gemini 2.5 Flash Image',
-                        name: 'gemini-2.5-flash-image',
+                        name: GOOGLE_MODELS.GEMINI_2_5_FLASH_IMAGE,
                         description: 'Latest, fastest, best'
                     },
                     {
                         label: 'Gemini 2.0 Flash Image',
-                        name: 'gemini-2.0-flash-image',
+                        name: GOOGLE_MODELS.GEMINI_2_0_FLASH_IMAGE,
                         description: 'Previous version'
                     },
                     {
                         label: 'Imagen 3.0',
-                        name: 'imagen-3.0-generate-001',
+                        name: GOOGLE_MODELS.IMAGEN_3_0,
                         description: 'Previous generation'
                     },
                     {
                         label: 'Imagen 4.0 Fast',
-                        name: 'imagen-4.0-fast-generate-001',
+                        name: GOOGLE_MODELS.IMAGEN_4_0_FAST,
                         description: 'Fastest'
                     },
                     {
                         label: 'Imagen 4.0',
-                        name: 'imagen-4.0-generate-001',
+                        name: GOOGLE_MODELS.IMAGEN_4_0,
                         description: 'Balanced'
                     },
                     {
                         label: 'Imagen 4.0 Ultra',
-                        name: 'imagen-4.0-ultra-generate-001',
+                        name: GOOGLE_MODELS.IMAGEN_4_0_ULTRA,
                         description: 'Best quality'
                     }
                 ],
-                default: 'gemini-2.0-flash-preview-image-generation',
+                default: DEFAULTS.GOOGLE_MODEL,
                 description: 'Select Google model (Paid API only)',
                 show: {
-                    provider: ['google']
+                    provider: [PROVIDERS.GOOGLE]
                 }
             },
             {
                 label: 'ComfyUI Server URL',
                 name: 'comfyuiEndpoint',
                 type: 'string',
-                default: 'http://localhost:8188',
+                default: DEFAULTS.COMFYUI_ENDPOINT,
                 placeholder: 'https://your-app.ngrok-free.app',
                 description:
                     'Your ComfyUI endpoint. Examples: http://localhost:8188 (local), http://192.168.1.100:8188 (LAN), https://abc123.ngrok-free.app (ngrok)',
                 show: {
-                    provider: ['comfyui']
+                    provider: [PROVIDERS.COMFYUI]
                 }
             },
             {
@@ -123,34 +137,34 @@ class ImageGen_MCP implements INode {
                 options: [
                     {
                         label: 'FLUX Schnell FP8 (Recommended)',
-                        name: 'flux1-schnell-fp8.safetensors',
+                        name: COMFYUI_MODELS.FLUX_SCHNELL_FP8,
                         description: 'Fast, FREE, Apache 2.0'
                     },
                     {
                         label: 'FLUX Dev FP8',
-                        name: 'flux1-dev-fp8.safetensors',
+                        name: COMFYUI_MODELS.FLUX_DEV_FP8,
                         description: 'Better quality, need license'
                     },
                     {
                         label: 'SD XL Base',
-                        name: 'sd_xl_base_1.0.safetensors',
+                        name: COMFYUI_MODELS.SD_XL_BASE,
                         description: 'Classic SD XL, FREE'
                     },
                     {
                         label: 'SD 1.5',
-                        name: 'v1-5-pruned-emaonly.safetensors',
+                        name: COMFYUI_MODELS.SD_1_5,
                         description: 'Fastest, FREE'
                     },
                     {
                         label: 'Custom Model',
-                        name: 'custom',
+                        name: COMFYUI_MODELS.CUSTOM,
                         description: 'Enter custom filename below'
                     }
                 ],
-                default: 'flux1-schnell-fp8.safetensors',
+                default: DEFAULTS.COMFYUI_MODEL,
                 description: 'Select model (Self-Hosted only)',
                 show: {
-                    provider: ['comfyui']
+                    provider: [PROVIDERS.COMFYUI]
                 }
             },
             {
@@ -161,8 +175,8 @@ class ImageGen_MCP implements INode {
                 description: 'Enter .safetensors filename (if Custom Model selected)',
                 optional: true,
                 show: {
-                    provider: ['comfyui'],
-                    selfHostedModel: ['custom']
+                    provider: [PROVIDERS.COMFYUI],
+                    selfHostedModel: [COMFYUI_MODELS.CUSTOM]
                 }
             },
             {
@@ -173,7 +187,7 @@ class ImageGen_MCP implements INode {
                 refresh: true
             }
         ]
-        this.baseClasses = ['Tool']
+        this.baseClasses = [BASE_CLASS]
     }
 
     //@ts-ignore
@@ -194,7 +208,7 @@ class ImageGen_MCP implements INode {
                     {
                         label: 'No Available Actions',
                         name: 'error',
-                        description: 'No available actions, please check your Google AI API key and refresh'
+                        description: ERROR_MESSAGES.NO_ACTIONS
                     }
                 ]
             }
@@ -218,41 +232,41 @@ class ImageGen_MCP implements INode {
     }
 
     async getTools(nodeData: INodeData, _options: ICommonObject): Promise<Tool[]> {
-        const provider = (nodeData.inputs?.provider as string) || 'google'
+        const provider = (nodeData.inputs?.provider as string) || DEFAULTS.PROVIDER
 
-        if (provider === 'google') {
+        if (provider === PROVIDERS.GOOGLE) {
             return this.getGoogleTools(nodeData, _options)
-        } else if (provider === 'comfyui') {
+        } else if (provider === PROVIDERS.COMFYUI) {
             return this.getComfyUITools(nodeData, _options)
         } else {
-            throw new Error(`Unknown provider: ${provider}`)
+            throw new Error(ERROR_MESSAGES.UNKNOWN_PROVIDER(provider))
         }
     }
 
     async getGoogleTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-        const geminiApiKey = getCredentialParam('googleGenerativeAPIKey', credentialData, nodeData)
-        const defaultModel = (nodeData.inputs?.googleModel as string) || 'gemini-2.0-flash-preview-image-generation'
+        const geminiApiKey = getCredentialParam(CREDENTIALS.GOOGLE_API_KEY_PARAM, credentialData, nodeData)
+        const defaultModel = (nodeData.inputs?.googleModel as string) || DEFAULTS.GOOGLE_MODEL
 
         if (!geminiApiKey) {
-            throw new Error('Google AI API key is required for Paid API provider')
+            throw new Error(ERROR_MESSAGES.NO_API_KEY)
         }
 
         // Path to the compiled MCP server
-        const serverPath = path.join(__dirname, 'image-gen-server.mjs')
+        const serverPath = path.join(__dirname, SERVER_FILES.GOOGLE)
 
         // Server parameters for STDIO transport
         const serverParams = {
             command: 'node',
             args: [serverPath],
             env: {
-                GEMINI_API_KEY: geminiApiKey,
-                DEFAULT_MODEL: defaultModel
+                [ENV_VARS.GEMINI_API_KEY]: geminiApiKey,
+                [ENV_VARS.DEFAULT_MODEL]: defaultModel
             }
         }
 
         // Create MCPToolkit with STDIO transport
-        const toolkit = new MCPToolkit(serverParams, 'stdio')
+        const toolkit = new MCPToolkit(serverParams, TRANSPORT_TYPE)
         await toolkit.initialize()
 
         const tools = toolkit.tools ?? []
@@ -265,39 +279,40 @@ class ImageGen_MCP implements INode {
         return tools as Tool[]
     }
 
-    async getComfyUITools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
-        const comfyuiEndpoint = (nodeData.inputs?.comfyuiEndpoint as string) || 'http://localhost:8188'
-        let model = (nodeData.inputs?.selfHostedModel as string) || 'flux1-schnell-fp8.safetensors'
+    async getComfyUITools(nodeData: INodeData, _options: ICommonObject): Promise<Tool[]> {
+        const comfyuiEndpoint =
+            (nodeData.inputs?.comfyuiEndpoint as string) || process.env[ENV_VARS.COMFYUI_ENDPOINT] || DEFAULTS.COMFYUI_ENDPOINT
+        let model = (nodeData.inputs?.selfHostedModel as string) || DEFAULTS.COMFYUI_MODEL
 
         // If custom model selected, use custom filename
-        if (model === 'custom') {
+        if (model === COMFYUI_MODELS.CUSTOM) {
             const customFilename = nodeData.inputs?.customModelFilename as string
             if (customFilename) {
                 model = customFilename
             } else {
-                throw new Error('Custom model filename is required when using Custom Model option')
+                throw new Error(ERROR_MESSAGES.CUSTOM_MODEL_FILENAME_REQUIRED)
             }
         }
 
         // Path to the ComfyUI MCP server
-        const serverPath = path.join(__dirname, 'flux-gen-server.mjs')
+        const serverPath = path.join(__dirname, SERVER_FILES.COMFYUI)
 
         // Server parameters for STDIO transport
         const serverParams = {
             command: 'node',
             args: [serverPath],
             env: {
-                COMFYUI_ENDPOINT: comfyuiEndpoint,
-                MODEL: model,
+                [ENV_VARS.COMFYUI_ENDPOINT]: comfyuiEndpoint,
+                [ENV_VARS.MODEL]: model,
                 // Hardcoded optimal settings (user doesn't configure these)
-                IMAGE_SIZE: '480',
-                STEPS: '20',
-                GUIDANCE: '3.5'
+                [ENV_VARS.IMAGE_SIZE]: DEFAULTS.IMAGE_SIZE,
+                [ENV_VARS.STEPS]: DEFAULTS.STEPS,
+                [ENV_VARS.GUIDANCE]: DEFAULTS.GUIDANCE
             }
         }
 
         // Create MCPToolkit with STDIO transport
-        const toolkit = new MCPToolkit(serverParams, 'stdio')
+        const toolkit = new MCPToolkit(serverParams, TRANSPORT_TYPE)
         await toolkit.initialize()
 
         const tools = toolkit.tools ?? []

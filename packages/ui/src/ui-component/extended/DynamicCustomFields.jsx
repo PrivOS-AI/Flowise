@@ -5,19 +5,11 @@ import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 
 // Material
-import {
-    Box,
-    TextField,
-    CircularProgress,
-    Typography,
-    Chip,
-    OutlinedInput
-} from '@mui/material'
+import { Box, TextField, CircularProgress, Typography, Chip, OutlinedInput } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 
 // const
 import { baseURL } from '@/store/constant'
-
 
 const fetchFieldDefinitions = async ({ nodeData }) => {
     let credentialId = nodeData.credential
@@ -56,7 +48,9 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
     const [availableFields, setAvailableFields] = useState([])
     const [loading, setLoading] = useState(false)
 
-    console.log('[DynamicCustomFields] Component mounted!', { name, nodeData, value })
+    console.log('[DynamicCustomFields] ========== COMPONENT MOUNTED! ==========')
+    console.log('[DynamicCustomFields] Props:', { name, nodeData, value })
+    console.log('[DynamicCustomFields] nodeData.inputs:', nodeData?.inputs)
 
     // Parse initial value
     useEffect(() => {
@@ -94,22 +88,39 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
                 console.log('[DynamicCustomFields] Field definitions response:', response)
 
                 // Response should be array of field definitions with structure:
-                // [{ label: "Assignees (USER)", name: "marketing_campaign_assignees_field", description: "Type: USER" }]
+                // [{ label: "Assignees (USER)", name: "{\"fieldId\":\"...\",\"fieldName\":\"...\",\"fieldType\":\"...\"}", description: "Type: USER" }]
                 const fields = (response || []).filter((f) => f.name !== '')
 
-                // Extract field type from label or description
+                // Parse field metadata from name (which is JSON string)
                 const fieldsWithType = fields.map((f) => {
-                    let fieldType = 'TEXT'
-                    if (f.label) {
-                        const match = f.label.match(/\(([A-Z_]+)\)/)
-                        if (match) {
-                            fieldType = match[1]
+                    let fieldData
+                    try {
+                        // Parse the JSON metadata from name field
+                        fieldData = JSON.parse(f.name)
+                    } catch (e) {
+                        // Fallback: extract from label if parse fails
+                        console.warn('[DynamicCustomFields] Failed to parse field metadata:', f.name)
+                        let fieldType = 'TEXT'
+                        if (f.label) {
+                            const match = f.label.match(/\(([A-Z_]+)\)/)
+                            if (match) {
+                                fieldType = match[1]
+                            }
+                        }
+                        fieldData = {
+                            fieldId: f.name,
+                            fieldName: f.label?.replace(/\s*\([A-Z_]+\)\s*$/, '') || f.name,
+                            fieldType: fieldType
                         }
                     }
+
                     return {
-                        ...f,
-                        fieldType: fieldType,
-                        fieldId: f.name
+                        label: f.label,
+                        fieldId: fieldData.fieldId,
+                        name: fieldData.fieldName,
+                        fieldType: fieldData.fieldType,
+                        order: fieldData.order,
+                        description: f.description
                     }
                 })
 
@@ -145,7 +156,7 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
 
         switch (fieldType) {
             case 'DATE':
-            case 'DATE_TIME':
+            case 'DATE_TIME': {
                 // Parse current value to Date object
                 const dateValue = currentValue ? new Date(currentValue) : null
 
@@ -164,13 +175,13 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
                             showTimeSelect={fieldType === 'DATE_TIME'}
                             showTimeSelectOnly={false}
                             timeIntervals={15}
-                            timeCaption="Time"
-                            dateFormat={fieldType === 'DATE_TIME' ? "yyyy-MM-dd HH:mm" : "yyyy-MM-dd"}
-                            placeholderText={fieldType === 'DATE_TIME' ? "Select date and time" : "Select date"}
+                            timeCaption='Time'
+                            dateFormat={fieldType === 'DATE_TIME' ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd'}
+                            placeholderText={fieldType === 'DATE_TIME' ? 'Select date and time' : 'Select date'}
                             disabled={disabled}
                             customInput={
                                 <TextField
-                                    size="small"
+                                    size='small'
                                     fullWidth
                                     sx={{
                                         '& .MuiOutlinedInput-notchedOutline': {
@@ -187,16 +198,17 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
                                     }}
                                 />
                             }
-                            wrapperClassName="datePicker"
-                            className="form-control"
+                            wrapperClassName='datePicker'
+                            className='form-control'
                         />
                     </Box>
                 )
+            }
 
             case 'TEXTAREA':
                 return (
                     <OutlinedInput
-                        size="small"
+                        size='small'
                         fullWidth
                         disabled={disabled}
                         placeholder={`Enter ${field.label || 'value'}`}
@@ -216,10 +228,10 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
             case 'USER':
                 return (
                     <TextField
-                        size="small"
+                        size='small'
                         fullWidth
                         disabled={disabled}
-                        placeholder="Enter user data (JSON format with _id and username)"
+                        placeholder='Enter user data (JSON format with _id and username)'
                         value={typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue)}
                         onChange={(e) => handleFieldValueChange(fieldId, e.target.value, fieldType)}
                         sx={{
@@ -234,10 +246,10 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
             case 'FILE':
                 return (
                     <TextField
-                        size="small"
+                        size='small'
                         fullWidth
                         disabled={disabled}
-                        placeholder="Enter file path or upload file"
+                        placeholder='Enter file path or upload file'
                         value={typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue)}
                         onChange={(e) => handleFieldValueChange(fieldId, e.target.value, fieldType)}
                         sx={{
@@ -252,7 +264,7 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
             case 'DOCUMENT':
                 return (
                     <OutlinedInput
-                        size="small"
+                        size='small'
                         fullWidth
                         disabled={disabled}
                         placeholder='Enter documents (JSON array format: [{"title": "...", "content": "..."}])'
@@ -274,7 +286,7 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
             default:
                 return (
                     <TextField
-                        size="small"
+                        size='small'
                         fullWidth
                         disabled={disabled}
                         placeholder={`Enter ${field.label || 'value'}`}
@@ -304,7 +316,7 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
         const selectedList = nodeData.inputs?.selectedList
         return (
             <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography color="textSecondary">
+                <Typography color='textSecondary'>
                     {selectedList ? 'No field definitions available for this list' : 'Please select a list first'}
                 </Typography>
             </Box>
@@ -313,19 +325,19 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
 
     return (
         <Box sx={{ mt: 2, mb: 2 }}>
-            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 500, color: theme.palette.primary.main }}>
+            <Typography variant='subtitle2' sx={{ mb: 2, fontWeight: 500, color: theme.palette.primary.main }}>
                 Custom Fields
             </Typography>
 
             {availableFields.map((field) => (
                 <Box key={field.fieldId} sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant='body2' sx={{ fontWeight: 500 }}>
                             {field.label?.replace(/\s*\([A-Z_]+\)\s*$/, '') || field.name}
                         </Typography>
                         <Chip
                             label={field.fieldType}
-                            size="small"
+                            size='small'
                             sx={{
                                 ml: 1,
                                 height: 20,
@@ -335,7 +347,7 @@ export const DynamicCustomFields = ({ name, nodeData, value, onSelect, disabled 
                             }}
                         />
                         {field.description && (
-                            <Typography variant="caption" color="textSecondary" sx={{ ml: 1 }}>
+                            <Typography variant='caption' color='textSecondary' sx={{ ml: 1 }}>
                                 (optional)
                             </Typography>
                         )}

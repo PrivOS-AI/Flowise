@@ -1,23 +1,23 @@
 import { ICommonObject, INode, INodeData, INodeParams, INodeOptionsValue } from '../../../src/Interface'
 import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
+import { CACHE_TTL, PRIVOS_ENDPOINTS, PRIVOS_HEADERS, CONTENT_TYPES, DEFAULT_PRIVOS_API_BASE_URL, ERROR_MESSAGES } from '../constants'
 
 // Global cache for rooms
 const roomsCachePostDoc: Map<string, { rooms: any[]; timestamp: number }> = new Map()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 async function fetchRoomsFromAPIPostDoc(baseUrl: string, userId: string, authToken: string): Promise<any[]> {
     try {
-        const apiUrl = `${baseUrl}/rooms.get`
+        const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS_GET}`
         console.log('Fetching rooms from:', apiUrl)
 
         const response = await secureAxiosRequest({
             method: 'GET',
             url: apiUrl,
             headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': userId,
-                'X-Auth-Token': authToken
+                [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                [PRIVOS_HEADERS.USER_ID]: userId,
+                [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
             }
         })
 
@@ -120,16 +120,16 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
 
                 const credentialData = await getCredentialData(credentialId, options)
                 if (!credentialData || Object.keys(credentialData).length === 0) {
-                    console.error('No credential data returned!')
+                    console.error(ERROR_MESSAGES.NO_CREDENTIAL_DATA)
                     return returnData
                 }
 
-                const baseUrl = credentialData.baseUrl || 'https://privos-chat-dev.roxane.one/api/v1'
+                const baseUrl = credentialData.baseUrl || DEFAULT_PRIVOS_API_BASE_URL
                 const userId = credentialData.userId
                 const authToken = credentialData.authToken
 
                 if (!userId || !authToken) {
-                    console.error('Missing userId or authToken')
+                    console.error(ERROR_MESSAGES.MISSING_USER_ID)
                     return returnData
                 }
 
@@ -177,30 +177,30 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
         try {
             // Get credentials
             const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos-chat-dev.roxane.one/api/v1'
+            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || DEFAULT_PRIVOS_API_BASE_URL
             const userId = getCredentialParam('userId', credentialData, nodeData)
             const authToken = getCredentialParam('authToken', credentialData, nodeData)
 
             if (!userId || !authToken) {
-                throw new Error('Missing credentials: User ID and Auth Token are required')
+                throw new Error(ERROR_MESSAGES.MISSING_CREDENTIALS)
             }
 
             // Validate inputs
             if (!selectedRoom) {
-                throw new Error('Please select a room')
+                throw new Error(ERROR_MESSAGES.MISSING_ROOM_SELECTION)
             }
 
             if (!documentsData || !Array.isArray(documentsData) || documentsData.length === 0) {
-                throw new Error('Documents Data is required and must contain at least 1 document')
+                throw new Error(ERROR_MESSAGES.DOCUMENTS_REQUIRED)
             }
 
             // Build documents array
             const documents = documentsData.map((doc, index) => {
                 if (!doc.title || (typeof doc.title === 'string' && doc.title.trim() === '')) {
-                    throw new Error(`Document #${index + 1} must have a title`)
+                    throw new Error(ERROR_MESSAGES.DOCUMENT_MISSING_TITLE(index))
                 }
                 if (!doc.content || (typeof doc.content === 'string' && doc.content.trim() === '')) {
-                    throw new Error(`Document #${index + 1} must have content`)
+                    throw new Error(ERROR_MESSAGES.DOCUMENT_MISSING_CONTENT(index))
                 }
 
                 const docPayload: any = {
@@ -222,7 +222,7 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 documents: documents
             }
 
-            const apiUrl = `${baseUrl}/external.documents.batch-create`
+            const apiUrl = `${baseUrl}${PRIVOS_ENDPOINTS.DOCUMENTS_BATCH_CREATE}`
 
             console.log('Privos Document Batch Create Request:')
             console.log('URL:', apiUrl)
@@ -233,9 +233,9 @@ class PrivosDocumentBatchCreate_Agentflow implements INode {
                 method: 'POST',
                 url: apiUrl,
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-User-Id': userId,
-                    'X-Auth-Token': authToken
+                    [PRIVOS_HEADERS.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+                    [PRIVOS_HEADERS.USER_ID]: userId,
+                    [PRIVOS_HEADERS.AUTH_TOKEN]: authToken
                 },
                 data: payload
             })
