@@ -5,6 +5,7 @@ import { BaseToolkit, tool, Tool } from '@langchain/core/tools'
 import { z } from 'zod'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { ARTIFACTS_PREFIX } from '../../../src/agents'
 
 export class MCPToolkit extends BaseToolkit {
     tools: Tool[] = []
@@ -87,7 +88,8 @@ export class MCPToolkit extends BaseToolkit {
         if (this._tools === null) {
             this.client = await this.createClient()
 
-            this._tools = await this.client.request({ method: 'tools/list' }, ListToolsResultSchema)
+            // Increased timeout for initialization
+            this._tools = await this.client.request({ method: 'tools/list' }, ListToolsResultSchema, { timeout: 300000 })
 
             this.tools = await this.get_tools()
 
@@ -139,8 +141,67 @@ export async function MCPTool({
 
             try {
                 const req: CallToolRequest = { method: 'tools/call', params: { name: name, arguments: input as any } }
-                const res = await client.request(req, CallToolResultSchema)
+                // 5 minutes timeout for long-running operations like image/video generation
+                const res = await client.request(req, CallToolResultSchema, { timeout: 300000 })
                 const content = res.content
+
+                // Extract text from content array for proper markdown rendering
+                if (Array.isArray(content) && content.length > 0) {
+                    // Find first text content
+                    const textContent = content.find((item) => item.type === 'text')
+                    if (textContent && 'text' in textContent) {
+                        const text = textContent.text
+
+                        let cleanedText = text
+                        const artifacts: any[] = []
+
+                        // Check if text contains markdown images (data URLs)
+                        // Pattern: ![alt](data:image/...;base64,...)
+                        const markdownImageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g
+                        const imageMatches = [...text.matchAll(markdownImageRegex)]
+
+                        if (imageMatches.length > 0) {
+                            for (const match of imageMatches) {
+                                // Remove this markdown image from text
+                                cleanedText = cleanedText.replace(match[0], '')
+
+                                // Add to artifacts as markdown type (Flowise will render it)
+                                artifacts.push({
+                                    type: 'markdown',
+                                    data: match[0] // Keep the markdown image syntax
+                                })
+                            }
+                        }
+
+                        // Check if text contains HTML video tags
+                        // Pattern: <video src="URL" ...></video>
+                        const videoRegex = /<video\s+[^>]*src="([^"]+)"[^>]*>.*?<\/video>/gi
+                        const videoMatches = [...text.matchAll(videoRegex)]
+
+                        if (videoMatches.length > 0) {
+                            for (const match of videoMatches) {
+                                // Remove this video tag from text
+                                cleanedText = cleanedText.replace(match[0], '')
+
+                                // Add to artifacts as markdown type (Flowise will render HTML)
+                                artifacts.push({
+                                    type: 'markdown',
+                                    data: match[0] // Keep the full video HTML tag
+                                })
+                            }
+                        }
+
+                        // Return text + artifacts if any were found
+                        cleanedText = cleanedText.trim()
+                        if (artifacts.length > 0) {
+                            return cleanedText + ARTIFACTS_PREFIX + JSON.stringify(artifacts)
+                        }
+
+                        return text
+                    }
+                }
+
+                // Fallback to JSON string if no text content found
                 const contentString = JSON.stringify(content)
                 return contentString
             } finally {

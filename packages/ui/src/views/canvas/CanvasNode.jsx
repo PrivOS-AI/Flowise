@@ -227,7 +227,14 @@ const CanvasNode = ({ data }) => {
                             <NodeInputHandler key={index} inputAnchor={inputAnchor} data={data} />
                         ))}
                         {data.inputParams
-                            .filter((inputParam) => !inputParam.hidden)
+                            .filter((inputParam) => {
+                                if (inputParam.type === 'dynamicCustomFields') {
+                                    console.log('[CanvasNode] DynamicCustomFields input:', inputParam)
+                                    console.log('[CanvasNode] hidden?', inputParam.hidden)
+                                    console.log('[CanvasNode] display?', inputParam.display)
+                                }
+                                return !inputParam.hidden
+                            })
                             .filter((inputParam) => inputParam.display !== false)
                             .map((inputParam, index) => (
                                 <NodeInputHandler

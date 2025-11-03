@@ -10,6 +10,7 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { StatusCodes } from 'http-status-codes'
 import { utilGetChatMessage } from '../../utils/getChatMessage'
 import { getPageAndLimitParams } from '../../utils/pagination'
+import { validateFlowAPIKey } from '../../utils/validateKey'
 
 const getFeedbackTypeFilters = (_feedbackTypeFilters: ChatMessageRatingType[]): ChatMessageRatingType[] | undefined => {
     try {
@@ -50,6 +51,28 @@ const createChatMessage = async (req: Request, res: Response, next: NextFunction
 
 const getAllChatMessages = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatMessageController.getAllChatMessages - id not provided!`
+            )
+        }
+
+        // Get chatflow to validate API key
+        const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${req.params.id} not found`)
+        }
+
+        // Validate API Key if its external API request
+        const isInternal = req.headers['x-request-from'] === 'internal'
+        if (!isInternal) {
+            const isKeyValidated = await validateFlowAPIKey(req, chatflow)
+            if (!isKeyValidated) {
+                throw new InternalFlowiseError(StatusCodes.UNAUTHORIZED, `Unauthorized`)
+            }
+        }
+
         const _chatTypes = req.query?.chatType as string | undefined
         let chatTypes: ChatType[] | undefined
         if (_chatTypes) {
@@ -79,12 +102,7 @@ const getAllChatMessages = async (req: Request, res: Response, next: NextFunctio
         if (feedbackTypeFilters) {
             feedbackTypeFilters = getFeedbackTypeFilters(feedbackTypeFilters)
         }
-        if (typeof req.params === 'undefined' || !req.params.id) {
-            throw new InternalFlowiseError(
-                StatusCodes.PRECONDITION_FAILED,
-                `Error: chatMessageController.getAllChatMessages - id not provided!`
-            )
-        }
+
         const apiResponse = await chatMessagesService.getAllChatMessages(
             req.params.id,
             chatTypes,
