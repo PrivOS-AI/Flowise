@@ -9,7 +9,6 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { GoogleGenAI } from '@google/genai'
-import sharp from 'sharp'
 
 // Helper function to get and validate API key
 function getGeminiApiKey(): string {
@@ -23,36 +22,6 @@ function getGeminiApiKey(): string {
 // Helper function to get default model from environment
 function getDefaultModel(): string {
     return process.env.DEFAULT_MODEL || 'gemini-2.0-flash-preview-image-generation'
-}
-
-/**
- * Compress and resize image for display in chat UI
- * Reduces base64 size to avoid LLM timeout while maintaining viewable quality
- */
-async function compressImageForDisplay(base64Data: string): Promise<string> {
-    try {
-        // Convert base64 to buffer
-        const imageBuffer = Buffer.from(base64Data, 'base64')
-
-        // Resize to max 800px width and compress to 60% quality
-        const compressedBuffer = await sharp(imageBuffer)
-            .resize(800, null, {
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .jpeg({
-                quality: 60,
-                progressive: true
-            })
-            .toBuffer()
-
-        // Convert back to base64
-        return compressedBuffer.toString('base64')
-    } catch (error) {
-        console.error('[MCP Server] Error compressing image:', error)
-        // Return original if compression fails
-        return base64Data
-    }
 }
 
 // Define available tools
@@ -266,14 +235,11 @@ async function generateImage(args: any) {
     const image = images[0]
     const originalSizeKB = (image.size / 1024).toFixed(2)
 
-    // Compress image for display to avoid LLM timeout
-    console.error(`[MCP Server] Compressing image for display...`)
-    const compressedBase64 = await compressImageForDisplay(image.data)
-    const compressedSizeKB = (Math.round(compressedBase64.length * 0.75) / 1024).toFixed(2)
-    console.error(`[MCP Server] Compressed from ~${originalSizeKB} KB to ~${compressedSizeKB} KB`)
+    // Use original image (no compression) - will be saved to storage for full quality
+    console.error(`[MCP Server] Using original image (no compression) - ${originalSizeKB} KB`)
 
-    // Create data URL with compressed image
-    const dataUrl = `data:image/jpeg;base64,${compressedBase64}`
+    // Create data URL with original image
+    const dataUrl = `data:image/jpeg;base64,${image.data}`
 
     return {
         content: [
@@ -393,15 +359,13 @@ async function generateMultipleImages(args: any) {
     // Build response text with compressed images
     let responseText = `Generated ${allImages.length} images successfully!\n\n`
 
-    // Compress each image and add to response
+    // Add each original image (no compression) to response
     for (let idx = 0; idx < allImages.length; idx++) {
         const img = allImages[idx]
         const originalSizeKB = (img.size / 1024).toFixed(2)
-        console.error(`[MCP Server] Compressing image ${idx + 1}/${allImages.length}...`)
-        const compressedBase64 = await compressImageForDisplay(img.data)
-        const compressedSizeKB = (Math.round(compressedBase64.length * 0.75) / 1024).toFixed(2)
+        console.error(`[MCP Server] Adding image ${idx + 1}/${allImages.length} (original quality) - ${originalSizeKB} KB`)
 
-        const dataUrl = `data:image/jpeg;base64,${compressedBase64}`
+        const dataUrl = `data:image/jpeg;base64,${img.data}`
         responseText += `![Image ${idx + 1}](${dataUrl})\n\n`
     }
 
