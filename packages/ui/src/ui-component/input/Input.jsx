@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import PropTypes from 'prop-types'
-import { FormControl, OutlinedInput, InputBase, Popover } from '@mui/material'
+import { FormControl, OutlinedInput, InputBase, Popover, Link, Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { IconExternalLink } from '@tabler/icons-react'
 import SelectVariable from '@/ui-component/json/SelectVariable'
 import { getAvailableNodesForVariable } from '@/utils/genericHelper'
 
@@ -58,6 +59,14 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
             setAnchorEl(ref.current)
         }
     }, [myValue])
+
+    // Check if this is a URL field and value is a valid URL
+    const isUrlField =
+        inputParam.name &&
+        (inputParam.name.includes('_url') || inputParam.name.toLowerCase().includes('url')) &&
+        myValue &&
+        typeof myValue === 'string' &&
+        (myValue.startsWith('http://') || myValue.startsWith('https://'))
 
     return (
         <>
@@ -127,6 +136,33 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
                     />
                 </FormControl>
             )}
+
+            {/* Render clickable link if this is a URL field */}
+            {isUrlField && (
+                <Box sx={{ mt: 1, mb: 1 }}>
+                    <Link
+                        href={myValue}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        underline='hover'
+                        sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            fontSize: '0.875rem',
+                            color: theme.palette.primary.main,
+                            cursor: 'pointer',
+                            '&:hover': {
+                                color: theme.palette.primary.dark
+                            }
+                        }}
+                    >
+                        <IconExternalLink size={16} />
+                        Click to open file in new tab
+                    </Link>
+                </Box>
+            )}
+
             <div ref={ref}></div>
             {inputParam?.acceptVariable && (
                 <Popover

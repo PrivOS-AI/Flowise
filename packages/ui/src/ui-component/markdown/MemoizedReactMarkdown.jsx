@@ -119,6 +119,27 @@ export const MemoizedReactMarkdown = memo(
                         p({ children }) {
                             return <p style={{ whiteSpace: 'pre-line' }}>{children}</p>
                         },
+                        img({ node, src, alt, ...imgProps }) {
+                            // Custom renderer for images (including base64 data URLs from MCP)
+                            return (
+                                <img
+                                    src={src}
+                                    alt={alt || 'Generated image'}
+                                    loading='lazy'
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '600px',
+                                        height: 'auto',
+                                        objectFit: 'contain',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                                        margin: '10px 0',
+                                        display: 'block'
+                                    }}
+                                    {...imgProps}
+                                />
+                            )
+                        },
                         ...props.components
                     }}
                     {...props}

@@ -30,7 +30,7 @@ class VideoGen_MCP implements INode {
     returnDirect: boolean
 
     constructor() {
-        this.label = 'Video Generation'
+        this.label = '[PrivOS] Video Generation'
         this.name = 'videoGenMCP'
         this.version = 1.0
         this.type = 'VideoGen MCP Tool'
