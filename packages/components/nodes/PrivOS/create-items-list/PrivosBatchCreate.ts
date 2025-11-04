@@ -13,7 +13,7 @@ import {
     ROOM_TYPES,
     PRIVOS_FIELD_IDS
 } from '../constants'
-import { uploadFileToPrivos } from '../utils'
+import { uploadFileToPrivos, getMimeTypeFromFilename } from '../utils'
 
 // Global cache for rooms and fields
 const roomsCachePostItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
@@ -857,21 +857,47 @@ class PrivosBatchCreate_Agentflow implements INode {
                             if (fieldValue.startsWith('data:')) {
                                 console.log(`[CREATE ITEM] Processing base64 data URI for ${inputName}`)
 
+                                // Extract filename if present (format: "data:mime;base64,data,filename:name.ext")
+                                const filenameMatch = fieldValue.match(/,filename:([^,]+)$/)
+                                const originalFilename = filenameMatch ? filenameMatch[1] : null
+
                                 // Parse data URI: data:mime/type;base64,<data>
-                                const matches = fieldValue.match(/^data:([^;]+);base64,(.+)$/)
+                                // Remove filename suffix if present
+                                const dataUriPart = filenameMatch ? fieldValue.substring(0, filenameMatch.index) : fieldValue
+                                const matches = dataUriPart.match(/^data:([^;]+);base64,(.+)$/)
                                 if (!matches) {
                                     throw new Error('Invalid data URI format')
                                 }
 
-                                mimeType = matches[1]
+                                const browserMimeType = matches[1]
                                 const base64Data = matches[2]
 
                                 // Convert base64 to buffer
                                 fileBuffer = Buffer.from(base64Data, 'base64')
 
-                                // Generate filename from mime type
-                                const ext = mimeType.split('/')[1] || 'bin'
-                                fileName = `file_${Date.now()}.${ext}`
+                                // Determine correct MIME type from filename extension if available
+                                if (originalFilename) {
+                                    const detectedMimeType = getMimeTypeFromFilename(originalFilename)
+
+                                    // If browser set octet-stream but we can detect from extension, use detected
+                                    if (
+                                        browserMimeType === 'application/octet-stream' &&
+                                        detectedMimeType &&
+                                        detectedMimeType !== 'application/octet-stream'
+                                    ) {
+                                        mimeType = detectedMimeType
+                                        console.log(`[CREATE ITEM] Browser MIME type was octet-stream, detected ${mimeType} from extension`)
+                                    } else {
+                                        mimeType = browserMimeType
+                                    }
+
+                                    fileName = originalFilename
+                                } else {
+                                    // No filename, generate from mime type
+                                    mimeType = browserMimeType
+                                    const ext = mimeType.split('/')[1] || 'bin'
+                                    fileName = `file_${Date.now()}.${ext}`
+                                }
 
                                 console.log(`[CREATE ITEM] Parsed base64 file: ${fileName} (${mimeType}, ${fileBuffer.length} bytes)`)
                             }
