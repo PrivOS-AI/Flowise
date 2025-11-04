@@ -12,7 +12,7 @@ import {
     ROOM_TYPES,
     PRIVOS_FIELD_IDS
 } from '../constants'
-import { uploadFileToPrivos } from '../utils'
+import { uploadFileToPrivos, getMimeTypeFromFilename } from '../utils'
 
 // Global cache for rooms
 const roomsCacheUpdateItem: Map<string, { rooms: any[]; timestamp: number }> = new Map()
@@ -110,6 +110,84 @@ class PrivosItemUpdate_Agentflow implements INode {
                         {
                             targetField: 'itemDescription',
                             sourcePath: 'description'
+                        },
+                        // Marketing fields
+                        {
+                            targetField: 'current_marketing_file_url',
+                            sourcePath: 'current_marketing_file_url'
+                        },
+                        {
+                            targetField: 'field_marketing_assignees',
+                            sourcePath: 'field_marketing_assignees'
+                        },
+                        {
+                            targetField: 'field_marketing_due_date',
+                            sourcePath: 'field_marketing_due_date'
+                        },
+                        {
+                            targetField: 'field_marketing_start_date',
+                            sourcePath: 'field_marketing_start_date'
+                        },
+                        {
+                            targetField: 'field_marketing_end_date',
+                            sourcePath: 'field_marketing_end_date'
+                        },
+                        {
+                            targetField: 'field_marketing_file',
+                            sourcePath: 'field_marketing_file'
+                        },
+                        {
+                            targetField: 'field_marketing_documents',
+                            sourcePath: 'field_marketing_documents'
+                        },
+                        {
+                            targetField: 'field_marketing_note',
+                            sourcePath: 'field_marketing_note'
+                        },
+                        // Recruitment fields
+                        {
+                            targetField: 'current_recruitment_cv_url',
+                            sourcePath: 'current_recruitment_cv_url'
+                        },
+                        {
+                            targetField: 'field_recruitment_cv',
+                            sourcePath: 'field_recruitment_cv'
+                        },
+                        {
+                            targetField: 'field_recruitment_ai_summary',
+                            sourcePath: 'field_recruitment_ai_summary'
+                        },
+                        {
+                            targetField: 'field_recruitment_ai_score',
+                            sourcePath: 'field_recruitment_ai_score'
+                        },
+                        {
+                            targetField: 'field_recruitment_interview_time',
+                            sourcePath: 'field_recruitment_interview_time'
+                        },
+                        {
+                            targetField: 'field_recruitment_interviewer',
+                            sourcePath: 'field_recruitment_interviewer'
+                        },
+                        {
+                            targetField: 'field_recruitment_interview_questions',
+                            sourcePath: 'field_recruitment_interview_questions'
+                        },
+                        {
+                            targetField: 'field_recruitment_interview_notes',
+                            sourcePath: 'field_recruitment_interview_notes'
+                        },
+                        {
+                            targetField: 'field_recruitment_interview_score',
+                            sourcePath: 'field_recruitment_interview_score'
+                        },
+                        {
+                            targetField: 'field_recruitment_trial_time',
+                            sourcePath: 'field_recruitment_trial_time'
+                        },
+                        {
+                            targetField: 'field_recruitment_cv_content',
+                            sourcePath: 'field_recruitment_cv_content'
                         }
                     ]
                 }
@@ -177,13 +255,12 @@ class PrivosItemUpdate_Agentflow implements INode {
                 }
             },
             {
-                label: '5a. Current File Info',
-                name: 'current_marketing_file_info',
+                label: '5a. Current File (Click URL to Open)',
+                name: 'current_marketing_file_url',
                 type: 'string',
-                rows: 3,
                 optional: true,
-                placeholder: 'Current file will be displayed here after selecting an item...',
-                description: 'READ-ONLY: Current file information. Click the URL to view the file.',
+                placeholder: 'No file - will show URL after selecting item',
+                description: 'READ-ONLY: Click or copy URL to view current file',
                 show: {
                     selectedList: 'marketing'
                 }
@@ -240,13 +317,12 @@ class PrivosItemUpdate_Agentflow implements INode {
             },
             // === HR/RECRUITMENT LIST FIELDS (10 fields) ===
             {
-                label: '1a. Current CV Info',
-                name: 'current_recruitment_cv_info',
+                label: '1a. Current CV (Click URL to Open)',
+                name: 'current_recruitment_cv_url',
                 type: 'string',
-                rows: 3,
                 optional: true,
-                placeholder: 'Current CV will be displayed here after selecting an item...',
-                description: 'READ-ONLY: Current CV file information. Click the URL to view the file.',
+                placeholder: 'No CV - will show URL after selecting item',
+                description: 'READ-ONLY: Click or copy URL to view current CV',
                 show: {
                     selectedList: 'personnel-recruitment'
                 }
@@ -760,11 +836,87 @@ class PrivosItemUpdate_Agentflow implements INode {
                         formattedInfo += `\n+${otherFields.length} additional custom field(s)`
                     }
 
-                    // Augment item with roomId and formatted info for later use
+                    // Flatten customFields for auto-fill support
+                    // Map field IDs to friendly input names
+                    const flattenedFields: any = {}
+                    for (const cf of customFields) {
+                        switch (cf.fieldId) {
+                            // Marketing fields
+                            case PRIVOS_FIELD_IDS.MARKETING.ASSIGNEES:
+                                flattenedFields.field_marketing_assignees = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.DUE_DATE:
+                                flattenedFields.field_marketing_due_date = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.START_DATE:
+                                flattenedFields.field_marketing_start_date = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.END_DATE:
+                                flattenedFields.field_marketing_end_date = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.FILE:
+                                flattenedFields.field_marketing_file = cf.value
+                                // Populate URL for auto-fill
+                                if (cf.value && cf.value.url) {
+                                    const fullUrl = cf.value.url.startsWith('http')
+                                        ? cf.value.url
+                                        : `${baseUrl.replace('/api/v1', '')}${cf.value.url}`
+                                    flattenedFields.current_marketing_file_url = fullUrl
+                                }
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.DOCUMENTS:
+                                flattenedFields.field_marketing_documents = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.MARKETING.NOTE:
+                                flattenedFields.field_marketing_note = cf.value
+                                break
+                            // Recruitment fields
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.CV:
+                                flattenedFields.field_recruitment_cv = cf.value
+                                // Populate URL for auto-fill
+                                if (cf.value && cf.value.url) {
+                                    const fullUrl = cf.value.url.startsWith('http')
+                                        ? cf.value.url
+                                        : `${baseUrl.replace('/api/v1', '')}${cf.value.url}`
+                                    flattenedFields.current_recruitment_cv_url = fullUrl
+                                }
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.AI_SUMMARY:
+                                flattenedFields.field_recruitment_ai_summary = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.AI_SCORE:
+                                flattenedFields.field_recruitment_ai_score = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_TIME:
+                                flattenedFields.field_recruitment_interview_time = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEWER:
+                                flattenedFields.field_recruitment_interviewer = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_QUESTIONS:
+                                flattenedFields.field_recruitment_interview_questions = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_NOTES:
+                                flattenedFields.field_recruitment_interview_notes = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.INTERVIEW_SCORE:
+                                flattenedFields.field_recruitment_interview_score = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.TRIAL_TIME:
+                                flattenedFields.field_recruitment_trial_time = cf.value
+                                break
+                            case PRIVOS_FIELD_IDS.RECRUITMENT.CV_CONTENT:
+                                flattenedFields.field_recruitment_cv_content = cf.value
+                                break
+                        }
+                    }
+
+                    // Augment item with roomId, formatted info, and flattened fields for later use
                     const itemWithExtras = {
                         ...item,
                         __roomId: roomId, // Store roomId for listUsers to access
-                        __formattedInfo: formattedInfo // Store formatted info
+                        __formattedInfo: formattedInfo, // Store formatted info
+                        ...flattenedFields // Flatten custom fields for auto-fill
                     }
 
                     // Store full item data (with roomId and formatted info) in the name field as JSON string
@@ -1057,29 +1209,23 @@ class PrivosItemUpdate_Agentflow implements INode {
             const userId = credentialData.userId
             const authToken = credentialData.authToken
 
-            // Extract current file info from customFields for read-only display
-            let currentMarketingFileInfo = ''
-            let currentRecruitmentCVInfo = ''
+            // Extract current file URLs from customFields for read-only display
+            let currentMarketingFileUrl = ''
+            let currentRecruitmentCVUrl = ''
 
             if (currentItem.customFields && Array.isArray(currentItem.customFields)) {
                 // Find Marketing File
                 const marketingFileField = currentItem.customFields.find((cf: any) => cf.fieldId === PRIVOS_FIELD_IDS.MARKETING.FILE)
                 if (marketingFileField && marketingFileField.value && marketingFileField.value.url) {
                     const file = marketingFileField.value
-                    const fullUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
-                    currentMarketingFileInfo = `📎 File: ${file.name}\n🔗 URL: ${fullUrl}\n📊 Size: ${(file.size / 1024).toFixed(
-                        2
-                    )} KB\n📄 Type: ${file.type}`
+                    currentMarketingFileUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
                 }
 
                 // Find Recruitment CV
                 const recruitmentCVField = currentItem.customFields.find((cf: any) => cf.fieldId === PRIVOS_FIELD_IDS.RECRUITMENT.CV)
                 if (recruitmentCVField && recruitmentCVField.value && recruitmentCVField.value.url) {
                     const file = recruitmentCVField.value
-                    const fullUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
-                    currentRecruitmentCVInfo = `📎 CV: ${file.name}\n🔗 URL: ${fullUrl}\n📊 Size: ${(file.size / 1024).toFixed(
-                        2
-                    )} KB\n📄 Type: ${file.type}`
+                    currentRecruitmentCVUrl = file.url.startsWith('http') ? file.url : `${baseUrl.replace('/api/v1', '')}${file.url}`
                 }
             }
 
@@ -1179,21 +1325,47 @@ class PrivosItemUpdate_Agentflow implements INode {
                             if (fieldValue.startsWith('data:')) {
                                 console.log(`[UPDATE ITEM] Processing base64 data URI for ${inputName}`)
 
+                                // Extract filename if present (format: "data:mime;base64,data,filename:name.ext")
+                                const filenameMatch = fieldValue.match(/,filename:([^,]+)$/)
+                                const originalFilename = filenameMatch ? filenameMatch[1] : null
+
                                 // Parse data URI: data:mime/type;base64,<data>
-                                const matches = fieldValue.match(/^data:([^;]+);base64,(.+)$/)
+                                // Remove filename suffix if present
+                                const dataUriPart = filenameMatch ? fieldValue.substring(0, filenameMatch.index) : fieldValue
+                                const matches = dataUriPart.match(/^data:([^;]+);base64,(.+)$/)
                                 if (!matches) {
                                     throw new Error('Invalid data URI format')
                                 }
 
-                                mimeType = matches[1]
+                                const browserMimeType = matches[1]
                                 const base64Data = matches[2]
 
                                 // Convert base64 to buffer
                                 fileBuffer = Buffer.from(base64Data, 'base64')
 
-                                // Generate filename from mime type
-                                const ext = mimeType.split('/')[1] || 'bin'
-                                fileName = `file_${Date.now()}.${ext}`
+                                // Determine correct MIME type from filename extension if available
+                                if (originalFilename) {
+                                    const detectedMimeType = getMimeTypeFromFilename(originalFilename)
+
+                                    // If browser set octet-stream but we can detect from extension, use detected
+                                    if (
+                                        browserMimeType === 'application/octet-stream' &&
+                                        detectedMimeType &&
+                                        detectedMimeType !== 'application/octet-stream'
+                                    ) {
+                                        mimeType = detectedMimeType
+                                        console.log(`[UPDATE ITEM] Browser MIME type was octet-stream, detected ${mimeType} from extension`)
+                                    } else {
+                                        mimeType = browserMimeType
+                                    }
+
+                                    fileName = originalFilename
+                                } else {
+                                    // No filename, generate from mime type
+                                    mimeType = browserMimeType
+                                    const ext = mimeType.split('/')[1] || 'bin'
+                                    fileName = `file_${Date.now()}.${ext}`
+                                }
 
                                 console.log(`[UPDATE ITEM] Parsed base64 file: ${fileName} (${mimeType}, ${fileBuffer.length} bytes)`)
                             }
@@ -1435,9 +1607,9 @@ The item has been updated successfully.${movedToStage ? ' Item moved to new stag
                 listName: listData.name || '',
                 updatedFieldsCount: allCustomFields.length,
                 updatedItem: updatedItem,
-                // Populate read-only file info fields for UI display
-                current_marketing_file_info: currentMarketingFileInfo,
-                current_recruitment_cv_info: currentRecruitmentCVInfo,
+                // Populate read-only file URL fields for UI display
+                current_marketing_file_url: currentMarketingFileUrl,
+                current_recruitment_cv_url: currentRecruitmentCVUrl,
                 ...(movedToStage && {
                     movedToStage: true,
                     newStageId: moveToStage,
