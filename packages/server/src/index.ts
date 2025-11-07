@@ -364,7 +364,9 @@ export class App {
     async stopApp() {
         try {
             const removePromises: any[] = []
-            removePromises.push(this.telemetry.flush())
+            if (this.telemetry) {
+                removePromises.push(this.telemetry.flush())
+            }
             if (this.queueManager) {
                 removePromises.push(this.redisSubscriber.disconnect())
             }

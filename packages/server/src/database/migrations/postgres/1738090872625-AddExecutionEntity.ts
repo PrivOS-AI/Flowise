@@ -11,6 +11,7 @@ export class AddExecutionEntity1738090872625 implements MigrationInterface {
                 "agentflowId" uuid NOT NULL,
                 "sessionId" uuid NOT NULL,
                 "isPublic" boolean,
+                "roomId" text,
                 "createdDate" timestamp NOT NULL DEFAULT now(),
                 "updatedDate" timestamp NOT NULL DEFAULT now(),
                 "stoppedDate" timestamp,
