@@ -95,6 +95,7 @@ export const mariadbMigrations = [
     AddOrganization1727798417345,
     LinkWorkspaceId1729130948686,
     LinkOrganizationId1729133111652,
+    AddRoomIdToEntities1730000000000,
     AddSSOColumns1730519457880,
     AddSeqNoToDatasetRow1733752119696,
     AddPersonalWorkspace1734074497540,
@@ -107,6 +108,5 @@ export const mariadbMigrations = [
     AddTextToSpeechToChatFlow1754986457485,
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419231100,
-    AddChatFlowNameIndex1759424809984,
-    AddRoomIdToEntities1730000000000
+    AddChatFlowNameIndex1759424809984
 ]

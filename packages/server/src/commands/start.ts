@@ -42,9 +42,17 @@ async function killMCPProcesses() {
             }
         } else {
             // Unix/Linux/Mac
-            await execPromise("pkill -f 'image-gen-server' || true")
-            await execPromise("pkill -f 'video-gen-server' || true")
-            logger.info('🧹 [server]: Killed all MCP server processes')
+            try {
+                await execPromise("pkill -f 'image-gen-server' || true")
+            } catch (e) {
+                // Ignore - process may not exist or pkill not available
+            }
+            try {
+                await execPromise("pkill -f 'video-gen-server' || true")
+            } catch (e) {
+                // Ignore - process may not exist or pkill not available
+            }
+            logger.info('🧹 [server]: Cleaned up MCP server processes')
         }
     } catch (error) {
         logger.warn('⚠️  [server]: Error cleaning up MCP processes:', error)
