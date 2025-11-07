@@ -10,6 +10,7 @@ import { ChatMessageFeedback } from '../../database/entities/ChatMessageFeedback
 import { UpsertHistory } from '../../database/entities/UpsertHistory'
 import { Workspace } from '../../enterprise/database/entities/workspace.entity'
 import { getWorkspaceSearchOptions } from '../../enterprise/utils/ControllerServiceUtils'
+import { isInvalidUUID } from '../../enterprise/utils/validation.util'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import documentStoreService from '../../services/documentstore'
@@ -136,7 +137,14 @@ const deleteChatflow = async (chatflowId: string, orgId: string, workspaceId: st
     }
 }
 
-const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllChatflows = async (
+    type?: ChatflowType,
+    workspaceId?: string,
+    page: number = -1,
+    limit: number = -1,
+    roomId?: string,
+    isRootAdmin?: boolean
+) => {
     try {
         const appServer = getRunningExpressApp()
 
@@ -159,6 +167,12 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
             queryBuilder.andWhere('chat_flow.type = :type', { type: 'CHATFLOW' })
         }
         if (workspaceId) queryBuilder.andWhere('chat_flow.workspaceId = :workspaceId', { workspaceId })
+
+        // Room isolation: Root admin sees all, room users see their room + global resources
+        if (!isRootAdmin && roomId) {
+            queryBuilder.andWhere('(chat_flow.roomId = :roomId OR chat_flow.roomId IS NULL)', { roomId })
+        }
+
         const [data, total] = await queryBuilder.getManyAndCount()
 
         if (page > 0 && limit > 0) {
@@ -177,6 +191,12 @@ const getAllChatflows = async (type?: ChatflowType, workspaceId?: string, page: 
 async function getAllChatflowsCountByOrganization(type: ChatflowType, organizationId: string): Promise<number> {
     try {
         const appServer = getRunningExpressApp()
+
+        // Handle external users with non-UUID organization IDs (e.g., "external-org")
+        if (isInvalidUUID(organizationId)) {
+            logger.warn(`[Chatflows]: Skipping organization count for non-UUID organizationId: ${organizationId}`)
+            return 0
+        }
 
         const workspaces = await appServer.AppDataSource.getRepository(Workspace).findBy({ organizationId })
         const workspaceIds = workspaces.map((workspace) => workspace.id)

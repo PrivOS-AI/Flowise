@@ -26,4 +26,7 @@ export class Variable implements IVariable {
 
     @Column({ nullable: true, type: 'text' })
     workspaceId?: string
+
+    @Column({ nullable: true, type: 'text' })
+    roomId?: string
 }

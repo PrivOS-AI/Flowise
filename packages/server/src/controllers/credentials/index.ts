@@ -13,6 +13,12 @@ const createCredential = async (req: Request, res: Response, next: NextFunction)
         }
         const body = req.body
         body.workspaceId = req.user?.activeWorkspaceId
+
+        // Room isolation: Only set roomId if user is NOT root admin
+        if (!req.isRootAdmin && req.roomId) {
+            body.roomId = req.roomId
+        }
+
         const apiResponse = await credentialsService.createCredential(body)
         return res.json(apiResponse)
     } catch (error) {
@@ -28,6 +34,21 @@ const deleteCredentials = async (req: Request, res: Response, next: NextFunction
                 `Error: credentialsController.deleteCredentials - id not provided!`
             )
         }
+
+        // Room isolation: Check if user can delete this credential
+        const credential = await credentialsService.getCredentialById(req.params.id, req.user?.activeWorkspaceId)
+        if (!credential) {
+            return res.status(404).send(`Credential ${req.params.id} not found`)
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !credential.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: credentialsController.deleteCredentials - Cannot delete global resources. This credential was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await credentialsService.deleteCredentials(req.params.id)
         return res.json(apiResponse)
     } catch (error) {
@@ -37,7 +58,12 @@ const deleteCredentials = async (req: Request, res: Response, next: NextFunction
 
 const getAllCredentials = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const apiResponse = await credentialsService.getAllCredentials(req.query.credentialName, req.user?.activeWorkspaceId)
+        const apiResponse = await credentialsService.getAllCredentials(
+            req.query.credentialName,
+            req.user?.activeWorkspaceId,
+            req.roomId,
+            req.isRootAdmin
+        )
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -73,6 +99,21 @@ const updateCredential = async (req: Request, res: Response, next: NextFunction)
                 `Error: credentialsController.updateCredential - body not provided!`
             )
         }
+
+        // Room isolation: Check if user can update this credential
+        const credential = await credentialsService.getCredentialById(req.params.id, req.user?.activeWorkspaceId)
+        if (!credential) {
+            return res.status(404).send(`Credential ${req.params.id} not found`)
+        }
+
+        // Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !credential.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: credentialsController.updateCredential - Cannot edit global resources. This credential was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await credentialsService.updateCredential(req.params.id, req.body)
         return res.json(apiResponse)
     } catch (error) {

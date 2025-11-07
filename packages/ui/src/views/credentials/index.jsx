@@ -76,9 +76,18 @@ const StyledTableRow = styled(TableRow)(() => ({
 const Credentials = () => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
+    const currentUser = useSelector((state) => state.auth.user)
     const dispatch = useDispatch()
     useNotifier()
     const { error, setError } = useError()
+
+    // Room isolation: Helper function to check if user can edit a credential
+    const canEditCredential = (credential) => {
+        const isRootAdmin = currentUser?.isRootAdmin
+        const activeRoomId = currentUser?.activeRoomId
+        const isGlobalResource = !credential.roomId
+        return isRootAdmin || !activeRoomId || !isGlobalResource
+    }
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
     const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
@@ -404,6 +413,7 @@ const Credentials = () => {
                                                                         title='Edit'
                                                                         color='primary'
                                                                         onClick={() => edit(credential)}
+                                                                        disabled={!canEditCredential(credential)}
                                                                     >
                                                                         <IconEdit />
                                                                     </PermissionIconButton>
@@ -414,6 +424,7 @@ const Credentials = () => {
                                                                         title='Delete'
                                                                         color='error'
                                                                         onClick={() => deleteCredential(credential)}
+                                                                        disabled={!canEditCredential(credential)}
                                                                     >
                                                                         <IconTrash />
                                                                     </PermissionIconButton>

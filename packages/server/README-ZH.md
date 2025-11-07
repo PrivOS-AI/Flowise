@@ -6,7 +6,7 @@
 
 <h3>以可视化方式构建 AI Agents</h3>
 
-![Flowise](https://github.com/FlowiseAI/Flowise/blob/main/images/flowise_agentflow.gif?raw=true)
+![Privos Flow](../../images/flowise_agentflow.gif)
 
 ## ⚡ 快速入门
 

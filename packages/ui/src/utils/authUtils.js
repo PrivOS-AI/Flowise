@@ -49,7 +49,9 @@ const extractUser = (payload) => {
         lastLogin: payload.lastLogin,
         isOrganizationAdmin: payload.isOrganizationAdmin,
         assignedWorkspaces: payload.assignedWorkspaces,
-        permissions: payload.permissions
+        permissions: payload.permissions,
+        activeRoomId: payload.activeRoomId,
+        isRootAdmin: payload.isRootAdmin !== undefined ? payload.isRootAdmin : true
     }
     return user
 }

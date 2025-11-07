@@ -32,8 +32,10 @@ import Autocomplete, { autocompleteClasses } from '@mui/material/Autocomplete'
 import { Dropdown } from '@/ui-component/dropdown/Dropdown'
 import { MultiDropdown } from '@/ui-component/dropdown/MultiDropdown'
 import { AsyncDropdown } from '@/ui-component/dropdown/AsyncDropdown'
+import { DynamicCustomFields } from '@/ui-component/extended/DynamicCustomFields'
 import { Input } from '@/ui-component/input/Input'
 import { RichInput } from '@/ui-component/input/RichInput'
+import { DateTimePicker } from '@/ui-component/input/DateTimePicker'
 import { DataGrid } from '@/ui-component/grid/DataGrid'
 import { File } from '@/ui-component/file/File'
 import { SwitchInput } from '@/ui-component/switch/Switch'
@@ -162,16 +164,46 @@ const NodeInputHandler = ({
     const [promptGeneratorDialogOpen, setPromptGeneratorDialogOpen] = useState(false)
     const [promptGeneratorDialogProps, setPromptGeneratorDialogProps] = useState({})
 
-    const handleDataChange = ({ inputParam, newValue }) => {
+    const handleDataChange = ({ inputParam, newValue, autoFillData }) => {
         data.inputs[inputParam.name] = newValue
+
+        // ✨ NEW: Handle auto-fill data
+        if (autoFillData) {
+            Object.keys(autoFillData).forEach((fieldName) => {
+                data.inputs[fieldName] = autoFillData[fieldName]
+            })
+        }
+
         const allowedShowHideInputTypes = ['boolean', 'asyncOptions', 'asyncMultiOptions', 'options', 'multiOptions']
         if (allowedShowHideInputTypes.includes(inputParam.type)) {
             if (onCustomDataChange) {
-                onCustomDataChange({ nodeId: data.id, inputParam, newValue })
+                onCustomDataChange({ nodeId: data.id, inputParam, newValue, autoFillData })
             } else {
-                onNodeDataChange({ nodeId: data.id, inputParam, newValue })
+                onNodeDataChange({ nodeId: data.id, inputParam, newValue, autoFillData })
             }
         }
+    }
+
+    // ✨ NEW: Auto-fill handler
+    const handleAutoFill = (targetField, value) => {
+        console.log(`[NodeInputHandler] Auto-filling field ${targetField} with:`, value)
+
+        // Directly update data.inputs to ensure the value is set
+        data.inputs[targetField] = value
+
+        // Find the target input param
+        const targetParam = data.inputParams.find((p) => p.name === targetField)
+        if (targetParam) {
+            // Trigger data change to notify parent components
+            if (onCustomDataChange) {
+                onCustomDataChange({ nodeId: data.id, inputParam: targetParam, newValue: value })
+            } else {
+                onNodeDataChange({ nodeId: data.id, inputParam: targetParam, newValue: value })
+            }
+        }
+
+        // Force re-render by updating reload timestamp
+        setReloadTimestamp(Date.now().toString())
     }
 
     const onInputHintDialogClicked = (hint) => {
@@ -978,6 +1010,12 @@ const NodeInputHandler = ({
                                 onSelect={(newValue) => {
                                     data.credential = newValue
                                     data.inputs[FLOWISE_CREDENTIAL_ID] = newValue // in case data.credential is not updated
+                                    // Update ReactFlow node in agentflow
+                                    if (onCustomDataChange) {
+                                        onCustomDataChange({ nodeId: data.id, inputParam, newValue })
+                                    } else if (onNodeDataChange) {
+                                        onNodeDataChange({ nodeId: data.id, inputParam, newValue })
+                                    }
                                 }}
                             />
                         )}
@@ -1077,7 +1115,21 @@ const NodeInputHandler = ({
                             </>
                         )}
 
-                        {(inputParam.type === 'string' || inputParam.type === 'password' || inputParam.type === 'number') &&
+                        {(inputParam.type === 'datetime-local' ||
+                            inputParam.type === 'date' ||
+                            inputParam.type === 'time') && (
+                            <DateTimePicker
+                                key={data.inputs[inputParam.name]}
+                                disabled={disabled}
+                                inputParam={inputParam}
+                                onChange={(newValue) => (data.inputs[inputParam.name] = newValue)}
+                                value={data.inputs[inputParam.name] ?? inputParam.default ?? ''}
+                            />
+                        )}
+
+                        {(inputParam.type === 'string' ||
+                            inputParam.type === 'password' ||
+                            inputParam.type === 'number') &&
                             (inputParam?.acceptVariable &&
                             (window.location.href.includes('v2/agentcanvas') || window.location.href.includes('v2/marketplace')) ? (
                                 <RichInput
@@ -1188,6 +1240,15 @@ const NodeInputHandler = ({
                                             handleDataChange({ inputParam, newValue })
                                         }}
                                         onCreateNew={() => addAsyncOption(inputParam.name)}
+                                        // ✨ NEW: Auto-fill props
+                                        autoFillConfig={
+                                            inputParam.autoFillConfig
+                                                ? {
+                                                      fieldsToFill: inputParam.autoFillConfig.fieldsToFill,
+                                                      onFieldUpdate: handleAutoFill
+                                                  }
+                                                : null
+                                        }
                                     />
                                     {EDITABLE_OPTIONS.includes(inputParam.name) && data.inputs[inputParam.name] && (
                                         <IconButton
@@ -1213,6 +1274,15 @@ const NodeInputHandler = ({
                             </>
                         )}
                         {inputParam.type === 'array' && <ArrayRenderer inputParam={inputParam} data={data} disabled={disabled} />}
+                        {inputParam.type === 'dynamicCustomFields' && (
+                            <DynamicCustomFields
+                                name={inputParam.name}
+                                nodeData={data}
+                                value={data.inputs[inputParam.name] ?? inputParam.default ?? ''}
+                                onSelect={(newValue) => (data.inputs[inputParam.name] = newValue)}
+                                disabled={disabled}
+                            />
+                        )}
                         {/* CUSTOM INPUT LOGIC */}
                         {inputParam.type.includes('conditionFunction') && (
                             <>

@@ -22,6 +22,7 @@ export type NodeParamsType =
     | 'file'
     | 'folder'
     | 'tabs'
+    | 'dynamicCustomFields'
 
 export type CommonType = string | number | boolean | undefined | null
 
@@ -70,6 +71,17 @@ export interface INodeOutputsValue {
     isAnchor?: boolean
 }
 
+export interface IAutoFillFieldConfig {
+    targetField: string
+    sourcePath: string
+    transform?: (value: any) => any
+}
+
+export interface IAutoFillConfig {
+    fieldsToFill?: IAutoFillFieldConfig[]
+    detailsEndpoint?: string
+}
+
 export interface INodeParams {
     label: string
     name: string
@@ -105,6 +117,7 @@ export interface INodeParams {
     hide?: INodeDisplay
     generateDocStoreDescription?: boolean
     generateInstruction?: boolean
+    autoFillConfig?: IAutoFillConfig
 }
 
 export interface INodeExecutionData {

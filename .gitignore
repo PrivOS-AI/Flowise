@@ -34,6 +34,11 @@
 .env.test.local
 .env.production.local
 .env
+# Docker environment files with actual secrets (keep templates like .env.example and .env.queue-source)
+docker/.env
+docker/.env.local
+docker/.env.queue-source.local
+docker/.env.production
 
 ## turbo
 .turbo
@@ -104,3 +109,5 @@
 ## S/MIME message
 *.smime
 *.vsix
+.flowise
+

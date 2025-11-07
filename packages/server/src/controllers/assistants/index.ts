@@ -52,6 +52,21 @@ const deleteAssistant = async (req: Request, res: Response, next: NextFunction) 
                 `Error: assistantsController.deleteAssistant - id not provided!`
             )
         }
+
+        // Room isolation: Check if user can delete this assistant
+        const assistant = await assistantsService.getAssistantById(req.params.id)
+        if (!assistant) {
+            return res.status(404).send(`Assistant ${req.params.id} not found`)
+        }
+
+        // Prevent room users from deleting global resources
+        if (!req.isRootAdmin && req.roomId && !assistant.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: assistantsController.deleteAssistant - Cannot delete global resources. This assistant was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await assistantsService.deleteAssistant(req.params.id, req.query.isDeleteBoth)
         return res.json(apiResponse)
     } catch (error) {
@@ -98,6 +113,21 @@ const updateAssistant = async (req: Request, res: Response, next: NextFunction) 
                 `Error: assistantsController.updateAssistant - body not provided!`
             )
         }
+
+        // Room isolation: Check if user can update this assistant
+        const assistant = await assistantsService.getAssistantById(req.params.id)
+        if (!assistant) {
+            return res.status(404).send(`Assistant ${req.params.id} not found`)
+        }
+
+        // Prevent room users from editing global resources
+        if (!req.isRootAdmin && req.roomId && !assistant.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: assistantsController.updateAssistant - Cannot edit global resources. This assistant was created by a root admin and is read-only for room users.`
+            )
+        }
+
         const apiResponse = await assistantsService.updateAssistant(req.params.id, req.body)
         return res.json(apiResponse)
     } catch (error) {

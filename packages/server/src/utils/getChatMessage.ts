@@ -58,6 +58,7 @@ export const utilGetChatMessage = async ({
     const appServer = getRunningExpressApp()
 
     // Check if chatflow workspaceId is same as activeWorkspaceId
+    // If activeWorkspaceId is not provided (e.g., API key access), skip workspace check
     if (activeWorkspaceId) {
         const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
             id: chatflowid,
@@ -66,8 +67,6 @@ export const utilGetChatMessage = async ({
         if (!chatflow) {
             throw new Error('Unauthorized access')
         }
-    } else {
-        throw new Error('Unauthorized access')
     }
 
     if (feedback) {

@@ -72,7 +72,8 @@ export const AsyncDropdown = ({
     freeSolo = false,
     disableClearable = false,
     multiple = false,
-    fullWidth = false
+    fullWidth = false,
+    autoFillConfig = null        // ✨ NEW: Config for auto-fill
 }) => {
     const customization = useSelector((state) => state.customization)
     const theme = useTheme()
@@ -96,6 +97,74 @@ export const AsyncDropdown = ({
     const addNewOption = [{ label: '- Create New -', name: '-create-' }]
     let [internalValue, setInternalValue] = useState(value ?? 'choose an option')
     const { reactFlowInstance } = useContext(flowContext)
+
+    // ✨ NEW: Helper to extract value from item using path
+    const extractValueFromItem = (item, sourcePath) => {
+        if (!sourcePath || !item) return null
+
+        // Handle customFields[fieldId] syntax
+        const customFieldMatch = sourcePath.match(/customFields\[([^\]]+)\]\.(.+)/)
+        if (customFieldMatch) {
+            const [, fieldId, rest] = customFieldMatch
+            if (Array.isArray(item.customFields)) {
+                const field = item.customFields.find((cf) => cf.fieldId === fieldId)
+                if (field && rest) {
+                    return rest.split('.').reduce((obj, key) => obj?.[key], field)
+                }
+                return field
+            }
+        }
+
+        // Handle normal nested path
+        return sourcePath.split('.').reduce((obj, key) => obj?.[key], item)
+    }
+
+    // ✨ NEW: Handle selection with auto-fill
+    const handleSelectionWithAutoFill = async (selection) => {
+        const selectedValue = selection ? selection.name : ''
+
+        // Set value for current field
+        setInternalValue(selectedValue)
+        onSelect(selectedValue)
+
+        // Auto-fill logic
+        if (selectedValue && autoFillConfig) {
+            try {
+                console.log('[AsyncDropdown] Fetching item details for auto-fill:', selectedValue)
+
+                // Parse item details from JSON string
+                let itemDetails
+                try {
+                    itemDetails = JSON.parse(selectedValue)
+                    console.log('[AsyncDropdown] Item details parsed:', itemDetails)
+                } catch (e) {
+                    console.error('[AsyncDropdown] Failed to parse item details:', e)
+                    return
+                }
+
+                // Trigger auto-fill for configured fields
+                if (autoFillConfig.fieldsToFill && itemDetails && autoFillConfig.onFieldUpdate) {
+                    autoFillConfig.fieldsToFill.forEach((fieldConfig) => {
+                        let value = extractValueFromItem(itemDetails, fieldConfig.sourcePath)
+
+                        // Apply transform if provided
+                        if (value !== undefined && value !== null && fieldConfig.transform) {
+                            try {
+                                value = fieldConfig.transform(value)
+                            } catch (transformError) {
+                                console.error(`[AsyncDropdown] Transform error for ${fieldConfig.targetField}:`, transformError)
+                            }
+                        }
+
+                        console.log(`[AsyncDropdown] Auto-filling ${fieldConfig.targetField} with:`, value)
+                        autoFillConfig.onFieldUpdate(fieldConfig.targetField, value)
+                    })
+                }
+            } catch (error) {
+                console.error('[AsyncDropdown] Error during auto-fill:', error)
+            }
+        }
+    }
 
     const fetchCredentialList = async () => {
         try {
@@ -149,7 +218,8 @@ export const AsyncDropdown = ({
                                 id: currentNode.id,
                                 name: currentNode.data.name,
                                 label: currentNode.data.label,
-                                inputs: currentNode.data.inputs
+                                inputs: currentNode.data.inputs,
+                                credential: currentNode.data.credential || nodeData.credential
                             }
                             body.currentNode = currentNode
                         }
@@ -173,7 +243,7 @@ export const AsyncDropdown = ({
         })()
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [nodeData.credential, JSON.stringify(nodeData.inputs)])
 
     return (
         <>
@@ -209,8 +279,14 @@ export const AsyncDropdown = ({
                         if (isCreateNewOption && value === '-create-') {
                             onCreateNew()
                         } else {
-                            setInternalValue(value)
-                            onSelect(value)
+                            // ✨ MODIFIED: Use auto-fill handler if configured
+                            if (autoFillConfig) {
+                                handleSelectionWithAutoFill(selection)
+                            } else {
+                                // Original logic for backward compatibility
+                                setInternalValue(value)
+                                onSelect(value)
+                            }
                         }
                     }
                 }}
@@ -320,5 +396,6 @@ AsyncDropdown.propTypes = {
     disableClearable: PropTypes.bool,
     isCreateNewOption: PropTypes.bool,
     multiple: PropTypes.bool,
-    fullWidth: PropTypes.bool
+    fullWidth: PropTypes.bool,
+    autoFillConfig: PropTypes.object      // ✨ NEW
 }

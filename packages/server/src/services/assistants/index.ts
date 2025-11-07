@@ -8,6 +8,7 @@ import { Credential } from '../../database/entities/Credential'
 import { DocumentStore } from '../../database/entities/DocumentStore'
 import { Workspace } from '../../enterprise/database/entities/workspace.entity'
 import { getWorkspaceSearchOptions } from '../../enterprise/utils/ControllerServiceUtils'
+import { isInvalidUUID } from '../../enterprise/utils/validation.util'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import { AssistantType } from '../../Interface'
@@ -208,6 +209,12 @@ const deleteAssistant = async (assistantId: string, isDeleteBoth: any): Promise<
 async function getAssistantsCountByOrganization(type: AssistantType, organizationId: string): Promise<number> {
     try {
         const appServer = getRunningExpressApp()
+
+        // Handle external users with non-UUID organization IDs (e.g., "external-org")
+        if (isInvalidUUID(organizationId)) {
+            logger.warn(`[Assistants]: Skipping organization count for non-UUID organizationId: ${organizationId}`)
+            return 0
+        }
 
         const workspaces = await appServer.AppDataSource.getRepository(Workspace).findBy({ organizationId })
         const workspaceIds = workspaces.map((workspace) => workspace.id)

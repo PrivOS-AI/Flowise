@@ -1,0 +1,22 @@
+{
+    "name": "video-gen-mcp-server",
+    "version": "1.0.0",
+    "description": "MCP server for video generation using Google Veo 2.0",
+    "type": "module",
+    "main": "video-gen-server.js",
+    "bin": {
+        "video-gen-server": "./video-gen-server.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "start": "node video-gen-server.js"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.10.1",
+        "@google/genai": "^1.25.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    }
+}

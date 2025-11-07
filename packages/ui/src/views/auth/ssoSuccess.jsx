@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { store } from '@/store'
-import { loginSuccess } from '@/store/reducers/authSlice'
+import { loginSuccess, logoutSuccess } from '@/store/reducers/authSlice'
 import authApi from '@/api/auth'
 
 const SSOSuccess = () => {
@@ -15,6 +15,10 @@ const SSOSuccess = () => {
 
             if (token) {
                 try {
+                    // IMPORTANT: Clear any existing authentication state first
+                    // This ensures that when switching rooms via SSO, the old user data is completely removed
+                    store.dispatch(logoutSuccess())
+
                     const user = await authApi.ssoSuccess(token)
                     if (user) {
                         if (user.status === 200) {
