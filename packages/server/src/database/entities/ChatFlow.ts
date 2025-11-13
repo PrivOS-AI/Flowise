@@ -66,4 +66,10 @@ export class ChatFlow implements IChatFlow {
 
     @Column({ nullable: true, type: 'text' })
     roomId?: string
+
+    @Column({ nullable: true, type: 'text' })
+    scheduleConfig?: string
+
+    @Column({ nullable: true, default: false })
+    scheduleEnabled?: boolean
 }
