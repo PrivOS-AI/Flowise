@@ -7,14 +7,22 @@ export class RedisEventPublisher implements IServerSideEventStreamer {
 
     constructor() {
         if (process.env.REDIS_URL) {
+            let socketOptions: any = {
+                keepAlive:
+                    process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
+                        ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)
+                        : undefined
+            }
+
+            // Handle TLS for rediss:// URLs
+            if (process.env.REDIS_URL.startsWith('rediss://')) {
+                socketOptions.tls = true
+                socketOptions.rejectUnauthorized = false
+            }
+
             this.redisPublisher = createClient({
                 url: process.env.REDIS_URL,
-                socket: {
-                    keepAlive:
-                        process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
-                            ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)
-                            : undefined
-                },
+                socket: socketOptions,
                 pingInterval:
                     process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
                         ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)
