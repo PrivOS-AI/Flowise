@@ -60,13 +60,31 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
         }
     }, [myValue])
 
-    // Check if this is a URL field and value is a valid URL
-    const isUrlField =
+    // Check if this is a file URL field (not API endpoint)
+    // Only show "Click to open" for file URLs in PrivOS nodes, not for LLM endpoints
+    const isFileUrlField =
         inputParam.name &&
-        (inputParam.name.includes('_url') || inputParam.name.toLowerCase().includes('url')) &&
         myValue &&
         typeof myValue === 'string' &&
-        (myValue.startsWith('http://') || myValue.startsWith('https://'))
+        (myValue.startsWith('http://') || myValue.startsWith('https://')) &&
+        // Include: file-specific field names
+        (inputParam.name.includes('file_url') ||
+            inputParam.name.includes('fileUrl') ||
+            inputParam.name.includes('cv_url') ||
+            inputParam.name.includes('cvUrl') ||
+            inputParam.name.includes('document_url') ||
+            inputParam.name.includes('documentUrl') ||
+            // OR: URL contains file/upload patterns
+            myValue.includes('/upload/') ||
+            myValue.includes('/file/') ||
+            myValue.includes('/get-upload-file') ||
+            myValue.includes('/api/v1/public-chatflows')) &&
+        // Exclude: API endpoint field names
+        !inputParam.name.toLowerCase().includes('baseurl') &&
+        !inputParam.name.toLowerCase().includes('base_url') &&
+        !inputParam.name.toLowerCase().includes('apiurl') &&
+        !inputParam.name.toLowerCase().includes('api_url') &&
+        !inputParam.name.toLowerCase().includes('endpoint')
 
     return (
         <>
@@ -137,8 +155,8 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
                 </FormControl>
             )}
 
-            {/* Render clickable link if this is a URL field */}
-            {isUrlField && (
+            {/* Render clickable link if this is a file URL field */}
+            {isFileUrlField && (
                 <Box sx={{ mt: 1, mb: 1 }}>
                     <Link
                         href={myValue}
@@ -158,7 +176,7 @@ export const Input = ({ inputParam, value, nodes, edges, nodeId, onChange, disab
                         }}
                     >
                         <IconExternalLink size={16} />
-                        Click to open file in new tab
+                        Click to open in new tab
                     </Link>
                 </Box>
             )}
