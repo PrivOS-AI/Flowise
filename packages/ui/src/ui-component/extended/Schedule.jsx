@@ -70,8 +70,6 @@ const Schedule = ({ dialogProps }) => {
     const [customInterval, setCustomInterval] = useState('5') // For custom frequency
     const [customUnit, setCustomUnit] = useState('minutes') // minutes, hours, days
     const [timezone, setTimezone] = useState('Asia/Ho_Chi_Minh')
-    const [webhookUrl, setWebhookUrl] = useState('')
-    const [prompt, setPrompt] = useState('')
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [cronDescription, setCronDescription] = useState('')
@@ -104,8 +102,6 @@ const Schedule = ({ dialogProps }) => {
                 const config = response.data.scheduleConfig
                 setEnabled(response.data.scheduleEnabled || false)
                 setTimezone(config.timezone || 'Asia/Ho_Chi_Minh')
-                setWebhookUrl(config.webhookUrl || '')
-                setPrompt(config.prompt || '')
 
                 // Parse cron expression to determine frequency and time
                 const cron = config.cronExpression || '0 8 * * *'
@@ -226,9 +222,7 @@ const Schedule = ({ dialogProps }) => {
             const scheduleConfig = {
                 enabled,
                 cronExpression,
-                timezone,
-                webhookUrl: webhookUrl.trim(),
-                prompt: prompt.trim()
+                timezone
             }
 
             await chatflowsApi.updateScheduleConfig(dialogProps.chatflow.id, scheduleConfig)
@@ -513,32 +507,9 @@ const Schedule = ({ dialogProps }) => {
                         </Select>
                     </FormControl>
 
-                    {/* Prompt/Question */}
-                    <TextField
-                        fullWidth
-                        label='Prompt/Question'
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder='Hey, how are you?'
-                        helperText='The question or prompt to send to your agent/chatflow when triggered'
-                        multiline
-                        rows={3}
-                    />
-
-                    {/* Webhook URL */}
-                    <TextField
-                        fullWidth
-                        label='Webhook URL (Optional)'
-                        value={webhookUrl}
-                        onChange={(e) => setWebhookUrl(e.target.value)}
-                        placeholder='https://your-app.com/webhook'
-                        helperText='Send execution results to this webhook URL (e.g., PrivOS notification endpoint)'
-                    />
-
-                    <Alert severity='warning'>
+                    <Alert severity='info'>
                         <Typography variant='body2'>
-                            <strong>Important:</strong> Make sure your Redis connection is active (MODE=queue) for schedule features to
-                            work. Results will be sent to the webhook URL if provided.
+                            <strong>Note:</strong>Note: Configure the initial prompt in your AI system message .
                         </Typography>
                     </Alert>
                 </>

@@ -11,8 +11,6 @@ import { ScheduleMetricsCollector } from './metrics'
 
 interface ScheduledJobData {
     chatflowId: string
-    webhookUrl?: string
-    prompt?: string
     type: 'scheduled-execution'
 }
 
@@ -78,8 +76,11 @@ export class ScheduleWorker {
     }
 
     private async processScheduledJob(job: Job<ScheduledJobData>): Promise<any> {
-        const { chatflowId, webhookUrl, prompt } = job.data
+        const { chatflowId } = job.data
         const startTime = this.metricsCollector.recordJobStart(chatflowId)
+
+        // Get webhook URL from environment variable
+        const webhookUrl = process.env.SCHEDULE_WEBHOOK_URL
 
         try {
             logger.info(`[ScheduleWorker] Processing scheduled execution for chatflow: ${chatflowId}`)
@@ -130,7 +131,7 @@ export class ScheduleWorker {
             }
 
             // Build and execute the flow
-            const result = await this.executeChatflow(chatflow, prompt)
+            const result = await this.executeChatflow(chatflow)
 
             // Send result to webhook if configured
             if (webhookUrl) {
@@ -170,7 +171,7 @@ export class ScheduleWorker {
         }
     }
 
-    private async executeChatflow(chatflow: any, prompt?: string): Promise<any> {
+    private async executeChatflow(chatflow: any): Promise<any> {
         try {
             // Use prediction queue for both CHATFLOW and AGENTFLOW
             // This ensures consistent execution with proper error handling, retry, etc.
@@ -182,7 +183,7 @@ export class ScheduleWorker {
             const job = await predictionQueue.addJob({
                 chatflow: chatflow, // Pass full chatflow object
                 incomingInput: {
-                    question: prompt || 'Scheduled execution trigger',
+                    question: '.',
                     overrideConfig: {},
                     chatId: chatId,
                     sessionId: sessionId
@@ -196,9 +197,7 @@ export class ScheduleWorker {
                 isInternal: true // Mark as internal execution
             })
 
-            logger.info(
-                `[ScheduleWorker] Flow execution queued with job ID: ${job.id}, prompt: "${prompt || 'Scheduled execution trigger'}"`
-            )
+            logger.info(`[ScheduleWorker] Flow execution queued with job ID: ${job.id}`)
 
             // Wait for job to complete WITHOUT timeout - let it run as long as needed
             try {

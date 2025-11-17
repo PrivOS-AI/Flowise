@@ -8,8 +8,6 @@ export interface ScheduleConfig {
     cronExpression: string // e.g., "0 8 * * *" for 8 AM daily
     timezone?: string // e.g., "Asia/Ho_Chi_Minh"
     enabled: boolean
-    webhookUrl?: string // Optional webhook to call after execution
-    prompt?: string // Question/prompt to send to the agent/chatflow
 }
 
 export class ScheduleManager {
@@ -105,8 +103,6 @@ export class ScheduleManager {
                 `schedule-${chatflowId}`,
                 {
                     chatflowId,
-                    webhookUrl: config.webhookUrl,
-                    prompt: config.prompt,
                     type: 'scheduled-execution'
                 },
                 {
