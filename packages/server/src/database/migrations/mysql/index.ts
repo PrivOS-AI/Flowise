@@ -42,6 +42,7 @@ import { ModifyChatflowType1755066758601 } from './1755066758601-ModifyChatflowT
 import { AddTextToSpeechToChatFlow1759419216034 } from './1759419216034-AddTextToSpeechToChatFlow'
 import { AddChatFlowNameIndex1759424828558 } from './1759424828558-AddChatFlowNameIndex'
 import { AddScheduleConfigToChatFlow1760000000000 } from './1760000000000-AddScheduleConfigToChatFlow'
+import { AddBotEnabledToChatFlow1760100000000 } from './1760100000000-AddBotEnabledToChatFlow'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/mysql/1720230151482-AddAuthTables'
@@ -112,5 +113,6 @@ export const mysqlMigrations = [
     ModifyChatflowType1755066758601,
     AddTextToSpeechToChatFlow1759419216034,
     AddChatFlowNameIndex1759424828558,
-    AddScheduleConfigToChatFlow1760000000000
+    AddScheduleConfigToChatFlow1760000000000,
+    AddBotEnabledToChatFlow1760100000000
 ]

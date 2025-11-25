@@ -72,4 +72,7 @@ export class ChatFlow implements IChatFlow {
 
     @Column({ nullable: true, default: false })
     scheduleEnabled?: boolean
+
+    @Column({ nullable: true, default: false })
+    botEnabled?: boolean
 }

@@ -33,4 +33,8 @@ router.get('/schedules/metrics', checkAnyPermission('chatflows:view,chatflows:up
 router.get('/schedules/health', checkAnyPermission('chatflows:view,chatflows:update'), chatflowsController.getScheduleHealth)
 router.get('/schedules/queue-stats', checkAnyPermission('chatflows:view,chatflows:update'), chatflowsController.getScheduleQueueStats)
 
+// BOT MANAGEMENT
+router.get('/bots/all', chatflowsController.getAllBots)
+router.post('/bot/:id', chatflowsController.updateBotEnabled)
+
 export default router
