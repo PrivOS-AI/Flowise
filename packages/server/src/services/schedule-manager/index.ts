@@ -128,17 +128,27 @@ export class ScheduleManager {
         this.checkInitialized()
 
         try {
-            const jobId = `schedule-${chatflowId}`
+            const jobName = `schedule-${chatflowId}`
 
-            // Get all repeatable jobs
-            const repeatableJobs = await this.scheduleQueue.getRepeatableJobs()
+            // Get all job schedulers (new BullMQ API for repeatable jobs)
+            const jobSchedulers = await this.scheduleQueue.getJobSchedulers()
 
-            // Find and remove the job with matching jobId
-            const jobToRemove = repeatableJobs.find((job) => job.id === jobId || job.key.includes(chatflowId))
+            // Filter schedulers by the specific name for the chatflow
+            const schedulersToRemove = jobSchedulers.filter((scheduler) => scheduler.name === jobName)
 
-            if (jobToRemove) {
-                await this.scheduleQueue.removeRepeatableByKey(jobToRemove.key)
-                logger.info(`[ScheduleManager] Unregistered schedule for chatflow ${chatflowId}`)
+            // Remove each found job scheduler
+            if (schedulersToRemove.length > 0) {
+                for (const scheduler of schedulersToRemove) {
+                    await this.scheduleQueue.removeJobScheduler(scheduler.key)
+                    logger.info(
+                        `[ScheduleManager] Removed schedule job ${scheduler.name} (key: ${scheduler.key}) for chatflow ${chatflowId}`
+                    )
+                }
+                logger.info(
+                    `[ScheduleManager] Successfully removed ${schedulersToRemove.length} schedule job(s) for chatflow ${chatflowId}`
+                )
+            } else {
+                logger.info(`[ScheduleManager] No schedule jobs found for chatflow ${chatflowId}`)
             }
         } catch (error) {
             logger.error(`[ScheduleManager] Failed to unregister schedule for chatflow ${chatflowId}:`, error)
@@ -217,7 +227,8 @@ export class ScheduleManager {
     public async getRepeatableJobs(): Promise<any[]> {
         this.checkInitialized()
 
-        return await this.scheduleQueue.getRepeatableJobs()
+        // The `getRepeatableJobs` method is deprecated. The new method is `getJobs(['repeat'])`.
+        return await this.scheduleQueue.getJobs(['repeat'])
     }
 
     /**
@@ -248,7 +259,7 @@ export class ScheduleManager {
             this.scheduleQueue.getCompletedCount(),
             this.scheduleQueue.getFailedCount(),
             this.scheduleQueue.getDelayedCount(),
-            this.scheduleQueue.getRepeatableJobs()
+            this.scheduleQueue.getJobs(['repeat']) // Replaced deprecated getRepeatableJobs()
         ])
 
         return {
