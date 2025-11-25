@@ -29,6 +29,9 @@ export class FinalSafetyMigration9999999999999 implements MigrationInterface {
             { table: 'chat_flow', column: 'type', type: 'VARCHAR(20)', default: "'CHATFLOW'", description: 'Chatflow type' },
             { table: 'chat_flow', column: 'followUpPrompts', type: 'TEXT', description: 'Follow-up prompt configuration' },
             { table: 'chat_flow', column: 'textToSpeech', type: 'TEXT', description: 'Text-to-speech configuration' },
+            { table: 'chat_flow', column: 'scheduleConfig', type: 'TEXT', description: 'Schedule configuration for chatflow' },
+            { table: 'chat_flow', column: 'scheduleEnabled', type: 'BOOLEAN', default: 'false', description: 'Whether schedule is enabled' },
+            { table: 'chat_flow', column: 'botEnabled', type: 'BOOLEAN', default: 'false', description: 'Whether bot is enabled' },
 
             { table: 'credential', column: 'roomId', type: 'TEXT', description: 'Multi-tenant room identifier' },
             { table: 'credential', column: 'workspaceId', type: 'TEXT', description: 'Workspace identifier' },
