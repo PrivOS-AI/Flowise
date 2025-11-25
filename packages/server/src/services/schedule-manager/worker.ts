@@ -1,6 +1,5 @@
 import { Worker, Job, QueueEvents } from 'bullmq'
 import { DataSource } from 'typeorm'
-import axios from 'axios'
 import logger from '../../utils/logger'
 import { QueueManager } from '../../queue/QueueManager'
 import { IComponentNodes } from '../../Interface'
@@ -8,6 +7,7 @@ import { CachePool } from '../../CachePool'
 import { Telemetry } from '../../utils/telemetry'
 import { ChatFlow } from '../../database/entities/ChatFlow'
 import { ScheduleMetricsCollector } from './metrics'
+import { SCHEDULE_WORKER_CONFIG } from '../../utils/constants'
 
 interface ScheduledJobData {
     chatflowId: string
@@ -37,10 +37,6 @@ export class ScheduleWorker {
         })
 
         // Create worker for schedule queue with configurable settings
-        const concurrency = parseInt(process.env.SCHEDULE_WORKER_CONCURRENCY || '5')
-        const lockDuration = parseInt(process.env.SCHEDULE_LOCK_DURATION || '600000') // 10 minutes
-        const stalledInterval = parseInt(process.env.SCHEDULE_STALLED_INTERVAL || '60000') // 60 seconds
-
         this.worker = new Worker(
             'flowise-schedule',
             async (job: Job<ScheduledJobData>) => {
@@ -48,14 +44,14 @@ export class ScheduleWorker {
             },
             {
                 connection: queueManager.getConnection(),
-                concurrency, // Configurable via env var
-                lockDuration, // Configurable via env var
-                stalledInterval // Configurable via env var
+                concurrency: SCHEDULE_WORKER_CONFIG.CONCURRENCY,
+                lockDuration: SCHEDULE_WORKER_CONFIG.LOCK_DURATION,
+                stalledInterval: SCHEDULE_WORKER_CONFIG.STALLED_INTERVAL
             }
         )
 
         logger.info(
-            `[ScheduleWorker] Worker started with concurrency=${concurrency}, lockDuration=${lockDuration}ms, stalledInterval=${stalledInterval}ms`
+            `[ScheduleWorker] Worker started with concurrency=${SCHEDULE_WORKER_CONFIG.CONCURRENCY}, lockDuration=${SCHEDULE_WORKER_CONFIG.LOCK_DURATION}ms, stalledInterval=${SCHEDULE_WORKER_CONFIG.STALLED_INTERVAL}ms`
         )
 
         this.worker.on('completed', (job) => {
@@ -68,19 +64,15 @@ export class ScheduleWorker {
 
         logger.info('[ScheduleWorker] Worker initialized successfully')
 
-        // Log metrics summary every 5 minutes
-        const metricsInterval = parseInt(process.env.SCHEDULE_METRICS_INTERVAL || '300000') // 5 minutes
+        // Log metrics summary periodically
         setInterval(() => {
             this.metricsCollector.logMetricsSummary()
-        }, metricsInterval)
+        }, SCHEDULE_WORKER_CONFIG.METRICS_INTERVAL)
     }
 
     private async processScheduledJob(job: Job<ScheduledJobData>): Promise<any> {
         const { chatflowId } = job.data
         const startTime = this.metricsCollector.recordJobStart(chatflowId)
-
-        // Get webhook URL from environment variable
-        const webhookUrl = process.env.SCHEDULE_WEBHOOK_URL
 
         try {
             logger.info(`[ScheduleWorker] Processing scheduled execution for chatflow: ${chatflowId}`)
@@ -93,7 +85,7 @@ export class ScheduleWorker {
                 throw new Error(`Chatflow ${chatflowId} not found`)
             }
 
-            // ✅ CHECK: Verify schedule is still enabled in database
+            // CHECK: Verify schedule is still enabled in database
             // This prevents execution if schedule was disabled while server was down
             if (!chatflow.scheduleEnabled) {
                 logger.warn(
@@ -133,16 +125,6 @@ export class ScheduleWorker {
             // Build and execute the flow
             const result = await this.executeChatflow(chatflow)
 
-            // Send result to webhook if configured
-            if (webhookUrl) {
-                await this.sendWebhook(webhookUrl, {
-                    chatflowId,
-                    executionTime: new Date().toISOString(),
-                    result,
-                    status: 'success'
-                })
-            }
-
             // Record success metrics
             this.metricsCollector.recordJobSuccess(chatflowId, startTime)
 
@@ -152,20 +134,6 @@ export class ScheduleWorker {
 
             // Record failure metrics
             this.metricsCollector.recordJobFailure(chatflowId, startTime, error)
-
-            // Send error to webhook if configured
-            if (webhookUrl) {
-                try {
-                    await this.sendWebhook(webhookUrl, {
-                        chatflowId,
-                        executionTime: new Date().toISOString(),
-                        error: error.message,
-                        status: 'error'
-                    })
-                } catch (webhookError) {
-                    logger.error(`[ScheduleWorker] Failed to send error webhook:`, webhookError)
-                }
-            }
 
             throw error
         }
@@ -180,10 +148,32 @@ export class ScheduleWorker {
             const chatId = `schedule-${chatflow.id}-${Date.now()}`
             const sessionId = `schedule-${Date.now()}`
 
+            // Schedule trigger = auto, no user input needed
+            // userId and messageJson will be empty for scheduled trigger
+            // When user replies, Privos will call flow API with populated params
+            const uploads: any[] = []
+
+            // userId - empty for schedule trigger (auto broadcast)
+            uploads.push({
+                data: `data:text/plain;base64,${Buffer.from('').toString('base64')}`,
+                type: 'file:full',
+                name: 'userId',
+                mime: 'text/plain'
+            })
+
+            // messageJson - empty for schedule trigger
+            uploads.push({
+                data: `data:text/plain;base64,${Buffer.from('{}').toString('base64')}`,
+                type: 'file:full',
+                name: 'messageJson',
+                mime: 'text/plain'
+            })
+
             const job = await predictionQueue.addJob({
                 chatflow: chatflow, // Pass full chatflow object
                 incomingInput: {
-                    question: '.',
+                    question: '', // Empty for schedule trigger (auto broadcast)
+                    uploads: uploads,
                     overrideConfig: {},
                     chatId: chatId,
                     sessionId: sessionId
@@ -211,29 +201,6 @@ export class ScheduleWorker {
             }
         } catch (error) {
             logger.error(`[ScheduleWorker] Error executing chatflow:`, error)
-            throw error
-        }
-    }
-
-    private async sendWebhook(url: string, payload: any): Promise<void> {
-        try {
-            logger.info(`[ScheduleWorker] Sending webhook to: ${url}`)
-
-            const response = await axios.post(url, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Flowise-Schedule/1.0'
-                },
-                timeout: 10000 // 10 second timeout
-            })
-
-            logger.info(`[ScheduleWorker] Webhook sent successfully. Status: ${response.status}`)
-        } catch (error: any) {
-            logger.error(`[ScheduleWorker] Failed to send webhook:`, {
-                url,
-                error: error.message,
-                response: error.response?.data
-            })
             throw error
         }
     }

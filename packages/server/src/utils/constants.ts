@@ -157,3 +157,13 @@ export const EXTERNAL_SSO_DEFAULT_PERMISSIONS = [
     'templates:marketplace',
     'templates:custom'
 ]
+
+/**
+ * Schedule Worker Configuration
+ */
+export const SCHEDULE_WORKER_CONFIG = {
+    CONCURRENCY: 5,
+    LOCK_DURATION: 600000, // 10 minutes
+    STALLED_INTERVAL: 60000, // 1 minute
+    METRICS_INTERVAL: 3000000 // 50 minutes
+}
