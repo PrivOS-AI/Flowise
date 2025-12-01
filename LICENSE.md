@@ -1,4 +1,5 @@
 Copyright (c) 2023-present FlowiseAI, Inc.
+Portions Copyright (c) 2025 B.ARMY COMPANY LIMITED. All rights reserved.
 
 Portions of this software are licensed as follows:
 
@@ -182,3 +183,8 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    of your accepting any such warranty or additional liability.
 
 END OF TERMS AND CONDITIONS
+
+---
+
+**Note**: This repository contains proprietary modifications by B.ARMY COMPANY LIMITED.
+For information about the proprietary portions, please see [COPYRIGHT.md](COPYRIGHT.md).
