@@ -6,7 +6,6 @@ const router = express.Router()
 
 // READ
 router.get(['/', '/:id'], chatflowsController.getSinglePublicChatflow)
-router.get('/bots/all', chatflowsController.getAllBots)
 
 // UPDATE
 

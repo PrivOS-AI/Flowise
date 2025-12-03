@@ -13,8 +13,6 @@ import Leads from '@/ui-component/extended/Leads'
 import FollowUpPrompts from '@/ui-component/extended/FollowUpPrompts'
 import FileUpload from '@/ui-component/extended/FileUpload'
 import PostProcessing from '@/ui-component/extended/PostProcessing'
-import Schedule from '@/ui-component/extended/Schedule'
-import BotToggle from '@/ui-component/extended/BotToggle'
 
 const CHATFLOW_CONFIGURATION_TABS = [
     {
@@ -57,14 +55,6 @@ const CHATFLOW_CONFIGURATION_TABS = [
         label: 'Post Processing',
         id: 'postProcessing',
         hideInAgentFlow: true
-    },
-    {
-        label: 'Schedule',
-        id: 'schedule'
-    },
-    {
-        label: 'Bot',
-        id: 'bot'
     }
 ]
 
@@ -158,8 +148,6 @@ const ChatflowConfigurationDialog = ({ show, isAgentCanvas, dialogProps, onCance
                         {item.id === 'leads' ? <Leads dialogProps={dialogProps} /> : null}
                         {item.id === 'fileUpload' ? <FileUpload dialogProps={dialogProps} /> : null}
                         {item.id === 'postProcessing' ? <PostProcessing dialogProps={dialogProps} /> : null}
-                        {item.id === 'schedule' ? <Schedule dialogProps={dialogProps} /> : null}
-                        {item.id === 'bot' ? <BotToggle dialogProps={dialogProps} /> : null}
                     </TabPanel>
                 ))}
             </DialogContent>

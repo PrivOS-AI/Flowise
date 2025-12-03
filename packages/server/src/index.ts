@@ -32,8 +32,6 @@ import { QueueManager } from './queue/QueueManager'
 import { RedisEventSubscriber } from './queue/RedisEventSubscriber'
 import 'global-agent/bootstrap'
 import { UsageCacheManager } from './UsageCacheManager'
-import { ScheduleManager } from './services/schedule-manager'
-import { ScheduleWorker } from './services/schedule-manager/worker'
 import { Workspace } from './enterprise/database/entities/workspace.entity'
 import { Organization } from './enterprise/database/entities/organization.entity'
 import { GeneralRole, Role } from './enterprise/database/entities/role.entity'
@@ -77,8 +75,6 @@ export class App {
     queueManager: QueueManager
     redisSubscriber: RedisEventSubscriber
     usageCacheManager: UsageCacheManager
-    scheduleManager: ScheduleManager
-    scheduleWorker: ScheduleWorker
 
     constructor() {
         this.app = express()
@@ -151,26 +147,6 @@ export class App {
                 this.redisSubscriber = new RedisEventSubscriber(this.sseStreamer)
                 await this.redisSubscriber.connect()
                 logger.info('🔗 [server]: Redis event subscriber connected successfully')
-
-                // Initialize Schedule Manager
-                this.scheduleManager = ScheduleManager.getInstance()
-                await this.scheduleManager.initialize(this.AppDataSource, this.queueManager)
-                logger.info('⏰ [server]: Schedule Manager initialized successfully')
-
-                // Initialize Schedule Worker
-                this.scheduleWorker = new ScheduleWorker(
-                    this.queueManager,
-                    this.AppDataSource,
-                    this.nodesPool.componentNodes,
-                    this.cachePool,
-                    this.telemetry
-                )
-                logger.info('⏱️ [server]: Schedule Worker initialized successfully')
-
-                // Start Prediction Worker in the same process (single-process mode)
-                const predictionQueue = this.queueManager.getQueue('prediction')
-                predictionQueue.createWorker()
-                logger.info('🔄 [server]: Prediction Worker started in server process')
             }
 
             // TODO: Remove this by end of 2025
