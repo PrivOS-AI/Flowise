@@ -33,12 +33,6 @@ class ChatOpenAICustom_ChatModels implements INode {
         }
         this.inputs = [
             {
-                label: 'BasePath',
-                name: 'basepath',
-                type: 'string',
-                placeholder: 'https://llm-hub.roxane.one/v1'
-            },
-            {
                 label: 'Cache',
                 name: 'cache',
                 type: 'BaseCache',
@@ -48,7 +42,7 @@ class ChatOpenAICustom_ChatModels implements INode {
                 label: 'Model Name',
                 name: 'modelName',
                 type: 'string',
-                placeholder: 'gemma3:12b'
+                placeholder: 'ft:gpt-3.5-turbo:my-org:custom_suffix:id'
             },
             {
                 label: 'Temperature',
@@ -103,6 +97,13 @@ class ChatOpenAICustom_ChatModels implements INode {
                 name: 'timeout',
                 type: 'number',
                 step: 1,
+                optional: true,
+                additionalParams: true
+            },
+            {
+                label: 'BasePath',
+                name: 'basepath',
+                type: 'string',
                 optional: true,
                 additionalParams: true
             },

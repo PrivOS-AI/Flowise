@@ -111,11 +111,3 @@ docker/.env.production
 *.vsix
 .flowise
 
-"nul" 
-"packages/server/check-schedules.js" 
-"packages/server/clear-redis-schedules.js" 
-
-# Utility scripts (development only)
-packages/server/check-schedules.js
-packages/server/clear-redis-schedules.js
-nul
