@@ -9,22 +9,14 @@ export class RedisEventSubscriber {
 
     constructor(sseStreamer: SSEStreamer) {
         if (process.env.REDIS_URL) {
-            let socketOptions: any = {
-                keepAlive:
-                    process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
-                        ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)
-                        : undefined
-            }
-
-            // Handle TLS for rediss:// URLs
-            if (process.env.REDIS_URL.startsWith('rediss://')) {
-                socketOptions.tls = true
-                socketOptions.rejectUnauthorized = false
-            }
-
             this.redisSubscriber = createClient({
                 url: process.env.REDIS_URL,
-                socket: socketOptions,
+                socket: {
+                    keepAlive:
+                        process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
+                            ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)
+                            : undefined
+                },
                 pingInterval:
                     process.env.REDIS_KEEP_ALIVE && !isNaN(parseInt(process.env.REDIS_KEEP_ALIVE, 10))
                         ? parseInt(process.env.REDIS_KEEP_ALIVE, 10)

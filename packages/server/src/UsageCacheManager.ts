@@ -1,4 +1,4 @@
-import Keyv from 'keyv'
+import { Keyv } from 'keyv'
 import KeyvRedis from '@keyv/redis'
 import { Cache, createCache } from 'cache-manager'
 import { MODE } from './Interface'
@@ -52,11 +52,12 @@ export class UsageCacheManager {
                     }
                 }
             }
-            const keyvStore = new Keyv({
-                store: new KeyvRedis(redisConfig)
-            })
             this.cache = createCache({
-                stores: [keyvStore as any]
+                stores: [
+                    new Keyv({
+                        store: new KeyvRedis(redisConfig)
+                    })
+                ]
             })
         } else {
             this.cache = createCache()

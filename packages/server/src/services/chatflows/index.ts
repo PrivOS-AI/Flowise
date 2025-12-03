@@ -420,35 +420,6 @@ const _checkAndUpdateDocumentStoreUsage = async (chatflow: ChatFlow, workspaceId
     }
 }
 
-const getAllBotEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
-    try {
-        const appServer = getRunningExpressApp()
-        return await appServer.AppDataSource.getRepository(ChatFlow).find({
-            where: { botEnabled: true },
-            select: [
-                'id',
-                'name',
-                'type',
-                'botEnabled',
-                'scheduleEnabled',
-                'scheduleConfig',
-                'createdDate',
-                'updatedDate',
-                'workspaceId',
-                'roomId',
-                'deployed',
-                'isPublic',
-                'category'
-            ]
-        })
-    } catch (error) {
-        throw new InternalFlowiseError(
-            StatusCodes.INTERNAL_SERVER_ERROR,
-            `Error: chatflowsService.getAllBotEnabledChatflows - ${getErrorMessage(error)}`
-        )
-    }
-}
-
 const checkIfChatflowHasChanged = async (chatflowId: string, lastUpdatedDateTime: string): Promise<any> => {
     try {
         const appServer = getRunningExpressApp()
@@ -482,6 +453,5 @@ export default {
     updateChatflow,
     getSinglePublicChatbotConfig,
     checkIfChatflowHasChanged,
-    getAllChatflowsCountByOrganization,
-    getAllBotEnabledChatflows
+    getAllChatflowsCountByOrganization
 }
