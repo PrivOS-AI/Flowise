@@ -12,6 +12,7 @@ import { getPageAndLimitParams } from '../../utils/pagination'
 import { WorkspaceUserErrorMessage, WorkspaceUserService } from '../../enterprise/services/workspace-user.service'
 import { QueryRunner } from 'typeorm'
 import { GeneralErrorMessage } from '../../utils/constants'
+import { ScheduleManager } from '../../services/schedule-manager'
 
 const checkIfChatflowIsValidForStreaming = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -195,10 +196,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
 
         // Room isolation: Prevent room users from editing global resources
         if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
-            throw new InternalFlowiseError(
-                StatusCodes.FORBIDDEN,
-                `You don't have permission to edit this resource`
-            )
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `You don't have permission to edit this resource`)
         }
 
         const orgId = req.user?.activeOrganizationId
@@ -296,6 +294,352 @@ const checkIfChatflowHasChanged = async (req: Request, res: Response, next: Next
     }
 }
 
+// Schedule Management Endpoints
+
+const updateChatflowSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.updateChatflowSchedule - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const scheduleConfig = req.body
+
+        // Validate cron expression (basic validation)
+        if (scheduleConfig.cronExpression && !isValidCronExpression(scheduleConfig.cronExpression)) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Error: Invalid cron expression`)
+        }
+
+        // Get chatflow and update schedule config
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(
+                StatusCodes.FORBIDDEN,
+                `Error: Cannot modify schedule for global resources. This chatflow was created by a root admin.`
+            )
+        }
+
+        // Update chatflow with new schedule config
+        chatflow.scheduleConfig = JSON.stringify(scheduleConfig)
+        chatflow.scheduleEnabled = scheduleConfig.enabled || false
+
+        const orgId = req.user?.activeOrganizationId
+        if (!orgId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Organization not found`)
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Workspace not found`)
+        }
+
+        const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
+
+        const updatedChatflow = await chatflowsService.updateChatflow(chatflow, chatflow, orgId, workspaceId, subscriptionId)
+
+        // Update schedule in ScheduleManager
+        const scheduleManager = ScheduleManager.getInstance()
+        await scheduleManager.updateSchedule(chatflowId, scheduleConfig)
+
+        return res.json(updatedChatflow)
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getChatflowSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.getChatflowSchedule - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        const scheduleConfig = chatflow.scheduleConfig ? JSON.parse(chatflow.scheduleConfig) : null
+
+        return res.json({
+            chatflowId: chatflow.id,
+            scheduleEnabled: chatflow.scheduleEnabled || false,
+            scheduleConfig
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const enableChatflowSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.enableChatflowSchedule - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `Error: Cannot enable schedule for global resources`)
+        }
+
+        if (!chatflow.scheduleConfig) {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Error: No schedule configuration found for this chatflow`)
+        }
+
+        const scheduleManager = ScheduleManager.getInstance()
+        await scheduleManager.enableSchedule(chatflowId)
+
+        return res.json({ message: 'Schedule enabled successfully', chatflowId })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const disableChatflowSchedule = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.disableChatflowSchedule - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `Error: Cannot disable schedule for global resources`)
+        }
+
+        const scheduleManager = ScheduleManager.getInstance()
+        await scheduleManager.disableSchedule(chatflowId)
+
+        return res.json({ message: 'Schedule disabled successfully', chatflowId })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getAllScheduledChatflows = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const scheduleManager = ScheduleManager.getInstance()
+        const scheduledFlows = await scheduleManager.getScheduledFlows()
+
+        // Filter by workspace if user has one
+        const workspaceId = req.user?.activeWorkspaceId
+        const filteredFlows = workspaceId ? scheduledFlows.filter((flow) => flow.workspaceId === workspaceId) : scheduledFlows
+
+        // Apply room isolation
+        const roomFilteredFlows = req.isRootAdmin
+            ? filteredFlows
+            : filteredFlows.filter((flow) => !flow.roomId || flow.roomId === req.roomId)
+
+        return res.json(roomFilteredFlows)
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getAllBots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Get all chatflows with botEnabled = true
+        const bots = await chatflowsService.getAllBotEnabledChatflows()
+
+        // Filter by workspace if user has one
+        const workspaceId = req.user?.activeWorkspaceId
+        const filteredBots = workspaceId ? bots.filter((bot) => bot.workspaceId === workspaceId) : bots
+
+        // Apply room isolation
+        const roomFilteredBots = req.isRootAdmin ? filteredBots : filteredBots.filter((bot) => !bot.roomId || bot.roomId === req.roomId)
+
+        return res.json(roomFilteredBots)
+    } catch (error) {
+        next(error)
+    }
+}
+
+const updateBotEnabled = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.updateBotEnabled - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const { enabled } = req.body
+
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `Error: Cannot modify bot config for global resources`)
+        }
+
+        // Update botEnabled field
+        chatflow.botEnabled = enabled || false
+
+        const orgId = req.user?.activeOrganizationId
+        if (!orgId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Organization not found`)
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Workspace not found`)
+        }
+
+        const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
+
+        const updatedChatflow = await chatflowsService.updateChatflow(chatflow, chatflow, orgId, workspaceId, subscriptionId)
+
+        return res.json({ message: 'Bot configuration updated successfully', chatflowId, botEnabled: updatedChatflow.botEnabled })
+    } catch (error) {
+        next(error)
+    }
+}
+
+// Schedule Monitoring Endpoints
+
+const getScheduleMetrics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.getScheduleMetrics - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Get metrics from ScheduleWorker
+        const app = getRunningExpressApp()
+        const scheduleWorker = app.scheduleWorker
+
+        if (!scheduleWorker) {
+            return res.json({
+                message: 'Schedule worker not initialized. Make sure MODE=queue is set.',
+                metrics: null
+            })
+        }
+
+        const metricsCollector = scheduleWorker.getMetricsCollector()
+        const metrics = metricsCollector.getChatflowMetrics(chatflowId)
+        const successRate = metricsCollector.getSuccessRate(chatflowId)
+
+        return res.json({
+            chatflowId,
+            metrics: metrics || null,
+            successRate: successRate.toFixed(2) + '%'
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getGlobalScheduleMetrics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Get metrics from ScheduleWorker
+        const app = getRunningExpressApp()
+        const scheduleWorker = app.scheduleWorker
+
+        if (!scheduleWorker) {
+            return res.json({
+                message: 'Schedule worker not initialized. Make sure MODE=queue is set.',
+                metrics: null
+            })
+        }
+
+        const metricsCollector = scheduleWorker.getMetricsCollector()
+        const globalMetrics = metricsCollector.getGlobalMetrics()
+        const successRate = metricsCollector.getGlobalSuccessRate()
+        const allMetrics = metricsCollector.getAllMetrics()
+
+        // Convert Map to object for JSON serialization
+        const perChatflowMetrics: Record<string, any> = {}
+        allMetrics.forEach((metrics, chatflowId) => {
+            perChatflowMetrics[chatflowId] = {
+                ...metrics,
+                successRate: metricsCollector.getSuccessRate(chatflowId).toFixed(2) + '%'
+            }
+        })
+
+        return res.json({
+            globalMetrics,
+            globalSuccessRate: successRate.toFixed(2) + '%',
+            perChatflowMetrics
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getScheduleHealth = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const scheduleManager = ScheduleManager.getInstance()
+        const healthStatus = await scheduleManager.getHealthStatus()
+
+        return res.json(healthStatus)
+    } catch (error) {
+        next(error)
+    }
+}
+
+const getScheduleQueueStats = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const scheduleManager = ScheduleManager.getInstance()
+        const queueStats = await scheduleManager.getQueueStats()
+
+        return res.json(queueStats)
+    } catch (error) {
+        next(error)
+    }
+}
+
+// Helper function to validate cron expression
+function isValidCronExpression(expression: string): boolean {
+    // Basic cron expression validation (5 or 6 fields)
+    const cronRegex =
+        /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))( (\*|([0-9]{4})))?$/
+    return cronRegex.test(expression)
+}
+
 export default {
     checkIfChatflowIsValidForStreaming,
     checkIfChatflowIsValidForUploads,
@@ -307,5 +651,16 @@ export default {
     updateChatflow,
     getSinglePublicChatflow,
     getSinglePublicChatbotConfig,
-    checkIfChatflowHasChanged
+    checkIfChatflowHasChanged,
+    updateChatflowSchedule,
+    getChatflowSchedule,
+    enableChatflowSchedule,
+    disableChatflowSchedule,
+    getAllScheduledChatflows,
+    getScheduleMetrics,
+    getGlobalScheduleMetrics,
+    getScheduleHealth,
+    getScheduleQueueStats,
+    getAllBots,
+    updateBotEnabled
 }

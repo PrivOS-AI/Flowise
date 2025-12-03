@@ -22,6 +22,22 @@ const getHasChatflowChanged = (id, lastUpdatedDateTime) => client.get(`/chatflow
 
 const generateAgentflow = (body) => client.post(`/agentflowv2-generator/generate`, body)
 
+// Schedule Management
+const getScheduleConfig = (id) => client.get(`/chatflows/schedule/${id}`)
+
+const updateScheduleConfig = (id, body) => client.post(`/chatflows/schedule/${id}`, body)
+
+const enableSchedule = (id) => client.post(`/chatflows/schedule/${id}/enable`)
+
+const disableSchedule = (id) => client.post(`/chatflows/schedule/${id}/disable`)
+
+const getAllScheduledChatflows = () => client.get(`/chatflows/schedules/all`)
+
+// Bot Management
+const updateBotEnabled = (id, enabled) => client.post(`/chatflows/bot/${id}`, { enabled })
+
+const getAllBots = () => client.get(`/chatflows/bots/all`)
+
 export default {
     getAllChatflows,
     getAllAgentflows,
@@ -33,5 +49,12 @@ export default {
     getIsChatflowStreaming,
     getAllowChatflowUploads,
     getHasChatflowChanged,
-    generateAgentflow
+    generateAgentflow,
+    getScheduleConfig,
+    updateScheduleConfig,
+    enableSchedule,
+    disableSchedule,
+    getAllScheduledChatflows,
+    updateBotEnabled,
+    getAllBots
 }

@@ -71,6 +71,9 @@ export interface IChatFlow {
     category?: string
     type?: ChatflowType
     workspaceId?: string
+    roomId?: string
+    scheduleConfig?: string
+    scheduleEnabled?: boolean
 }
 
 export interface IChatMessage {
