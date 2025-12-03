@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm'
 
 /**
- * FINAL SAFETY MIGRATION - ALWAYS RUNS LAST
+ * FINAL SAFETY MIGRATION - ALWAYS RUNS LAST (SQLite)
  *
  * This migration ensures ALL required columns exist regardless of migration history.
  * It's the last migration (timestamp 9999999999999) so it always runs after everything else.
@@ -18,7 +18,7 @@ export class FinalSafetyMigration9999999999999 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         console.log('\n' + '='.repeat(80))
-        console.log('🔍 FINAL SAFETY CHECK: Verifying all required database columns')
+        console.log('🔍 FINAL SAFETY CHECK: Verifying all required database columns (SQLite)')
         console.log('='.repeat(80) + '\n')
 
         // Define ALL columns that must exist in the database
@@ -73,14 +73,11 @@ export class FinalSafetyMigration9999999999999 implements MigrationInterface {
                     continue
                 }
 
-                // Check if column exists
-                const result = await queryRunner.query(
-                    `SELECT column_name FROM information_schema.columns
-                     WHERE table_name = $1 AND column_name = $2`,
-                    [col.table, col.column]
-                )
+                // Check if column exists using SQLite PRAGMA
+                const tableInfo = await queryRunner.query(`PRAGMA table_info("${col.table}")`)
+                const columnExists = tableInfo.some((row: any) => row.name === col.column)
 
-                if (result.length === 0) {
+                if (!columnExists) {
                     // Column doesn't exist - add it
                     console.log(`➕ Adding "${col.column}" to "${col.table}" - ${col.description}`)
 
@@ -97,7 +94,7 @@ export class FinalSafetyMigration9999999999999 implements MigrationInterface {
                     existingCount++
                 }
             } catch (error: any) {
-                console.error(`   ❌ Error processing "${col.table}.${col.column}": ${error.message}`)
+                console.error(`   ❌ Error processing "${col.table}.${col.column}": ${error?.message || error}`)
             }
         }
 
@@ -120,5 +117,6 @@ export class FinalSafetyMigration9999999999999 implements MigrationInterface {
     public async down(queryRunner: QueryRunner): Promise<void> {
         console.log('⚠️  Rollback not supported for safety migration')
         console.log('   Columns are not dropped to prevent data loss')
+        console.log('   Note: SQLite DROP COLUMN is only supported in version 3.35.0+')
     }
 }
