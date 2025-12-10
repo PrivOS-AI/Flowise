@@ -42,6 +42,7 @@ import { AddTextToSpeechToChatFlow1759419231100 } from './1759419231100-AddTextT
 import { AddChatFlowNameIndex1759424809984 } from './1759424809984-AddChatFlowNameIndex'
 import { AddScheduleConfigToChatFlow1760000000000 } from './1760000000000-AddScheduleConfigToChatFlow'
 import { AddBotEnabledToChatFlow1760100000000 } from './1760100000000-AddBotEnabledToChatFlow'
+import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSubAgentEnabledToChatFlow'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/mariadb/1720230151482-AddAuthTables'
@@ -112,5 +113,6 @@ export const mariadbMigrations = [
     AddTextToSpeechToChatFlow1759419231100,
     AddChatFlowNameIndex1759424809984,
     AddScheduleConfigToChatFlow1760000000000,
-    AddBotEnabledToChatFlow1760100000000
+    AddBotEnabledToChatFlow1760100000000,
+    AddSubAgentEnabledToChatFlow1760200000000
 ]

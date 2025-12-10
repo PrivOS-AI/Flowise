@@ -75,4 +75,7 @@ export class ChatFlow implements IChatFlow {
 
     @Column({ nullable: true, default: false })
     botEnabled?: boolean
+
+    @Column({ nullable: true, default: false })
+    subAgentEnabled?: boolean
 }
