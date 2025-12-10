@@ -38,6 +38,11 @@ const updateBotEnabled = (id, enabled) => client.post(`/chatflows/bot/${id}`, { 
 
 const getAllBots = () => client.get(`/chatflows/bots/all`)
 
+// SubAgent Management
+const updateSubAgentEnabled = (id, enabled) => client.post(`/chatflows/subagent/${id}`, { enabled })
+
+const getAllSubAgents = () => client.get(`/chatflows/subagents/all`)
+
 export default {
     getAllChatflows,
     getAllAgentflows,
@@ -56,5 +61,7 @@ export default {
     disableSchedule,
     getAllScheduledChatflows,
     updateBotEnabled,
-    getAllBots
+    getAllBots,
+    updateSubAgentEnabled,
+    getAllSubAgents
 }

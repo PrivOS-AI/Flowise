@@ -40,6 +40,7 @@ import { AddTextToSpeechToChatFlow1759419136055 } from './1759419136055-AddTextT
 import { AddChatFlowNameIndex1759424923093 } from './1759424923093-AddChatFlowNameIndex'
 import { AddScheduleConfigToChatFlow1760000000000 } from './1760000000000-AddScheduleConfigToChatFlow'
 import { AddBotEnabledToChatFlow1760100000000 } from './1760100000000-AddBotEnabledToChatFlow'
+import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSubAgentEnabledToChatFlow'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 import { FinalSafetyMigration9999999999999 } from './9999999999999-FinalSafetyMigration'
 
@@ -110,5 +111,6 @@ export const sqliteMigrations = [
     AddChatFlowNameIndex1759424923093,
     AddScheduleConfigToChatFlow1760000000000,
     AddBotEnabledToChatFlow1760100000000,
+    AddSubAgentEnabledToChatFlow1760200000000,
     FinalSafetyMigration9999999999999
 ]

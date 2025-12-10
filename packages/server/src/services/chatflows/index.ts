@@ -430,6 +430,7 @@ const getAllBotEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
                 'name',
                 'type',
                 'botEnabled',
+                'subAgentEnabled',
                 'scheduleEnabled',
                 'scheduleConfig',
                 'createdDate',
@@ -445,6 +446,36 @@ const getAllBotEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
             `Error: chatflowsService.getAllBotEnabledChatflows - ${getErrorMessage(error)}`
+        )
+    }
+}
+
+const getAllSubAgentEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
+    try {
+        const appServer = getRunningExpressApp()
+        return await appServer.AppDataSource.getRepository(ChatFlow).find({
+            where: { subAgentEnabled: true },
+            select: [
+                'id',
+                'name',
+                'type',
+                'botEnabled',
+                'subAgentEnabled',
+                'scheduleEnabled',
+                'scheduleConfig',
+                'createdDate',
+                'updatedDate',
+                'workspaceId',
+                'roomId',
+                'deployed',
+                'isPublic',
+                'category'
+            ]
+        })
+    } catch (error) {
+        throw new InternalFlowiseError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            `Error: chatflowsService.getAllSubAgentEnabledChatflows - ${getErrorMessage(error)}`
         )
     }
 }
@@ -483,5 +514,6 @@ export default {
     getSinglePublicChatbotConfig,
     checkIfChatflowHasChanged,
     getAllChatflowsCountByOrganization,
-    getAllBotEnabledChatflows
+    getAllBotEnabledChatflows,
+    getAllSubAgentEnabledChatflows
 }

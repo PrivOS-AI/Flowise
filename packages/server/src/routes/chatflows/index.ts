@@ -37,4 +37,8 @@ router.get('/schedules/queue-stats', checkAnyPermission('chatflows:view,chatflow
 router.get('/bots/all', chatflowsController.getAllBots)
 router.post('/bot/:id', chatflowsController.updateBotEnabled)
 
+// SUBAGENT MANAGEMENT
+router.get('/subagents/all', chatflowsController.getAllSubAgents)
+router.post('/subagent/:id', chatflowsController.updateSubAgentEnabled)
+
 export default router
