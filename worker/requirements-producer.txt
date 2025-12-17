@@ -1,0 +1,21 @@
+# FastAPI and ASGI server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# HTTP client
+httpx==0.25.2
+
+# BullMQ and Redis
+bullmq==2.6.3
+redis==5.0.1
+
+# Validation and serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Logging and utilities
+colorama==0.4.6
+loguru==0.7.2
+
+# Environment
+python-dotenv==1.0.0

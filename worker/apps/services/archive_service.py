@@ -1,0 +1,612 @@
+import asyncio
+import mimetypes
+import os
+import shutil
+import tarfile
+import tempfile
+import zipfile
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+from bson import ObjectId
+
+try:
+    import py7zr
+    PY7ZR_AVAILABLE = True
+except ImportError:
+    PY7ZR_AVAILABLE = False
+
+try:
+    import rarfile
+    RARFILE_AVAILABLE = True
+except ImportError:
+    RARFILE_AVAILABLE = False
+
+try:
+    import patoolib
+    PATOOL_AVAILABLE = True
+except ImportError:
+    PATOOL_AVAILABLE = False
+
+
+from core.config import settings
+from models.file import File, Folder, ArchiveFile
+from services.minio_service import minio_service
+
+
+
+class ArchiveService:
+    """Service for processing various archive file formats"""
+
+    # Supported file extensions for docling processing
+    DOCLING_SUPPORTED_EXTENSIONS = {
+        ".pdf", ".docx", ".doc", ".txt", ".rtf", ".odt",
+        ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp",
+        ".html", ".htm", ".xml", ".csv", ".json", ".yaml", ".yml"
+    }
+
+    # Archive format mapping
+    ARCHIVE_FORMATS = {
+        ".zip": {"type": "zip", "module": "zipfile"},
+        ".tar": {"type": "tar", "module": "tarfile"},
+        ".gz": {"type": "gzip", "module": "tarfile"},
+        ".tgz": {"type": "gzip", "module": "tarfile"},
+        ".bz2": {"type": "bzip2", "module": "tarfile"},
+        ".xz": {"type": "xz", "module": "tarfile"},
+        ".7z": {"type": "7z", "module": "py7zr"},
+        ".rar": {"type": "rar", "module": "rarfile"},
+    }
+
+    def __init__(self):
+        self.redis_config = {
+            "host": settings.redis_host,
+            "port": settings.redis_port,
+            "password": settings.redis_password,
+        }
+
+
+    def is_archive_file(self, filename: str) -> bool:
+        """Check if file is an archive based on extension"""
+        extension = Path(filename).suffix.lower()
+        return extension in self.ARCHIVE_FORMATS
+
+    def get_archive_type(self, filename: str) -> Optional[Dict]:
+        """Get archive type info for a file"""
+        extension = Path(filename).suffix.lower()
+        return self.ARCHIVE_FORMATS.get(extension)
+
+    async def extract_archive(self, file_data: bytes, filename: str, extract_to: str) -> List[str]:
+        """
+        Extract archive file to specified directory
+
+        Args:
+            file_data: Raw bytes of the archive file
+            filename: Name of the archive file
+            extract_to: Directory to extract files to
+
+        Returns:
+            List of extracted file paths
+        """
+        archive_info = self.get_archive_type(filename)
+        if not archive_info:
+            raise ValueError(f"Unsupported archive format: {filename}")
+
+        # Ensure extraction directory exists
+        os.makedirs(extract_to, exist_ok=True)
+
+        # Create a temporary file for the archive
+        with tempfile.NamedTemporaryFile(delete=False, suffix=filename) as temp_file:
+            temp_file.write(file_data)
+            temp_file_path = temp_file.name
+
+        try:
+            if archive_info["type"] == "zip":
+                return await self._extract_zip(temp_file_path, extract_to)
+            elif archive_info["type"] == "tar":
+                return await self._extract_tar(temp_file_path, extract_to)
+            elif archive_info["type"] == "gzip":
+                return await self._extract_gzip(temp_file_path, extract_to)
+            elif archive_info["type"] == "7z":
+                return await self._extract_7z(temp_file_path, extract_to)
+            elif archive_info["type"] == "rar":
+                return await self._extract_rar(temp_file_path, extract_to)
+            else:
+                # Try using patool for unknown formats
+                return await self._extract_with_patool(temp_file_path, extract_to)
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+
+    async def _extract_zip(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract ZIP file"""
+        extracted_files = []
+
+        def _extract():
+            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_to)
+                return zip_ref.namelist()
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def _extract_tar(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract TAR file"""
+        extracted_files = []
+
+        def _extract():
+            with tarfile.open(archive_path, 'r:*') as tar_ref:
+                tar_ref.extractall(extract_to)
+                return tar_ref.getnames()
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def _extract_gzip(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract GZIP/TAR.GZ file"""
+        extracted_files = []
+
+        def _extract():
+            # Handle .tar.gz, .tgz files
+            if archive_path.endswith(('.tar.gz', '.tgz')):
+                with tarfile.open(archive_path, 'r:gz') as tar_ref:
+                    tar_ref.extractall(extract_to)
+                    return tar_ref.getnames()
+            else:
+                # Handle plain .gz files (decompress to file)
+                import gzip
+                output_path = os.path.join(extract_to, os.path.basename(archive_path[:-3]))
+                with gzip.open(archive_path, 'rb') as gz_file:
+                    with open(output_path, 'wb') as out_file:
+                        shutil.copyfileobj(gz_file, out_file)
+                return [os.path.basename(output_path)]
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def _extract_7z(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract 7Z file"""
+        if not PY7ZR_AVAILABLE:
+            raise ImportError("py7zr is not installed. Install it with: pip install py7zr")
+
+        extracted_files = []
+
+        def _extract():
+            with py7zr.SevenZipFile(archive_path, mode='r') as archive:
+                archive.extractall(extract_to)
+                return archive.getnames()
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def _extract_rar(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract RAR file"""
+        if not RARFILE_AVAILABLE:
+            raise ImportError("rarfile is not installed. Install it with: pip install rarfile")
+
+        # Note: rarfile also requires unrar command to be installed on the system
+        extracted_files = []
+
+        def _extract():
+            with rarfile.RarFile(archive_path, 'r') as rar_ref:
+                rar_ref.extractall(extract_to)
+                return rar_ref.namelist()
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def _extract_with_patool(self, archive_path: str, extract_to: str) -> List[str]:
+        """Extract archive using patool (fallback for other formats)"""
+        if not PATOOL_AVAILABLE:
+            raise ImportError("patool is not installed. Install it with: pip install patool")
+
+        def _extract():
+            # Ensure extract directory exists
+            os.makedirs(extract_to, exist_ok=True)
+
+            # Extract using patool command directly
+            import subprocess
+            result = subprocess.run(['patool', 'extract', '--outdir', extract_to, archive_path],
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                # Check if extraction actually succeeded despite the error
+                # patool sometimes reports error but extraction works
+                if os.listdir(extract_to):
+                    print(f"patool reported error but files were extracted: {result.stderr}")
+                else:
+                    raise Exception(f"patool extraction failed: {result.stderr}")
+
+            # Get list of extracted files
+            extracted = []
+            for root, dirs, files in os.walk(extract_to):
+                for file in files:
+                    rel_path = os.path.relpath(os.path.join(root, file), extract_to)
+                    extracted.append(rel_path)
+            return extracted
+
+        # Run in thread pool to avoid blocking
+        extracted_files = await asyncio.to_thread(_extract)
+        return extracted_files
+
+    async def process_archive_file(self, archive_id: str, archive_file, channel_id: str, user_id: str = None) -> Dict:
+        """
+        Process an archive file - extract contents and create jobs
+
+        Args:
+            archive_id: MongoDB ID of the archive file
+            archive_file: ArchiveFile object from MongoDB
+            channel_id: Channel ID
+            user_id: User ID
+
+        Returns:
+            Dict with processing results
+        """
+        try:
+            print(f"Processing archive file: {archive_file.filename}")
+
+            # Update status to PROCESSING
+            archive_file.status = "PROCESSING"
+            await archive_file.save()
+
+            # Download archive file from MinIO
+            print(f"Attempting to download archive file from MinIO: {archive_file.file_path}")
+            archive_data = await minio_service.download_file(archive_file.file_path)
+            if not archive_data:
+                # Check if MinIO service is initialized
+                if not minio_service.client:
+                    print("❌ MinIO client not initialized")
+                else:
+                    print(f"✅ MinIO client initialized, bucket: {minio_service.bucket}")
+                    # Try to check if file exists
+                    try:
+                        import asyncio
+                        exists = await asyncio.to_thread(
+                            minio_service.client.stat_object,
+                            minio_service.bucket,
+                            archive_file.file_path
+                        )
+                        print(f"✅ File exists in MinIO: {archive_file.file_path}")
+                    except Exception as e:
+                        print(f"❌ File does not exist in MinIO: {archive_file.file_path}")
+                        print(f"MinIO error: {e}")
+                raise ValueError(f"Failed to download archive file: {archive_file.file_path}")
+
+            # Create temporary directory for extraction
+            temp_dir = f"temp/archive_extraction/{archive_id}"
+            os.makedirs(temp_dir, exist_ok=True)
+
+            # Extract archive
+            extracted_files = await self.extract_archive(
+                archive_data,
+                archive_file.filename,
+                temp_dir
+            )
+            print(f"Extracted {len(extracted_files)} files from {archive_file.filename}")
+
+            # Create folder structure
+            folder_map = await self._create_folder_structure(
+                archive_id, temp_dir, channel_id
+            )
+
+            # Process and upload files
+            processed_files = await self._process_extracted_files(
+                archive_id, temp_dir, folder_map, channel_id, user_id
+            )
+
+            # Update archive file record with results
+            archive_file.status = "COMPLETED"
+            archive_file.total_files = len(processed_files)
+            archive_file.total_folders = len(folder_map)
+            await archive_file.save()
+
+            # Clean up temporary directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"Cleaned up temporary directory: {temp_dir}")
+
+            return {
+                "status": "success",
+                "total_files": len(processed_files),
+                "total_folders": len(folder_map),
+                "files": processed_files,
+            }
+
+        except Exception as e:
+            print(f"Error processing archive file {archive_id}: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Update archive file status to FAILED
+            try:
+                archive_file = await archive_file.get(archive_id)
+                if archive_file:
+                    archive_file.status = "FAILED"
+                    archive_file.error_message = str(e)
+                    await archive_file.save()
+            except:
+                pass
+
+            # Clean up on error
+            try:
+                shutil.rmtree(f"temp/archive_extraction/{archive_id}", ignore_errors=True)
+            except:
+                pass
+
+            raise
+
+    async def _create_folder_structure(self, archive_id: str, extract_dir: str, channel_id: str) -> Dict[str, str]:
+        """
+        Create folder structure from extracted archive contents
+
+        Args:
+            archive_id: ID of the archive file
+            extract_dir: Directory where files were extracted
+            channel_id: Channel ID
+
+        Returns:
+            Dict mapping folder paths to folder IDs
+        """
+        folder_map = {}
+
+        # Find all directories
+        all_dirs = []
+        for root, dirs, _ in os.walk(extract_dir):
+            for dir_name in dirs:
+                full_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(full_path, extract_dir)
+                all_dirs.append(rel_path)
+
+        # Sort to ensure parents are created before children
+        all_dirs.sort()
+
+        for rel_path in all_dirs:
+            # Convert Windows path to forward slashes
+            rel_path = rel_path.replace("\\", "/")
+            path_obj = Path(rel_path)
+            folder_name = path_obj.name
+            folder_path = f"/{rel_path}"
+
+            # Get parent folder path
+            parent_path = str(path_obj.parent)
+            if parent_path == ".":
+                # Top-level folder: no parent
+                parent_id = None
+            else:
+                # Child folder: find parent in folder_map
+                parent_path = f"/{parent_path}".replace("\\", "/")
+                parent_id = folder_map.get(parent_path)
+
+            # Create folder record
+            from models.file import Folder
+            folder = Folder(
+                name=folder_name,
+                folder_path=folder_path,
+                father=parent_id,  # Using 'father' to match Meteor model
+                channel_id=channel_id,
+                zip_id=archive_id  # Reuse zip_id field for archives
+            )
+            await folder.insert()
+            folder_id = str(folder.id)
+            folder_map[folder_path] = folder_id
+
+            print(f"Created folder: {folder_path} -> ID: {folder_id} (parent: {parent_id or 'None'})")
+            print(f"Updated folder_map: {folder_map}")
+
+        return folder_map
+
+    async def _process_extracted_files(
+        self, archive_id: str, extract_dir: str, folder_map: Dict[str, str],
+        channel_id: str, user_id: Optional[str]
+    ) -> List[Dict]:
+        """
+        Process all extracted files and upload to MinIO
+
+        Args:
+            archive_id: ID of the archive file
+            extract_dir: Directory where files were extracted
+            folder_map: Mapping of folder paths to folder IDs
+            channel_id: Channel ID
+            user_id: User ID
+
+        Returns:
+            List of processed file information
+        """
+        processed_files = []
+        docling_files = []  # Files to be processed with docling
+
+        # First pass: identify files and upload non-docling files to MinIO
+        for root, _, files in os.walk(extract_dir):
+            for file_name in files:
+                full_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(full_path, extract_dir)
+                rel_path = rel_path.replace("\\", "/")
+
+                # Skip empty files
+                if os.path.getsize(full_path) == 0:
+                    print(f"Skipping empty file: {rel_path}")
+                    continue
+
+                # Get file info
+                import mimetypes
+                file_size = os.path.getsize(full_path)
+                path_obj = Path(rel_path)
+                extension = path_obj.suffix.lower()
+                mime_type, _ = mimetypes.guess_type(file_name)
+
+                # Determine folder ID
+                folder_id = None
+                parent_path = str(path_obj.parent)
+                if parent_path != ".":
+                    parent_path = f"/{parent_path}".replace("\\", "/")
+                    folder_id = folder_map.get(parent_path)
+                    print(f"File {file_name}: parent_path={parent_path}, folder_id={folder_id}")
+                    if folder_id:
+                        print(f"Found folder in map: {folder_map}")
+                    else:
+                        print(f"Folder NOT found in map for path: {parent_path}")
+                        print(f"Available paths in folder_map: {list(folder_map.keys())}")
+
+                # Check if file should be processed with docling
+                if extension in self.DOCLING_SUPPORTED_EXTENSIONS:
+                    docling_files.append({
+                        "full_path": full_path,
+                        "rel_path": rel_path,
+                        "file_name": file_name,
+                        "file_size": file_size,
+                        "extension": extension,
+                        "mime_type": mime_type,
+                        "folder_id": folder_id
+                    })
+                    continue
+
+                # Create file record first to get ID
+                file_record = File(
+                    name=file_name,
+                    file_path='',  # Will be updated after MinIO upload
+                    folder_id=folder_id,
+                    channel_id=channel_id,
+                    user_id=user_id,
+                    file_size=file_size,
+                    file_type=extension,  # Use file_type to match Meteor model
+                    mime_type=mime_type
+                )
+                await file_record.insert()
+
+                # Generate MinIO path using the same pattern as regular files
+                # extension already includes the dot (e.g., ".pdf"), so no need to add another dot
+                minio_path = f"{channel_id}/{file_record.id}{extension}" if extension else f"{channel_id}/{file_record.id}"
+
+                # Upload to MinIO
+                success = await self._upload_file_to_minio(
+                    full_path, minio_path, mime_type
+                )
+
+                if success:
+                    # Update file record with MinIO path
+                    file_record.file_path = minio_path
+                    await file_record.save()
+
+                    processed_files.append({
+                        "file_name": file_name,
+                        "file_path": minio_path,
+                        "size": file_size,
+                        "type": "uploaded",
+                        "mime_type": mime_type
+                    })
+
+                    print(f"Uploaded file: {rel_path}")
+
+        # Second pass: process docling-supported files
+        if docling_files:
+            print(f"Processing {len(docling_files)} files with docling...")
+            await self._process_docling_files(docling_files, archive_id, channel_id, user_id, processed_files)
+
+        return processed_files
+
+    async def _upload_file_to_minio(self, file_path: str, minio_path: str, mime_type: Optional[str]) -> bool:
+        """Upload a file to MinIO"""
+        try:
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            return await minio_service.upload_file(minio_path, file_data, mime_type or "application/octet-stream")
+        except Exception as e:
+            print(f"Failed to upload {file_path}: {e}")
+            return False
+
+    async def _process_docling_files(
+        self, docling_files: List[Dict], archive_id: str, channel_id: str,
+        user_id: Optional[str], processed_files: List[Dict]
+    ):
+        """Process files using docling - upload to MinIO first, then process from temp file"""
+        # Import docling service for local processing
+        from services.docling_service import docling_service
+
+        for file_info in docling_files:
+            try:
+                print(f"Processing docling file: {file_info['file_name']}")
+
+                # Process file directly from temp path (no download needed)
+                result = await docling_service.extract_and_chunk(file_info['full_path'])
+
+                # Create file record first to get ID
+                file_record = File(
+                    name=file_info['file_name'],
+                    file_path='',  # Will be updated after MinIO upload
+                    folder_id=file_info['folder_id'],
+                    channel_id=channel_id,
+                    user_id=user_id,
+                    file_size=file_info['file_size'],
+                    file_type=file_info['extension'],  # Use file_type to match Meteor model
+                    mime_type=file_info['mime_type']
+                )
+                await file_record.insert()
+
+                # Generate MinIO path using the same pattern as regular files
+                extension = file_info['extension']
+                # extension already includes the dot (e.g., ".pdf"), so no need to add another dot
+                minio_path = f"{channel_id}/{file_record.id}{extension}" if extension else f"{channel_id}/{file_record.id}"
+
+                # Re-upload with correct path
+                success = await self._upload_file_to_minio(
+                    file_info['full_path'], minio_path, file_info['mime_type']
+                )
+
+                if not success:
+                    print(f"Failed to upload {file_info['file_name']} to MinIO")
+                    continue
+
+                # Update file record with MinIO path
+                file_record.file_path = minio_path
+                await file_record.save()
+
+                # Upload chunks to Weaviate if available
+                chunks = result.get("chunks", [])
+                if chunks:
+                    print(f"Uploading {len(chunks)} chunks to Weaviate...")
+                    from services.weaviate_service import weaviate_service
+
+                    # Create collection name based on channel_id (sanitize for Weaviate)
+                    collection_name = channel_id.replace('-', '_')
+
+                    # Try to upload chunks to Weaviate
+                    try:
+                        success = await weaviate_service.upload_chunks(
+                            file_path=minio_path,  # This is the correct path for deletion
+                            file_name=file_info['file_name'],
+                            chunks=chunks,
+                            collection_name=collection_name
+                        )
+                        if success:
+                            print(f"✓ Successfully uploaded chunks to Weaviate collection: {collection_name}")
+                            result["weaviate_uploaded"] = True
+                            result["weaviate_collection"] = collection_name
+                        else:
+                            print(f"✗ Failed to upload chunks to Weaviate")
+                            result["weaviate_uploaded"] = False
+                    except Exception as e:
+                        print(f"✗ Error uploading chunks to Weaviate: {e}")
+                        result["weaviate_uploaded"] = False
+                        result["weaviate_error"] = str(e)
+
+                processed_files.append({
+                    "file_name": file_info['file_name'],
+                    "file_path": minio_path,  # MinIO path for download
+                    "size": file_info['file_size'],
+                    "type": "docling",
+                    "mime_type": file_info['mime_type'],
+                    "processed": True,
+                    "result": result  # Include docling processing result with Weaviate info
+                })
+
+                print(f"Successfully processed docling file: {file_info['file_name']}")
+
+            except Exception as e:
+                print(f"Error processing docling file {file_info['file_name']}: {e}")
+                import traceback
+                traceback.print_exc()
+
+
+# Singleton instance
+archive_service = ArchiveService()
