@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     redis_password: Optional[str] = None
 
     # Queue settings
-    queue_name: str = "file-processing-queue"
+    queue_name: str = "file-processing"
 
     class Config:
-        env_file = ".env"
+        env_file = "fastapi.env"
         extra = "ignore"
 
 

@@ -35,10 +35,10 @@ from services.mongodb import mongodb_service
 def print_banner():
     """Print startup banner"""
     print(f"""
-{Fore.CYAN}TPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPW
-Q                    FILE PROCESSING WORKER                     Q
-Q                   (BullMQ Compatible)                        Q
-ZPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP]{Style.RESET_ALL}
+{Fore.CYAN}╔══════════════════════════════════════════════════════════╗
+║                     FILE PROCESSING QUEUE API            ║
+║                      (BullMQ Producer worker)            ║
+╚══════════════════════════════════════════════════════════╝
 
 {Fore.YELLOW}=� Configuration:{Style.RESET_ALL}
   " Redis: {settings.redis_host}:{settings.redis_port}

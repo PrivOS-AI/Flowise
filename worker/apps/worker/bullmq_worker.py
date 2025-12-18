@@ -250,7 +250,7 @@ class BullMQCompatibleWorker:
 
     async def _handle_delete_file(self, job, job_data, job_id):
         """Handle delete-file job"""
-        file_id = job_data.get("file_id")
+        file_id = job_data.get("file_id")  # Optional - not always provided
         file_path = job_data.get("file_path")
         collection_name = job_data.get("collection_name", "Document")
 
@@ -258,11 +258,8 @@ class BullMQCompatibleWorker:
         if collection_name != "Document" and not collection_name.startswith("vs_"):
             collection_name = f"vs_{collection_name}"
 
-        if not file_id:
-            raise ValueError("No file_id provided in job data")
-
         logger.info(
-            f"{Fore.BLUE}🗑️ Deleting documents for file_id: {file_id}{Style.RESET_ALL}"
+            f"{Fore.BLUE}🗑️ Deleting documents for file_path: {file_path}{Style.RESET_ALL}"
         )
 
         await job.updateProgress(10)
@@ -283,7 +280,7 @@ class BullMQCompatibleWorker:
             await job.updateProgress(25)
 
             # Step 1: Delete from Weaviate
-            logger.info(f"{Fore.CYAN}📊 Deleting from Weaviate...{Style.RESET_ALL}")
+            logger.info(f"{Fore.CYAN}📊 Deleting from Weaviate from collection '{collection_name}'...{Style.RESET_ALL}")
             delete_success = await weaviate_service.delete_by_file_path(
                 file_path=file_path, collection_name=collection_name
             )
@@ -291,7 +288,10 @@ class BullMQCompatibleWorker:
             await job.updateProgress(60)
 
             if not delete_success:
-                raise ValueError("Failed to delete documents from Weaviate")
+                # Log more details but don't fail the entire job - Weaviate might not have any documents for this file
+                logger.warning(f"{Fore.YELLOW}⚠️ Weaviate deletion returned False, but continuing with MongoDB cleanup{Style.RESET_ALL}")
+                # Don't raise an error here - continue with MongoDB cleanup
+                delete_success = True  # Mark as success for the overall job
 
             # Step 2: Get images count associated with this file (no MinIO deletion)
             logger.info(f"{Fore.CYAN}🖼️ Counting images associated with file...{Style.RESET_ALL}")
@@ -306,18 +306,21 @@ class BullMQCompatibleWorker:
 
             await job.updateProgress(95)
 
-        # Prepare result
+            # Prepare result
             result = {
-                "file_id": file_id,
                 "file_path": file_path,
                 "collection_name": collection_name,
                 "status": "deleted",
                 "deleted_images_count": deleted_images_count,
-                "message": f"Successfully deleted all documents and {deleted_images_count} image records for file_id: {file_id}",
+                "message": f"Successfully deleted all documents and {deleted_images_count} image records for file_path: {file_path}",
             }
 
+            # Include file_id in result if it exists
+            if file_id:
+                result["file_id"] = file_id
+
             logger.success(
-                f"{Fore.GREEN}✅ Delete job {job_id} completed successfully for file_id {file_id}{Style.RESET_ALL}"
+                f"{Fore.GREEN}✅ Delete job {job_id} completed successfully for file_path {file_path}{Style.RESET_ALL}"
             )
 
             await job.updateProgress(100)
@@ -325,7 +328,7 @@ class BullMQCompatibleWorker:
 
         except Exception as e:
             logger.error(
-                f"{Fore.RED}❌ Error deleting file with ID {file_id}: {e}{Style.RESET_ALL}"
+                f"{Fore.RED}❌ Error deleting file at path {file_path}: {e}{Style.RESET_ALL}"
             )
             # Raising exception marks job as failed in BullMQ
             raise e

@@ -41,7 +41,8 @@ async def add_file_process_job(request: FileProcessJobRequest):
             download_link=request.download_link,
             filename=request.filename,
             file_path=request.file_path,
-            channel_id=request.channel_id
+            channel_id=request.channel_id,
+            ttl=request.ttl
         )
 
         logger.success(
@@ -81,7 +82,8 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
             filename=request.filename,
             file_path=request.file_path,
             channel_id=request.channel_id,
-            user_id=request.user_id
+            user_id=request.user_id,
+            ttl=request.ttl
         )
 
         logger.success(
@@ -112,13 +114,13 @@ async def add_delete_file_job(request: DeleteFileJobRequest):
     The job will be processed by the BullMQ worker.
     """
     try:
-        logger.info(f"{Fore.BLUE}📋 Received file deletion job request: {request.file_id}{Style.RESET_ALL}")
+        logger.info(f"{Fore.BLUE}📋 Received file deletion job request: {request.file_path}{Style.RESET_ALL}")
 
         # Add job to queue
         result = await bullmq_producer.add_delete_file_job(
-            file_id=request.file_id,
             file_path=request.file_path,
-            collection_name=request.collection_name
+            collection_name=request.collection_name,
+            ttl=request.ttl
         )
 
         logger.success(

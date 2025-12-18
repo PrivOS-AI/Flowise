@@ -8,6 +8,7 @@ class FileProcessJobRequest(BaseModel):
     filename: str = Field(..., description="Name of the file")
     file_path: str = Field(..., description="Path where the file will be stored")
     channel_id: Optional[str] = Field(default="Document", description="Channel ID for Weaviate collection")
+    ttl: Optional[int] = Field(default=86400000, description="Time to live in milliseconds (default: 24 hours)")
 
 
 class ArchiveProcessJobRequest(BaseModel):
@@ -17,13 +18,14 @@ class ArchiveProcessJobRequest(BaseModel):
     file_path: str = Field(..., description="Path of the archive file")
     channel_id: Optional[str] = Field(default=None, description="Channel ID for Weaviate collection")
     user_id: Optional[str] = Field(default=None, description="User ID")
+    ttl: Optional[int] = Field(default=86400000, description="Time to live in milliseconds (default: 24 hours)")
 
 
 class DeleteFileJobRequest(BaseModel):
     """Request model for adding a file deletion job"""
-    file_id: str = Field(..., description="ID of the file to delete")
     file_path: str = Field(..., description="Path of the file to delete")
     collection_name: Optional[str] = Field(default="Document", description="Weaviate collection name")
+    ttl: Optional[int] = Field(default=86400000, description="Time to live in milliseconds (default: 24 hours)")
 
 
 class JobResponse(BaseModel):

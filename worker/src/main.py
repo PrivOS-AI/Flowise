@@ -26,8 +26,6 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     # Startup
     print(f"{Fore.CYAN}🚀 Starting {settings.app_name} v{settings.app_version}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}✓ Connected to Redis: {settings.redis_host}:{settings.redis_port}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}✓ Queue: {settings.queue_name}{Style.RESET_ALL}")
 
     yield
 

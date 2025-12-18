@@ -31,8 +31,6 @@ class BullMQProducer:
                 "connection": redis_config
             })
 
-            logger.info(f"{Fore.GREEN}✓ Connected to Redis and initialized queue: {settings.queue_name}{Style.RESET_ALL}")
-
         except Exception as e:
             logger.error(f"{Fore.RED}❌ Failed to initialize BullMQ producer: {e}{Style.RESET_ALL}")
             raise
@@ -42,7 +40,8 @@ class BullMQProducer:
         download_link: str,
         filename: str,
         file_path: str,
-        channel_id: Optional[str] = "Document"
+        channel_id: Optional[str] = "Document",
+        ttl: Optional[int] = 86400000
     ) -> Dict[str, Any]:
         """
         Add a file processing job to the queue
@@ -52,6 +51,7 @@ class BullMQProducer:
             filename: Name of the file
             file_path: Path where the file will be stored
             channel_id: Channel ID for Weaviate collection
+            ttl: Time to live in milliseconds (job will be removed from Redis after this time)
 
         Returns:
             Job information including job ID
@@ -64,8 +64,15 @@ class BullMQProducer:
                 "channelId": channel_id
             }
 
-            # Add job to queue
-            job = await self.queue.add("process-file", job_data)
+            # Add job to queue with TTL
+            job_opts = {}
+            if ttl:
+                job_opts = {
+                    "removeOnComplete": ttl,
+                    "removeOnFail": ttl
+                }
+
+            job = await self.queue.add("process-file", job_data, job_opts)
 
             logger.info(
                 f"{Fore.GREEN}✅ Added file processing job: {job.id} - {filename}{Style.RESET_ALL}"
@@ -89,7 +96,8 @@ class BullMQProducer:
         filename: str,
         file_path: str,
         channel_id: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        ttl: Optional[int] = 86400000
     ) -> Dict[str, Any]:
         """
         Add an archive processing job to the queue
@@ -100,6 +108,7 @@ class BullMQProducer:
             file_path: Path of the archive file
             channel_id: Channel ID for Weaviate collection
             user_id: User ID
+            ttl: Time to live in milliseconds (job will be removed from Redis after this time)
 
         Returns:
             Job information including job ID
@@ -113,8 +122,15 @@ class BullMQProducer:
                 "user_id": user_id
             }
 
-            # Add job to queue
-            job = await self.queue.add("process-archive", job_data)
+            # Add job to queue with TTL
+            job_opts = {}
+            if ttl:
+                job_opts = {
+                    "removeOnComplete": ttl,
+                    "removeOnFail": ttl
+                }
+
+            job = await self.queue.add("process-archive", job_data, job_opts)
 
             logger.info(
                 f"{Fore.GREEN}✅ Added archive processing job: {job.id} - {filename}{Style.RESET_ALL}"
@@ -134,33 +150,39 @@ class BullMQProducer:
 
     async def add_delete_file_job(
         self,
-        file_id: str,
         file_path: str,
-        collection_name: Optional[str] = "Document"
+        collection_name: Optional[str] = "Document",
+        ttl: Optional[int] = 86400000
     ) -> Dict[str, Any]:
         """
         Add a file deletion job to the queue
 
         Args:
-            file_id: ID of the file to delete
             file_path: Path of the file to delete
             collection_name: Weaviate collection name
+            ttl: Time to live in milliseconds (job will be removed from Redis after this time)
 
         Returns:
             Job information including job ID
         """
         try:
             job_data = {
-                "file_id": file_id,
                 "file_path": file_path,
                 "collection_name": collection_name
             }
 
-            # Add job to queue
-            job = await self.queue.add("delete-file", job_data)
+            # Add job to queue with TTL
+            job_opts = {}
+            if ttl:
+                job_opts = {
+                    "removeOnComplete": ttl,
+                    "removeOnFail": ttl
+                }
+
+            job = await self.queue.add("delete-file", job_data, job_opts)
 
             logger.info(
-                f"{Fore.GREEN}✅ Added file deletion job: {job.id} - {file_id}{Style.RESET_ALL}"
+                f"{Fore.GREEN}✅ Added file deletion job: {job.id} - {file_path}{Style.RESET_ALL}"
             )
 
             return {

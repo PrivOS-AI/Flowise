@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     )
 
     class Config:
-        env_file = ".env"
+        env_file = "worker.env"
         extra = "ignore"
         # case_sensitive = False
 
