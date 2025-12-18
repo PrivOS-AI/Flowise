@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 import logging
 from colorama import Fore, Style, init
 
-from src.core.config import settings
-from src.api.v1.router import api_router
-from src.services.bullmq_producer import bullmq_producer
+from core.config import settings
+from api.v1.router import api_router
+from services.bullmq_producer import bullmq_producer
 
 # Initialize colorama
 init()
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 """)
 
     uvicorn.run(
-        "src.main:app",
+        "main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,

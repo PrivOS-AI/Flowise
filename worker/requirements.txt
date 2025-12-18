@@ -7,9 +7,8 @@ weaviate-client
 python-dotenv
 bullmq
 colorama
-motor
-protobuf<=5.28.3
-grpcio==1.67.1
+protobuf
+grpcio
 loguru
 beanie
 aiohttp

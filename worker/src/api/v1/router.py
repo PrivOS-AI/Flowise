@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from src.routers import jobs
+from routers import jobs
 
 api_router = APIRouter()
 

@@ -1,28 +1,23 @@
 # FastAPI and ASGI server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi
+uvicorn[standard]
 
 # HTTP client
-aiohttp==3.9.1
-httpx==0.25.2
+aiohttp
+httpx
 
 # Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
 
 # Validation and serialization
-pydantic==2.5.0
-pydantic-settings==2.1.0
+pydantic
+pydantic-settings
 
 # Dependencies from existing worker (keep these)
-beanie==1.23.5
-bullmq==2.6.3
-colorama==0.4.6
-loguru==0.7.2
-motor==3.3.2
-weaviate-client==3.25.3
-docling==2.1.0
-pydantic-settings==2.1.0
-aiofiles==23.2.1
-python-dotenv==1.0.0
+bullmq
+colorama
+loguru
+aiofiles
+python-dotenv

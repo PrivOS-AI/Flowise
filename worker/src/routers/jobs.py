@@ -3,7 +3,7 @@ from typing import Optional, List
 from colorama import Fore, Style
 from loguru import logger
 
-from src.schemas.jobs import (
+from schemas.jobs import (
     FileProcessJobRequest,
     ArchiveProcessJobRequest,
     DeleteFileJobRequest,
@@ -11,13 +11,15 @@ from src.schemas.jobs import (
     JobStatusResponse,
     QueueStatsResponse
 )
-from src.services.bullmq_producer import bullmq_producer
+from services.bullmq_producer import bullmq_producer
 
 router = APIRouter(
     prefix="/jobs",
     tags=["jobs"]
 )
 
+
+# region File Processing Jobs
 
 @router.post("/process-file", response_model=JobResponse)
 async def add_file_process_job(request: FileProcessJobRequest):
@@ -52,6 +54,11 @@ async def add_file_process_job(request: FileProcessJobRequest):
         logger.error(f"{Fore.RED}❌ Failed to add file processing job: {e}{Style.RESET_ALL}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# endregion
+
+
+# region Archive Processing Jobs
 
 @router.post("/process-archive", response_model=JobResponse)
 async def add_archive_process_job(request: ArchiveProcessJobRequest):
@@ -88,6 +95,11 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# endregion
+
+
+# region File Deletion Jobs
+
 @router.post("/delete-file", response_model=JobResponse)
 async def add_delete_file_job(request: DeleteFileJobRequest):
     """
@@ -120,6 +132,11 @@ async def add_delete_file_job(request: DeleteFileJobRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# endregion
+
+
+# region Job Status and Monitoring
+
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
     """
@@ -147,6 +164,8 @@ async def get_job_status(job_id: str):
         logger.error(f"{Fore.RED}❌ Failed to get job status: {e}{Style.RESET_ALL}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# region Queue Statistics
 
 @router.get("/queue/stats", response_model=QueueStatsResponse)
 async def get_queue_stats():
@@ -188,6 +207,11 @@ async def get_queue_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# endregion
+
+
+# region Queue Management
+
 @router.post("/queue/clean")
 async def clean_queue(
     completed: bool = Query(default=False, description="Clean completed jobs"),
@@ -227,3 +251,6 @@ async def clean_queue(
     except Exception as e:
         logger.error(f"{Fore.RED}❌ Failed to clean queue: {e}{Style.RESET_ALL}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# endregion

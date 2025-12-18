@@ -23,7 +23,7 @@ class File(Document):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
-        name = "files"
+        name = "privos_files"
         indexes = [
             "name",
             "channel_id",
@@ -55,7 +55,7 @@ class Folder(Document):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
-        name = "folders"
+        name = "privos_folders"
         indexes = [
             "name",
             "channel_id",
@@ -120,7 +120,7 @@ class ArchiveFile(Document):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
-        name = "archives"
+        name = "privos_archives"
         indexes = [
             "channel_id",
             "created_at",
@@ -134,47 +134,3 @@ class ArchiveFile(Document):
         self.updated_at = datetime.now(timezone.utc)
         return await super().save(*args, **kwargs)
 
-
-# Keep ZipFile for backward compatibility
-class ZipFile(Document):
-    """Zip file model for tracking zip file processing"""
-
-    filename: str
-    file_path: str  # Path in MinIO
-    channel_id: str
-    user_id: Optional[str] = None
-    file_size: Optional[int] = None
-
-    # Processing status
-    status: str = "PENDING"  # PENDING, PROCESSING, COMPLETED, FAILED
-    error_message: Optional[str] = None
-
-    # Processing results
-    total_files: int = 0
-    total_folders: int = 0
-
-    # Job tracking
-    job_id: Optional[str] = None
-
-    # MinIO upload tracking
-    minio_uploaded: bool = False
-
-    # Indexes will be defined in Settings class
-
-    # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    class Settings:
-        name = "zipfiles"
-        indexes = [
-            "channel_id",
-            "created_at",
-            "status",
-            "job_id",
-        ]
-
-    async def save(self, *args, **kwargs):
-        """Override save to update updated_at"""
-        self.updated_at = datetime.now(timezone.utc)
-        return await super().save(*args, **kwargs)

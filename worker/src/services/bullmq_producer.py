@@ -1,10 +1,9 @@
 from bullmq import Queue
-from redis import Redis
 from typing import Dict, Any, Optional
 from loguru import logger
 from colorama import Fore, Style
 
-from src.core.config import settings
+from core.config import settings
 
 
 class BullMQProducer:
@@ -12,24 +11,24 @@ class BullMQProducer:
 
     def __init__(self):
         """Initialize the BullMQ producer"""
-        self.redis_connection = None
         self.queue = None
         self._initialize_connection()
 
     def _initialize_connection(self):
         """Initialize Redis connection and queue"""
         try:
-            # Create Redis connection
-            self.redis_connection = Redis(
-                host=settings.redis_host,
-                port=settings.redis_port,
-                password=settings.redis_password,
-                decode_responses=True
-            )
+            # Create Redis connection configuration for BullMQ
+            redis_config = {
+                "host": settings.redis_host,
+                "port": settings.redis_port,
+            }
 
-            # Create BullMQ queue
+            if settings.redis_password:
+                redis_config["password"] = settings.redis_password
+
+            # Create BullMQ queue with Redis config
             self.queue = Queue(settings.queue_name, {
-                "connection": self.redis_connection
+                "connection": redis_config
             })
 
             logger.info(f"{Fore.GREEN}✓ Connected to Redis and initialized queue: {settings.queue_name}{Style.RESET_ALL}")
@@ -205,12 +204,10 @@ class BullMQProducer:
             return None
 
     async def close(self):
-        """Close the queue and Redis connections"""
+        """Close the queue connection"""
         try:
             if self.queue:
                 await self.queue.close()
-            if self.redis_connection:
-                await self.redis_connection.close()
             logger.info(f"{Fore.YELLOW}⚠️ BullMQ producer closed{Style.RESET_ALL}")
         except Exception as e:
             logger.error(f"{Fore.RED}❌ Error closing BullMQ producer: {e}{Style.RESET_ALL}")
