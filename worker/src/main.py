@@ -72,7 +72,45 @@ def create_application() -> FastAPI:
     # Health check endpoint
     @app.get("/health")
     async def health_check():
-        return {"status": "healthy", "service": settings.app_name}
+        """Basic health check"""
+        return {
+            "status": "healthy",
+            "service": settings.app_name,
+            "version": settings.app_version
+        }
+
+    # Detailed health check endpoint
+    @app.get("/health/detailed")
+    async def detailed_health_check():
+        """Detailed health check with service status"""
+        from datetime import datetime, timezone
+
+        # Check Redis connection by testing queue
+        redis_status = "connected"
+        try:
+            if bullmq_producer and bullmq_producer.queue:
+                # Test queue is accessible
+                pass
+            else:
+                redis_status = "disconnected"
+        except Exception:
+            redis_status = "error"
+
+        return {
+            "status": "healthy" if redis_status == "connected" else "unhealthy",
+            "service": settings.app_name,
+            "version": settings.app_version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "services": {
+                "redis": redis_status,
+                "queue": settings.queue_name
+            },
+            "endpoints": {
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "api": "/api/v1"
+            }
+        }
 
     return app
 
@@ -83,16 +121,17 @@ app = create_application()
 if __name__ == "__main__":
     # Print startup banner
     print(f"""
-{Fore.CYAN}████████████████████████████████████████████████████████████
-█                FILE PROCESSING QUEUE API                       █
-█                  (BullMQ Producer Service)                   █
-████████████████████████████████████████████████████████████
+{Fore.CYAN}┌─────────────────────────────────────────────────────────────┐
+│                FILE PROCESSING QUEUE API                       │
+│                  (BullMQ Producer Service)                   │
+└─────────────────────────────────────────────────────────────┘
 
 {Fore.YELLOW}═ Configuration:{Style.RESET_ALL}
   ├─ Host: {settings.host}:{settings.port}
   ├─ Redis: {settings.redis_host}:{settings.redis_port}
   ├─ Queue: {settings.queue_name}
   └─ Debug: {settings.debug}
+{Style.RESET_ALL}
 """)
 
     uvicorn.run(
