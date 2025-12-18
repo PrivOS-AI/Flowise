@@ -3,8 +3,6 @@ import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeParams } from 
 import { getCredentialData, getCredentialParam } from '../../../../src/utils'
 import { MCPToolkit } from '../core'
 import path from 'path'
-import { addSingleFileToStorage } from '../../../../src/storageUtils'
-import { randomBytes } from 'crypto'
 import {
     PROVIDERS,
     PROVIDER_LABELS,
@@ -16,91 +14,8 @@ import {
     ERROR_MESSAGES,
     SERVER_FILES,
     ENV_VARS,
-    TRANSPORT_TYPE,
-    BASE_CLASS
+    TRANSPORT_TYPE
 } from './constants'
-
-/**
- * Post-process tool response to extract base64 images, save to storage, and replace with public URLs
- */
-async function postProcessImageResponse(toolResponse: string, options: ICommonObject): Promise<string> {
-    const chatflowId = options.chatflowid
-    const chatId = options.chatId
-    const orgId = options.orgId || 'default'
-    const baseURL = options.baseURL || ''
-
-    if (!chatflowId || !chatId) {
-        console.warn('[ImageGenMCP] Missing chatflowId or chatId, returning base64 images as-is')
-        return toolResponse
-    }
-
-    // Regex to match markdown images with base64 data URLs
-    // Matches: ![alt text](data:image/jpeg;base64,...)
-    const base64ImageRegex = /!\[([^\]]*)\]\(data:image\/(png|jpeg|jpg|gif|webp);base64,([^)]+)\)/g
-
-    let processedResponse = toolResponse
-    const matches = Array.from(toolResponse.matchAll(base64ImageRegex))
-
-    for (const match of matches) {
-        const fullMatch = match[0] // Full markdown image string
-        const altText = match[1] || 'Generated image'
-        const imageType = match[2] // png, jpeg, etc.
-        const base64Data = match[3]
-
-        try {
-            // Convert base64 to buffer
-            const imageBuffer = Buffer.from(base64Data, 'base64')
-
-            // Generate unique filename
-            const timestamp = Date.now()
-            const randomSuffix = randomBytes(4).toString('hex')
-            const fileName = `image-gen-${timestamp}-${randomSuffix}.${imageType}`
-
-            // Save to storage using Flowise storage system
-            // Path: storage/{orgId}/{chatflowId}/{chatId}/{fileName}
-            const mimeType = `image/${imageType}`
-            await addSingleFileToStorage(mimeType, imageBuffer, fileName, orgId, chatflowId, chatId)
-
-            // Generate public URL for the image
-            const publicURL = `${baseURL}/api/v1/get-upload-file?chatflowId=${chatflowId}&chatId=${chatId}&fileName=${fileName}`
-
-            // Replace base64 data URL with public URL in markdown
-            const newMarkdown = `![${altText}](${publicURL})`
-            processedResponse = processedResponse.replace(fullMatch, newMarkdown)
-
-            console.log(`[ImageGenMCP] Saved image to storage: ${fileName}`)
-            console.log(`[ImageGenMCP] Generated public URL: ${publicURL}`)
-            console.log(`[ImageGenMCP] Context - chatflowId: ${chatflowId}, chatId: ${chatId}, orgId: ${orgId}, baseURL: ${baseURL}`)
-        } catch (error) {
-            console.error('[ImageGenMCP] Error saving image to storage:', error)
-            // Keep original base64 on error
-        }
-    }
-
-    return processedResponse
-}
-
-/**
- * Wrap a tool to post-process its response
- */
-function wrapToolWithStorageProcessing(tool: Tool, options: ICommonObject): Tool {
-    // Store the original invoke method
-    const originalInvoke = tool.invoke.bind(tool)
-
-    // Override invoke to post-process the response
-    tool.invoke = async function (input: any, config?: any): Promise<string> {
-        const result = await originalInvoke(input, config)
-
-        // Post-process if result contains base64 images
-        if (typeof result === 'string' && result.includes('data:image')) {
-            return await postProcessImageResponse(result, options)
-        }
-
-        return result
-    }
-
-    return tool
-}
 
 class ImageGen_MCP implements INode {
     label: string
@@ -126,7 +41,6 @@ class ImageGen_MCP implements INode {
         this.description =
             'Unified image generation: Choose Paid API (Google Gemini/Imagen) or Self-Hosted (FLUX, Stable Diffusion on ComfyUI). Returns images directly.'
         this.documentation = DOCUMENTATION_URL
-        this.returnDirect = true
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
@@ -207,9 +121,8 @@ class ImageGen_MCP implements INode {
                 name: 'comfyuiEndpoint',
                 type: 'string',
                 default: DEFAULTS.COMFYUI_ENDPOINT,
-                placeholder: 'https://your-app.ngrok-free.app',
-                description:
-                    'Your ComfyUI endpoint. Examples: http://localhost:8188 (local), http://192.168.1.100:8188 (LAN), https://abc123.ngrok-free.app (ngrok)',
+                placeholder: 'https://your-endpoint.app',
+                description: 'Your ComfyUI endpoint. Examples: http://localhost:8188 (local), https://abc123.com',
                 show: {
                     provider: [PROVIDERS.COMFYUI]
                 }
@@ -271,7 +184,7 @@ class ImageGen_MCP implements INode {
                 refresh: true
             }
         ]
-        this.baseClasses = [BASE_CLASS]
+        this.baseClasses = ['Tool']
     }
 
     //@ts-ignore
@@ -314,19 +227,17 @@ class ImageGen_MCP implements INode {
 
         const filteredTools = tools.filter((tool: any) => mcpActions.includes(tool.name))
 
-        // Wrap each tool to post-process responses and save images to storage
-        const wrappedTools = filteredTools.map((tool: Tool) => wrapToolWithStorageProcessing(tool, options))
-
-        return wrappedTools
+        // Return tools directly - ComfyUI server now handles storage upload and HTTPS URLs
+        return filteredTools
     }
 
-    async getTools(nodeData: INodeData, _options: ICommonObject): Promise<Tool[]> {
+    async getTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
         const provider = (nodeData.inputs?.provider as string) || DEFAULTS.PROVIDER
 
         if (provider === PROVIDERS.GOOGLE) {
-            return this.getGoogleTools(nodeData, _options)
+            return this.getGoogleTools(nodeData, options)
         } else if (provider === PROVIDERS.COMFYUI) {
-            return this.getComfyUITools(nodeData, _options)
+            return this.getComfyUITools(nodeData, options)
         } else {
             throw new Error(ERROR_MESSAGES.UNKNOWN_PROVIDER(provider))
         }
@@ -360,15 +271,11 @@ class ImageGen_MCP implements INode {
 
         const tools = toolkit.tools ?? []
 
-        // Set returnDirect = true for all tools to skip LLM processing
-        tools.forEach((tool: any) => {
-            tool.returnDirect = true
-        })
-
-        return tools as Tool[]
+        // Return tools directly - they will be processed in init()
+        return tools
     }
 
-    async getComfyUITools(nodeData: INodeData, _options: ICommonObject): Promise<Tool[]> {
+    async getComfyUITools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
         const comfyuiEndpoint =
             (nodeData.inputs?.comfyuiEndpoint as string) || process.env[ENV_VARS.COMFYUI_ENDPOINT] || DEFAULTS.COMFYUI_ENDPOINT
         let model = (nodeData.inputs?.selfHostedModel as string) || DEFAULTS.COMFYUI_MODEL
@@ -393,10 +300,14 @@ class ImageGen_MCP implements INode {
             env: {
                 [ENV_VARS.COMFYUI_ENDPOINT]: comfyuiEndpoint,
                 [ENV_VARS.MODEL]: model,
-                // Hardcoded optimal settings (user doesn't configure these)
-                [ENV_VARS.IMAGE_SIZE]: DEFAULTS.IMAGE_SIZE,
-                [ENV_VARS.STEPS]: DEFAULTS.STEPS,
-                [ENV_VARS.GUIDANCE]: DEFAULTS.GUIDANCE
+                // Pass storage configuration for direct S3/MinIO upload
+                STORAGE_TYPE: process.env.STORAGE_TYPE || 'local',
+                S3_STORAGE_ACCESS_KEY_ID: process.env.S3_STORAGE_ACCESS_KEY_ID,
+                S3_STORAGE_SECRET_ACCESS_KEY: process.env.S3_STORAGE_SECRET_ACCESS_KEY,
+                S3_STORAGE_REGION: process.env.S3_STORAGE_REGION,
+                S3_STORAGE_BUCKET_NAME: process.env.S3_STORAGE_BUCKET_NAME,
+                S3_ENDPOINT_URL: process.env.S3_ENDPOINT_URL,
+                S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE
             }
         }
 
@@ -406,12 +317,8 @@ class ImageGen_MCP implements INode {
 
         const tools = toolkit.tools ?? []
 
-        // Set returnDirect = true for all tools to skip LLM processing
-        tools.forEach((tool: any) => {
-            tool.returnDirect = true
-        })
-
-        return tools as Tool[]
+        // Return tools directly - they will be processed in init()
+        return tools
     }
 }
 
