@@ -6,7 +6,6 @@ from core.config import settings
 from weaviate.classes.config import Configure, DataType, Property
 from weaviate.classes.query import Filter
 from weaviate.classes.init import Auth
-from weaviate.config import AdditionalConfig, Timeout
 
 # -------------------------------------------------------------------------
 
