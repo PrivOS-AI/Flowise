@@ -121,10 +121,10 @@ app = create_application()
 if __name__ == "__main__":
     # Print startup banner
     print(f"""
-{Fore.CYAN}┌─────────────────────────────────────────────────────────────┐
-│                FILE PROCESSING QUEUE API                       │
-│                  (BullMQ Producer Service)                   │
-└─────────────────────────────────────────────────────────────┘
+{Fore.CYAN}╔══════════════════════════════════════════════════════════╗
+║                     FILE PROCESSING QUEUE API            ║
+║                       (BullMQ Producer Service)          ║
+╚══════════════════════════════════════════════════════════╝
 
 {Fore.YELLOW}═ Configuration:{Style.RESET_ALL}
   ├─ Host: {settings.host}:{settings.port}
