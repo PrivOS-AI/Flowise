@@ -96,7 +96,6 @@ class BullMQProducer:
         filename: str,
         file_path: str,
         channel_id: Optional[str] = None,
-        user_id: Optional[str] = None,
         ttl: Optional[int] = 86400000
     ) -> Dict[str, Any]:
         """
@@ -107,7 +106,6 @@ class BullMQProducer:
             filename: Name of the archive file
             file_path: Path of the archive file
             channel_id: Channel ID for Weaviate collection
-            user_id: User ID
             ttl: Time to live in milliseconds (job will be removed from Redis after this time)
 
         Returns:
@@ -118,8 +116,7 @@ class BullMQProducer:
                 "archive_id": archive_id,
                 "filename": filename,
                 "file_path": file_path,
-                "channel_id": channel_id,
-                "user_id": user_id
+                "channel_id": channel_id
             }
 
             # Add job to queue with TTL

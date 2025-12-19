@@ -199,7 +199,8 @@ class BullMQCompatibleWorker:
         filename = job_data.get("filename")
         file_path = job_data.get("file_path")
         channel_id = job_data.get("channel_id")
-        user_id = job_data.get("user_id")
+        # user_id is no longer required, set to None for compatibility
+        user_id = None
 
         if not archive_id:
             raise ValueError("No archive_id provided in job data")

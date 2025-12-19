@@ -82,7 +82,6 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
             filename=request.filename,
             file_path=request.file_path,
             channel_id=request.channel_id,
-            user_id=request.user_id,
             ttl=request.ttl
         )
 

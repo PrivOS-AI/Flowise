@@ -17,7 +17,6 @@ class ArchiveProcessJobRequest(BaseModel):
     filename: str = Field(..., description="Name of the archive file")
     file_path: str = Field(..., description="Path of the archive file")
     channel_id: Optional[str] = Field(default=None, description="Channel ID for Weaviate collection")
-    user_id: Optional[str] = Field(default=None, description="User ID")
     ttl: Optional[int] = Field(default=86400000, description="Time to live in milliseconds (default: 24 hours)")
 
 
