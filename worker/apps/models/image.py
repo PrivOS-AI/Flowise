@@ -1,6 +1,8 @@
+# Standard library imports
 from datetime import datetime
 from typing import Optional
 
+# Third-party imports
 from beanie import Document, Indexed
 from pydantic import Field
 
@@ -11,7 +13,7 @@ class Image(Document):
     """
 
     # File association
-    file_path: Indexed(str) = Field(
+    file_path: Indexed(str) = Field(  # pyright: ignore[reportInvalidTypeForm]
         ..., description="Path to the associated source file"
     )
 

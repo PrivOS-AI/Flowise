@@ -1,16 +1,15 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+# Standard library imports
+from typing import List, Optional
+
+# Third-party imports
 from colorama import Fore, Style
+from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
-from schemas.jobs import (
-    FileProcessJobRequest,
-    ArchiveProcessJobRequest,
-    DeleteFileJobRequest,
-    JobResponse,
-    JobStatusResponse,
-    QueueStatsResponse,
-)
+# Local/project imports
+from schemas.jobs import (ArchiveProcessJobRequest, DeleteFileJobRequest,
+                          FileProcessJobRequest, JobResponse,
+                          JobStatusResponse, QueueStatsResponse)
 from services.bullmq_producer import bullmq_producer
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])

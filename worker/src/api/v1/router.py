@@ -1,4 +1,7 @@
+# Third-party imports
 from fastapi import APIRouter
+
+# Local/project imports
 from routers import jobs
 
 api_router = APIRouter()

@@ -1,9 +1,11 @@
 """
 Format validation utilities for Docling supported file formats
 """
+# Standard library imports
 import os
 from typing import Set, Tuple
 
+# Third-party imports
 from docling.datamodel.base_models import InputFormat
 
 # Mapping of file extensions to Docling InputFormat

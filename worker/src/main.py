@@ -1,13 +1,18 @@
+# Standard library imports
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+
+# Third-party imports
 import uvicorn
+from colorama import Fore, Style, init
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-import logging
-from colorama import Fore, Style, init
 
-from core.config import settings
+# Local/project imports
 from api.v1.router import api_router
+from core.config import settings
 from services.bullmq_producer import bullmq_producer
 
 # Initialize colorama
@@ -81,7 +86,6 @@ def create_application() -> FastAPI:
     @app.get("/health/detailed")
     async def detailed_health_check():
         """Detailed health check with service status"""
-        from datetime import datetime, timezone
 
         # Check Redis connection by testing queue
         redis_status = "connected"

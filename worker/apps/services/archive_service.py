@@ -1,3 +1,4 @@
+# Standard library imports
 import asyncio
 import mimetypes
 import os
@@ -9,11 +10,14 @@ import traceback
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
+from models.file import Folder
 
-from core.config import settings
-from loguru import logger
-from models.file import File
-from services.minio_service import minio_service
+try:
+    import patoolib  # noqa: F401
+
+    PATOOL_AVAILABLE = True
+except ImportError:
+    PATOOL_AVAILABLE = False
 
 try:
     import py7zr
@@ -29,12 +33,13 @@ try:
 except ImportError:
     RARFILE_AVAILABLE = False
 
-try:
-    import patoolib
+# Third-party imports
+from loguru import logger
 
-    PATOOL_AVAILABLE = True
-except ImportError:
-    PATOOL_AVAILABLE = False
+# Local/project imports
+from core.config import settings
+from models.file import File
+from services.minio_service import minio_service
 
 
 class ArchiveService:
@@ -236,29 +241,35 @@ class ArchiveService:
             try:
                 # Use 7z command to extract
                 cmd = ["7z", "x", archive_path, f"-o{extract_to}", "-y"]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=300
+                )
 
                 if result.returncode == 0:
                     # Get list of extracted files
                     for root, _, files in os.walk(extract_to):
                         for file in files:
-                            rel_path = os.path.relpath(os.path.join(root, file), extract_to)
+                            rel_path = os.path.relpath(
+                                os.path.join(root, file), extract_to
+                            )
                             extracted_files.append(rel_path)
                     return extracted_files
                 else:
                     raise Exception(f"7z extraction failed: {result.stderr}")
 
             except subprocess.TimeoutExpired:
-                raise Exception(f"7z extraction timeout for archive")
+                raise Exception("7z extraction timeout for archive")
             except FileNotFoundError:
-                raise Exception("7z command not found. Please install p7zip-full or 7zip")
+                raise Exception(
+                    "7z command not found. Please install p7zip-full or 7zip"
+                )
             except Exception as e:
                 raise Exception(f"7z extraction error: {e}")
 
         # Run in thread pool to avoid blocking
         try:
             extracted_files = await asyncio.to_thread(_extract)
-            print(f"Successfully extracted archive with 7z")
+            print("Successfully extracted archive with 7z")
             return extracted_files
         except Exception as e:
             logger.error(f"Failed to extract with 7z: {e}")
@@ -346,9 +357,7 @@ class ArchiveService:
                     )
                     # Try to check if file exists
                     try:
-                        import asyncio
-
-                        exists = await asyncio.to_thread(
+                        await asyncio.to_thread(
                             minio_service.client.stat_object,
                             minio_service.bucket,
                             archive_file.file_path,
@@ -363,6 +372,12 @@ class ArchiveService:
                     f"Failed to download archive file: {archive_file.file_path}"
                 )
 
+            # Create a root folder for the archive (without extension)
+            archive_name = Path(archive_file.filename).stem
+            archive_folder = await self._create_archive_root_folder(
+                archive_name, channel_id, archive_id, user_id
+            )
+
             # Create temporary directory for extraction
             temp_dir = f"temp/archive_extraction/{archive_id}"
             os.makedirs(temp_dir, exist_ok=True)
@@ -375,14 +390,14 @@ class ArchiveService:
                 f"Extracted {len(extracted_files)} files from {archive_file.filename}"
             )
 
-            # Create folder structure
+            # Create folder structure with archive folder as root
             folder_map = await self._create_folder_structure(
-                archive_id, temp_dir, channel_id
+                archive_id, temp_dir, channel_id, archive_folder.id
             )
 
             # Process and upload files
             processed_files = await self._process_extracted_files(
-                archive_id, temp_dir, folder_map, channel_id, user_id
+                archive_id, temp_dir, folder_map, channel_id, user_id, archive_folder.id
             )
 
             # Update archive file record with results
@@ -399,6 +414,8 @@ class ArchiveService:
                 "status": "success",
                 "total_files": len(processed_files),
                 "total_folders": len(folder_map),
+                "archive_folder_id": archive_folder.id,
+                "archive_folder_name": archive_folder.name,
                 "files": processed_files,
             }
 
@@ -413,7 +430,7 @@ class ArchiveService:
                     archive_file.status = "FAILED"
                     archive_file.error_message = str(e)
                     await archive_file.save()
-            except:
+            except:  # noqa: E722
                 pass
 
             # Clean up on error
@@ -421,13 +438,48 @@ class ArchiveService:
                 shutil.rmtree(
                     f"temp/archive_extraction/{archive_id}", ignore_errors=True
                 )
-            except:
+            except:  # noqa: E722
                 pass
 
             raise
 
+    async def _create_archive_root_folder(
+        self, archive_name: str, channel_id: str, archive_id: str, user_id: str = None
+    ) -> Folder:
+        """
+        Create root folder for the archive
+
+        Args:
+            archive_name: Name of the archive (without extension)
+            channel_id: Channel ID
+            archive_id: ID of the archive file
+            user_id: User ID
+
+        Returns:
+            Folder object for the archive root folder
+        """
+
+        # Create root folder for the archive
+        folder_path = f"/{archive_name}"
+        folder = Folder(
+            name=archive_name,
+            folder_path=folder_path,
+            father=None,  # Root folder has no parent
+            channel_id=channel_id,
+            user_id=user_id,
+            zip_id=archive_id,  # Reuse zip_id field for archives
+        )
+        await folder.insert()
+
+        print(f"Created archive root folder: {folder_path} -> ID: {folder.id}")
+        return folder
+
     async def _create_folder_structure(
-        self, archive_id: str, extract_dir: str, channel_id: str
+        self,
+        archive_id: str,
+        extract_dir: str,
+        channel_id: str,
+        archive_root_folder_id: str = None,
     ) -> Dict[str, str]:
         """
         Create folder structure from extracted archive contents
@@ -436,6 +488,7 @@ class ArchiveService:
             archive_id: ID of the archive file
             extract_dir: Directory where files were extracted
             channel_id: Channel ID
+            archive_root_folder_id: ID of the root folder for the archive
 
         Returns:
             Dict mapping folder paths to folder IDs
@@ -463,8 +516,8 @@ class ArchiveService:
             # Get parent folder path
             parent_path = str(path_obj.parent)
             if parent_path == ".":
-                # Top-level folder: no parent
-                parent_id = None
+                # Top-level folder: parent is the archive root folder
+                parent_id = archive_root_folder_id
             else:
                 # Child folder: find parent in folder_map
                 parent_path = f"/{parent_path}".replace("\\", "/")
@@ -476,7 +529,9 @@ class ArchiveService:
             folder = Folder(
                 name=folder_name,
                 folder_path=folder_path,
-                father=parent_id,  # Using 'father' to match Meteor model
+                father=(
+                    str(parent_id) if parent_id else None
+                ),  # Using 'father' to match Meteor model
                 channel_id=channel_id,
                 zip_id=archive_id,  # Reuse zip_id field for archives
             )
@@ -498,6 +553,7 @@ class ArchiveService:
         folder_map: Dict[str, str],
         channel_id: str,
         user_id: Optional[str],
+        archive_root_folder_id: Optional[str] = None,
     ) -> List[Dict]:
         """
         Process all extracted files and upload to MinIO
@@ -538,19 +594,25 @@ class ArchiveService:
                 # Check if this is a nested archive
                 if self.is_archive_file(file_name):
                     print(f"Found nested archive: {file_name}")
-                    nested_archives.append({
-                        "full_path": full_path,
-                        "rel_path": rel_path,
-                        "file_name": file_name,
-                        "file_size": file_size,
-                        "extension": extension,
-                        "folder_id": None  # Will be determined below
-                    })
+                    nested_archives.append(
+                        {
+                            "full_path": full_path,
+                            "rel_path": rel_path,
+                            "file_name": file_name,
+                            "file_size": file_size,
+                            "extension": extension,
+                            "folder_id": None,  # Will be determined below
+                        }
+                    )
 
                 # Determine folder ID
                 folder_id = None
                 parent_path = str(path_obj.parent)
-                if parent_path != ".":
+                if parent_path == ".":
+                    # File at root level: use archive root folder
+                    folder_id = archive_root_folder_id
+                else:
+                    # File in subfolder: find parent in folder_map
                     parent_path = f"/{parent_path}".replace("\\", "/")
                     folder_id = folder_map.get(parent_path)
                     print(
@@ -630,7 +692,12 @@ class ArchiveService:
         if nested_archives:
             print(f"Processing {len(nested_archives)} nested archives...")
             await self._process_nested_archives(
-                nested_archives, archive_id, channel_id, user_id, folder_map, processed_files
+                nested_archives,
+                archive_id,
+                channel_id,
+                user_id,
+                folder_map,
+                processed_files,
             )
 
         # Second pass: process docling-supported files
@@ -684,7 +751,9 @@ class ArchiveService:
                     nested_files = await self.extract_archive(
                         archive_data, archive_info["file_name"], nested_temp_dir
                     )
-                    print(f"Extracted {len(nested_files)} files from nested archive {archive_info['file_name']}")
+                    print(
+                        f"Extracted {len(nested_files)} files from nested archive {archive_info['file_name']}"
+                    )
 
                     # Process extracted files from nested archive
                     for root, _, files in os.walk(nested_temp_dir):
@@ -707,7 +776,9 @@ class ArchiveService:
                             file_record = File(
                                 name=file_name,
                                 file_path="",  # Will be updated after MinIO upload
-                                folder_id=archive_info["folder_id"],  # Same folder as nested archive
+                                folder_id=archive_info[
+                                    "folder_id"
+                                ],  # Same folder as nested archive
                                 channel_id=channel_id,
                                 user_id=user_id,
                                 file_size=file_size,
@@ -732,14 +803,16 @@ class ArchiveService:
                                 file_record.file_path = minio_path
                                 await file_record.save()
 
-                                processed_files.append({
-                                    "file_name": file_name,
-                                    "file_path": minio_path,
-                                    "size": file_size,
-                                    "type": "nested_archive_file",
-                                    "mime_type": mime_type,
-                                    "parent_archive": archive_info["file_name"],
-                                })
+                                processed_files.append(
+                                    {
+                                        "file_name": file_name,
+                                        "file_path": minio_path,
+                                        "size": file_size,
+                                        "type": "nested_archive_file",
+                                        "mime_type": mime_type,
+                                        "parent_archive": archive_info["file_name"],
+                                    }
+                                )
 
                                 print(f"Uploaded nested file: {file_name}")
 
@@ -748,7 +821,9 @@ class ArchiveService:
                     shutil.rmtree(nested_temp_dir, ignore_errors=True)
 
             except Exception as e:
-                print(f"Error processing nested archive {archive_info['file_name']}: {e}")
+                print(
+                    f"Error processing nested archive {archive_info['file_name']}: {e}"
+                )
                 traceback.print_exc()
 
     async def _process_docling_files(
@@ -831,7 +906,7 @@ class ArchiveService:
                             result["weaviate_uploaded"] = True
                             result["weaviate_collection"] = collection_name
                         else:
-                            print(f"✗ Failed to upload chunks to Weaviate")
+                            print("✗ Failed to upload chunks to Weaviate")
                             result["weaviate_uploaded"] = False
                     except Exception as e:
                         print(f"✗ Error uploading chunks to Weaviate: {e}")

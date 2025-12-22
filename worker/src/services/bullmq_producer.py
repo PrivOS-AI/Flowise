@@ -1,8 +1,12 @@
-from bullmq import Queue
-from typing import Dict, Any, Optional
-from loguru import logger
-from colorama import Fore, Style
+# Standard library imports
+from typing import Any, Dict, Optional
 
+# Third-party imports
+from bullmq import Queue
+from colorama import Fore, Style
+from loguru import logger
+
+# Local/project imports
 from core.config import settings
 
 

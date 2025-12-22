@@ -1,20 +1,24 @@
+# Standard library imports
 import asyncio
 from io import BytesIO
-import aiohttp
 
+# Third-party imports
+import aiohttp
+from beanie import init_beanie
 from bullmq import Worker
 from colorama import Fore, Style
-from core.config import settings
 from loguru import logger
+from motor.motor_asyncio import AsyncIOMotorClient
+
+# Local/project imports
+from core.config import settings
+from models.file import ArchiveFile, File, Folder
+from models.image import Image
+from services.archive_service import archive_service
 from services.docling_service import docling_service
 from services.mongodb import mongodb_service
 from services.weaviate_service import weaviate_service
-from services.archive_service import archive_service
 from utils.format_validator import format_validation_error
-from beanie import init_beanie
-from motor.motor_asyncio import AsyncIOMotorClient
-from models.file import File, Folder, ArchiveFile
-from models.image import Image
 
 # -----------------------------------------------------------------
 

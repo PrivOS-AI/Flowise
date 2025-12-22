@@ -1,5 +1,7 @@
+# Standard library imports
 import asyncio
 
+# Local/project imports
 from services.weaviate_service import weaviate_service
 
 

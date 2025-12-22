@@ -4,12 +4,15 @@ Script to run both FastAPI Queue Service and Worker
 This script starts both services concurrently using subprocess
 """
 
-import subprocess
-import sys
+# Standard library imports
 import os
 import signal
+import subprocess
+import sys
 import time
 from pathlib import Path
+
+# Third-party imports
 from colorama import Fore, Style, init
 
 # Initialize colorama

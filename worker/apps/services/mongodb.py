@@ -1,8 +1,12 @@
+# Standard library imports
 from typing import Any, Dict, List, Optional
 
+# Third-party imports
 from bson import ObjectId
-from core.config import settings
 from motor.motor_asyncio import AsyncIOMotorClient
+
+# Local/project imports
+from core.config import settings
 
 
 # ---------------------------------------------------------------------

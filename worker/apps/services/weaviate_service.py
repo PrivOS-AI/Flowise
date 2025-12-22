@@ -1,11 +1,15 @@
+# Standard library imports
 import asyncio
 from typing import Any, Dict, List
 
+# Third-party imports
 import weaviate
-from core.config import settings
 from weaviate.classes.config import Configure, DataType, Property
-from weaviate.classes.query import Filter
 from weaviate.classes.init import Auth
+from weaviate.classes.query import Filter
+
+# Local/project imports
+from core.config import settings
 
 # -------------------------------------------------------------------------
 

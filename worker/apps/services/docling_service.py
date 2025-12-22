@@ -1,5 +1,5 @@
+# Standard library imports
 import asyncio
-import aiohttp
 import base64
 import os
 import shutil
@@ -7,9 +7,9 @@ import tempfile
 import time
 import warnings
 from typing import Any, Dict, List
-from urllib.parse import urlparse, unquote
+from urllib.parse import unquote, urlparse
 
-from core.config import settings
+# Third-party imports
 from docling.chunking import HybridChunker
 from docling.datamodel.base_models import DocumentStream, InputFormat
 from docling.datamodel.pipeline_options import (AcceleratorDevice,
@@ -20,6 +20,9 @@ from openai import AsyncOpenAI
 from pdf2image import convert_from_path
 from PIL import Image
 from pypdf import PdfReader
+
+# Local/project imports
+from core.config import settings
 
 
 # ------------------------------------------------------------------------------

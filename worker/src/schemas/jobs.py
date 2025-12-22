@@ -1,5 +1,8 @@
+# Standard library imports
+from typing import Any, Dict, Optional
+
+# Third-party imports
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
 
 
 class FileProcessJobRequest(BaseModel):

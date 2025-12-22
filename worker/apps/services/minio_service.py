@@ -1,13 +1,15 @@
+# Standard library imports
 import asyncio
 import io
 import os
 from datetime import timedelta
 from typing import Optional
-from urllib.parse import urljoin
 
+# Third-party imports
 from minio import Minio
 from minio.error import S3Error
 
+# Local/project imports
 from core.config import settings
 
 
@@ -20,7 +22,7 @@ class MinIOService:
         self.endpoint = settings.minio_endpoint
         self.access_key = settings.minio_access_key
         self.secret_key = settings.minio_secret_key
-        self.secure = getattr(settings, 'minio_secure', False)
+        self.secure = getattr(settings, "minio_secure", False)
 
         self._initialize_client()
 
@@ -31,7 +33,7 @@ class MinIOService:
                 endpoint=self.endpoint,
                 access_key=self.access_key,
                 secret_key=self.secret_key,
-                secure=self.secure
+                secure=self.secure,
             )
 
             # Ensure bucket exists
@@ -50,7 +52,7 @@ class MinIOService:
         object_name: str,
         file_data: bytes | io.BytesIO,
         content_type: str = "application/octet-stream",
-        metadata: Optional[dict] = None
+        metadata: Optional[dict] = None,
     ) -> bool:
         """Upload file to MinIO"""
         if not self.client:
@@ -70,7 +72,7 @@ class MinIOService:
                 file_data,
                 length=file_data.getbuffer().nbytes,
                 content_type=content_type,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
             print(f"✓ Uploaded file to MinIO: {object_name}")
             return True
@@ -88,9 +90,7 @@ class MinIOService:
         try:
             # Wrap synchronous call in asyncio.to_thread to avoid blocking
             response = await asyncio.to_thread(
-                self.client.get_object,
-                self.bucket,
-                object_name
+                self.client.get_object, self.bucket, object_name
             )
 
             # Read the data
@@ -123,10 +123,7 @@ class MinIOService:
 
             # Wrap synchronous call in asyncio.to_thread to avoid blocking
             await asyncio.to_thread(
-                self.client.fget_object,
-                self.bucket,
-                object_name,
-                file_path
+                self.client.fget_object, self.bucket, object_name, file_path
             )
 
             print(f"✓ Downloaded file from MinIO to: {file_path}")
@@ -149,11 +146,7 @@ class MinIOService:
             return False
 
         try:
-            await asyncio.to_thread(
-                self.client.remove_object,
-                self.bucket,
-                object_name
-            )
+            await asyncio.to_thread(self.client.remove_object, self.bucket, object_name)
             print(f"✓ Deleted file from MinIO: {object_name}")
             return True
 
@@ -168,11 +161,7 @@ class MinIOService:
             return False
 
         try:
-            await asyncio.to_thread(
-                self.client.stat_object,
-                self.bucket,
-                object_name
-            )
+            await asyncio.to_thread(self.client.stat_object, self.bucket, object_name)
             return True
 
         except S3Error as e:
@@ -192,7 +181,11 @@ class MinIOService:
 
         try:
             objects = await asyncio.to_thread(
-                lambda: list(self.client.list_objects(self.bucket, prefix=prefix, recursive=recursive))
+                lambda: list(
+                    self.client.list_objects(
+                        self.bucket, prefix=prefix, recursive=recursive
+                    )
+                )
             )
 
             # Filter out directories (objects that end with '/')
@@ -203,7 +196,9 @@ class MinIOService:
             print(f"❌ Failed to list files: {e}")
             return []
 
-    async def get_presigned_url(self, object_name: str, expires: int = 3600) -> Optional[str]:
+    async def get_presigned_url(
+        self, object_name: str, expires: int = 3600
+    ) -> Optional[str]:
         """Get presigned URL for file download"""
         if not self.client:
             print("❌ MinIO client not initialized")
@@ -216,7 +211,7 @@ class MinIOService:
                 self.client.presigned_get_object,
                 self.bucket,
                 object_name,
-                expires=expires_delta
+                expires=expires_delta,
             )
             return url
 
@@ -224,7 +219,9 @@ class MinIOService:
             print(f"❌ Failed to generate presigned URL: {e}")
             return None
 
-    async def get_presigned_upload_url(self, object_name: str, expires: int = 3600) -> Optional[str]:
+    async def get_presigned_upload_url(
+        self, object_name: str, expires: int = 3600
+    ) -> Optional[str]:
         """Get presigned URL for file upload"""
         if not self.client:
             print("❌ MinIO client not initialized")
@@ -237,7 +234,7 @@ class MinIOService:
                 self.client.presigned_put_object,
                 self.bucket,
                 object_name,
-                expires=expires_delta
+                expires=expires_delta,
             )
             return url
 
@@ -252,13 +249,12 @@ class MinIOService:
             return False
 
         try:
-            from minio.copyobj import CopyObjectResult
 
-            result = await asyncio.to_thread(
+            await asyncio.to_thread(
                 self.client.copy_object,
                 self.bucket,
                 destination_object,
-                self.bucket + "/" + source_object
+                self.bucket + "/" + source_object,
             )
 
             print(f"✓ Copied file in MinIO: {source_object} -> {destination_object}")

@@ -1,5 +1,8 @@
-from pydantic_settings import BaseSettings
+# Standard library imports
 from typing import Optional
+
+# Third-party imports
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
