@@ -111,6 +111,18 @@ class BullMQCompatibleWorker:
                 )
                 return {"status": "skipped", "reason": "No filename provided"}
 
+            # Check if file is an archive format first
+            if archive_service.is_archive_file(filename):
+                logger.warning(
+                    f"{Fore.YELLOW}⚠️ File {filename} is an archive format. It should be processed with process-archive job, not process-file.{Style.RESET_ALL}"
+                )
+                return {
+                    "status": "skipped",
+                    "reason": f"Archive file '{filename}' detected. Use process-archive endpoint instead.",
+                    "filename": filename,
+                    "message": "Archive files should be processed via the archive processing endpoint",
+                }
+
             is_valid, error_msg = format_validation_error(filename)
             if not is_valid:
                 logger.warning(
@@ -197,7 +209,6 @@ class BullMQCompatibleWorker:
         """Handle process-archive job for various archive formats"""
         archive_id = job_data.get("archive_id")
         filename = job_data.get("filename")
-        file_path = job_data.get("file_path")
         channel_id = job_data.get("channel_id")
         # user_id is no longer required, set to None for compatibility
         user_id = None

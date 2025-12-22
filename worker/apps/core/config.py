@@ -28,11 +28,15 @@ class Settings(BaseSettings):
     # OpenAI settings for translation (using openai-agents SDK)
     llm_hub_api_key: str = os.getenv("LLM_HUB_API_KEY", "")
 
-    weaviate_http_host: str = Field(default_factory=lambda: os.getenv("WEAVIATE_HTTP_HOST", "localhost"))
+    weaviate_http_host: str = Field(
+        default_factory=lambda: os.getenv("WEAVIATE_HTTP_HOST", "localhost")
+    )
     weaviate_http_port: int = Field(
         default_factory=lambda: int(os.getenv("WEAVIATE_HTTP_PORT", "8080"))
     )
-    weaviate_grpc_host: str = Field(default_factory=lambda: os.getenv("WEAVIATE_GRPC_HOST", "localhost"))
+    weaviate_grpc_host: str = Field(
+        default_factory=lambda: os.getenv("WEAVIATE_GRPC_HOST", "localhost")
+    )
     weaviate_grpc_port: int = Field(
         default_factory=lambda: int(os.getenv("WEAVIATE_GRPC_PORT", "50051"))
     )
@@ -41,7 +45,9 @@ class Settings(BaseSettings):
         == "true",
         alias="WEAVIATE_SECURE",
     )
-    weaviate_api_key: str = Field(default_factory=lambda: os.getenv("WEAVIATE_API_KEY", ""))
+    weaviate_api_key: str = Field(
+        default_factory=lambda: os.getenv("WEAVIATE_API_KEY", "")
+    )
 
     @property
     def weaviate_url(self) -> str:
@@ -58,16 +64,24 @@ class Settings(BaseSettings):
     ollama_api_key: str = Field(default_factory=lambda: os.getenv("OLLAMA_API_KEY", ""))
 
     # MinIO settings
-    minio_endpoint: str = Field(default_factory=lambda: os.getenv("MINIO_ENDPOINT", "localhost:9000"))
-    minio_access_key: str = Field(default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", ""))
-    minio_secret_key: str = Field(default_factory=lambda: os.getenv("MINIO_SECRET_KEY", ""))
-    minio_bucket: str = Field(default_factory=lambda: os.getenv("MINIO_BUCKET", "privos"))
+    minio_endpoint: str = Field(
+        default_factory=lambda: os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    )
+    minio_access_key: str = Field(
+        default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", "")
+    )
+    minio_secret_key: str = Field(
+        default_factory=lambda: os.getenv("MINIO_SECRET_KEY", "")
+    )
+    minio_bucket: str = Field(
+        default_factory=lambda: os.getenv("MINIO_BUCKET", "privos")
+    )
     minio_secure: bool = Field(
         default_factory=lambda: (os.getenv("MINIO_SECURE", "false")).lower() == "true"
     )
 
     class Config:
-        env_file = "worker.env"
+        env_file = "/home/roxane/Flowise/worker/worker.env"
         extra = "ignore"
         # case_sensitive = False
 

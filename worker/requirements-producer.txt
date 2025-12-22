@@ -19,3 +19,6 @@ loguru==0.7.2
 
 # Environment
 python-dotenv==1.0.0
+py7zr
+rarfile
+patool

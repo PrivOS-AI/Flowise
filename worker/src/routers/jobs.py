@@ -9,17 +9,15 @@ from schemas.jobs import (
     DeleteFileJobRequest,
     JobResponse,
     JobStatusResponse,
-    QueueStatsResponse
+    QueueStatsResponse,
 )
 from services.bullmq_producer import bullmq_producer
 
-router = APIRouter(
-    prefix="/jobs",
-    tags=["jobs"]
-)
+router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 # region File Processing Jobs
+
 
 @router.post("/process-file", response_model=JobResponse)
 async def add_file_process_job(request: FileProcessJobRequest):
@@ -34,7 +32,9 @@ async def add_file_process_job(request: FileProcessJobRequest):
     The job will be processed by the BullMQ worker.
     """
     try:
-        logger.info(f"{Fore.BLUE}📋 Received file processing job request: {request.filename}{Style.RESET_ALL}")
+        logger.info(
+            f"{Fore.BLUE}📋 Received file processing job request: {request.filename}{Style.RESET_ALL}"
+        )
 
         # Add job to queue
         result = await bullmq_producer.add_file_process_job(
@@ -42,7 +42,7 @@ async def add_file_process_job(request: FileProcessJobRequest):
             filename=request.filename,
             file_path=request.file_path,
             channel_id=request.channel_id,
-            ttl=request.ttl
+            ttl=request.ttl,
         )
 
         logger.success(
@@ -52,7 +52,9 @@ async def add_file_process_job(request: FileProcessJobRequest):
         return result
 
     except Exception as e:
-        logger.error(f"{Fore.RED}❌ Failed to add file processing job: {e}{Style.RESET_ALL}")
+        logger.error(
+            f"{Fore.RED}❌ Failed to add file processing job: {e}{Style.RESET_ALL}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -60,6 +62,7 @@ async def add_file_process_job(request: FileProcessJobRequest):
 
 
 # region Archive Processing Jobs
+
 
 @router.post("/process-archive", response_model=JobResponse)
 async def add_archive_process_job(request: ArchiveProcessJobRequest):
@@ -74,7 +77,9 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
     The job will be processed by the BullMQ worker.
     """
     try:
-        logger.info(f"{Fore.BLUE}📋 Received archive processing job request: {request.filename}{Style.RESET_ALL}")
+        logger.info(
+            f"{Fore.BLUE}📋 Received archive processing job request: {request.filename}{Style.RESET_ALL}"
+        )
 
         # Add job to queue
         result = await bullmq_producer.add_archive_process_job(
@@ -82,7 +87,7 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
             filename=request.filename,
             file_path=request.file_path,
             channel_id=request.channel_id,
-            ttl=request.ttl
+            ttl=request.ttl,
         )
 
         logger.success(
@@ -92,7 +97,9 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
         return result
 
     except Exception as e:
-        logger.error(f"{Fore.RED}❌ Failed to add archive processing job: {e}{Style.RESET_ALL}")
+        logger.error(
+            f"{Fore.RED}❌ Failed to add archive processing job: {e}{Style.RESET_ALL}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -100,6 +107,7 @@ async def add_archive_process_job(request: ArchiveProcessJobRequest):
 
 
 # region File Deletion Jobs
+
 
 @router.post("/delete-file", response_model=JobResponse)
 async def add_delete_file_job(request: DeleteFileJobRequest):
@@ -113,13 +121,15 @@ async def add_delete_file_job(request: DeleteFileJobRequest):
     The job will be processed by the BullMQ worker.
     """
     try:
-        logger.info(f"{Fore.BLUE}📋 Received file deletion job request: {request.file_path}{Style.RESET_ALL}")
+        logger.info(
+            f"{Fore.BLUE}📋 Received file deletion job request: {request.file_path}{Style.RESET_ALL}"
+        )
 
         # Add job to queue
         result = await bullmq_producer.add_delete_file_job(
             file_path=request.file_path,
             collection_name=request.collection_name,
-            ttl=request.ttl
+            ttl=request.ttl,
         )
 
         logger.success(
@@ -129,7 +139,9 @@ async def add_delete_file_job(request: DeleteFileJobRequest):
         return result
 
     except Exception as e:
-        logger.error(f"{Fore.RED}❌ Failed to add file deletion job: {e}{Style.RESET_ALL}")
+        logger.error(
+            f"{Fore.RED}❌ Failed to add file deletion job: {e}{Style.RESET_ALL}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -137,6 +149,7 @@ async def add_delete_file_job(request: DeleteFileJobRequest):
 
 
 # region Job Status and Monitoring
+
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
@@ -168,6 +181,7 @@ async def get_job_status(job_id: str):
 
 # region Queue Statistics
 
+
 @router.get("/queue/stats", response_model=QueueStatsResponse)
 async def get_queue_stats():
     """
@@ -193,7 +207,7 @@ async def get_queue_stats():
             active=len(active),
             waiting=len(waiting),
             completed=len(completed),
-            failed=len(failed)
+            failed=len(failed),
         )
 
         logger.info(
@@ -213,10 +227,11 @@ async def get_queue_stats():
 
 # region Queue Management
 
+
 @router.post("/queue/clean")
 async def clean_queue(
     completed: bool = Query(default=False, description="Clean completed jobs"),
-    failed: bool = Query(default=False, description="Clean failed jobs")
+    failed: bool = Query(default=False, description="Clean failed jobs"),
 ):
     """
     Clean jobs from the queue.
@@ -226,7 +241,9 @@ async def clean_queue(
     - failed: If True, clean all failed jobs
     """
     try:
-        logger.info(f"{Fore.BLUE}🧹 Cleaning queue - Completed: {completed}, Failed: {failed}{Style.RESET_ALL}")
+        logger.info(
+            f"{Fore.BLUE}🧹 Cleaning queue - Completed: {completed}, Failed: {failed}{Style.RESET_ALL}"
+        )
 
         cleaned = 0
 
@@ -235,19 +252,20 @@ async def clean_queue(
             for job in completed_jobs:
                 await bullmq_producer.queue.clean(job.id)
                 cleaned += 1
-            logger.info(f"{Fore.GREEN}✅ Cleaned {len(completed_jobs)} completed jobs{Style.RESET_ALL}")
+            logger.info(
+                f"{Fore.GREEN}✅ Cleaned {len(completed_jobs)} completed jobs{Style.RESET_ALL}"
+            )
 
         if failed:
             failed_jobs = await bullmq_producer.queue.getFailed()
             for job in failed_jobs:
                 await bullmq_producer.queue.clean(job.id)
                 cleaned += 1
-            logger.info(f"{Fore.GREEN}✅ Cleaned {len(failed_jobs)} failed jobs{Style.RESET_ALL}")
+            logger.info(
+                f"{Fore.GREEN}✅ Cleaned {len(failed_jobs)} failed jobs{Style.RESET_ALL}"
+            )
 
-        return {
-            "message": "Queue cleaned successfully",
-            "cleaned_jobs": cleaned
-        }
+        return {"message": "Queue cleaned successfully", "cleaned_jobs": cleaned}
 
     except Exception as e:
         logger.error(f"{Fore.RED}❌ Failed to clean queue: {e}{Style.RESET_ALL}")

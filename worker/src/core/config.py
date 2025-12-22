@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     queue_name: str = "file-processing"
 
     class Config:
-        env_file = "fastapi.env"
+        env_file = "/home/roxane/Flowise/worker/fastapi.env"
         extra = "ignore"
 
 
