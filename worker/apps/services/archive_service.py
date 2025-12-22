@@ -125,21 +125,22 @@ class ArchiveService:
             temp_file_path = temp_file.name
 
         try:
-            if archive_info["type"] == "zip":
-                return await self._extract_zip(temp_file_path, extract_to)
-            elif archive_info["type"] == "tar":
-                return await self._extract_tar(temp_file_path, extract_to)
-            elif archive_info["type"] == "gzip":
-                return await self._extract_gzip(temp_file_path, extract_to)
-            elif archive_info["type"] == "7z":
-                return await self._extract_7z(temp_file_path, extract_to)
-            elif archive_info["type"] == "7zip":
-                return await self._extract_7zip(temp_file_path, extract_to)
-            elif archive_info["type"] == "rar":
-                return await self._extract_rar(temp_file_path, extract_to)
-            else:
-                # Try using patool for unknown formats
-                return await self._extract_with_patool(temp_file_path, extract_to)
+            match archive_info["type"]:
+                case "zip":
+                    return await self._extract_zip(temp_file_path, extract_to)
+                case "tar":
+                    return await self._extract_tar(temp_file_path, extract_to)
+                case "gzip":
+                    return await self._extract_gzip(temp_file_path, extract_to)
+                case "7z":
+                    return await self._extract_7z(temp_file_path, extract_to)
+                case "7zip":
+                    return await self._extract_7zip(temp_file_path, extract_to)
+                case "rar":
+                    return await self._extract_rar(temp_file_path, extract_to)
+                case _:
+                    # Try using patool for unknown formats
+                    return await self._extract_with_patool(temp_file_path, extract_to)
         finally:
             # Clean up temporary file
             os.unlink(temp_file_path)
@@ -649,7 +650,7 @@ class ArchiveService:
                 file_record = File(
                     name=file_name,
                     file_path="",  # Will be updated after MinIO upload
-                    folder_id=folder_id,
+                    folder_id=str(folder_id) if folder_id else None,
                     channel_id=channel_id,
                     user_id=user_id,
                     file_size=file_size,
@@ -703,8 +704,13 @@ class ArchiveService:
         # Second pass: process docling-supported files
         if docling_files:
             print(f"Processing {len(docling_files)} files with docling...")
-            await self._process_docling_files(
-                docling_files, archive_id, channel_id, user_id, processed_files
+            await self._process_docling_files_batch(
+                docling_files,
+                archive_id,
+                channel_id,
+                user_id,
+                processed_files,
+                batch_size=5,
             )
 
         return processed_files
@@ -732,7 +738,7 @@ class ArchiveService:
         folder_map: Dict[str, str],
         processed_files: List[Dict],
     ):
-        """Process nested archive files"""
+        """Process nested archive files with full folder and docling support"""
 
         for archive_info in nested_archives:
             try:
@@ -746,6 +752,9 @@ class ArchiveService:
                 nested_temp_dir = f"temp/archive_extraction/{archive_id}/nested_{Path(archive_info['rel_path']).stem}"
                 os.makedirs(nested_temp_dir, exist_ok=True)
 
+                # Track nested folder structure
+                nested_folder_map = {}
+
                 try:
                     # Extract nested archive
                     nested_files = await self.extract_archive(
@@ -755,7 +764,16 @@ class ArchiveService:
                         f"Extracted {len(nested_files)} files from nested archive {archive_info['file_name']}"
                     )
 
-                    # Process extracted files from nested archive
+                    # Create folder structure for nested archive
+                    nested_folder_map = await self._create_nested_folder_structure(
+                        nested_temp_dir, archive_info["folder_id"], channel_id
+                    )
+
+                    # Separate regular files and docling files
+                    regular_files = []
+                    docling_files = []
+                    deeper_nested_archives = []
+
                     for root, _, files in os.walk(nested_temp_dir):
                         for file_name in files:
                             full_path = os.path.join(root, file_name)
@@ -772,49 +790,131 @@ class ArchiveService:
                             extension = path_obj.suffix.lower()
                             mime_type, _ = mimetypes.guess_type(file_name)
 
-                            # Create file record
-                            file_record = File(
-                                name=file_name,
-                                file_path="",  # Will be updated after MinIO upload
-                                folder_id=archive_info[
-                                    "folder_id"
-                                ],  # Same folder as nested archive
-                                channel_id=channel_id,
-                                user_id=user_id,
-                                file_size=file_size,
-                                file_type=extension,
-                                mime_type=mime_type,
-                            )
-                            await file_record.insert()
-
-                            # Generate MinIO path
-                            minio_path = (
-                                f"{channel_id}/{file_record.id}{extension}"
-                                if extension
-                                else f"{channel_id}/{file_record.id}"
-                            )
-
-                            # Upload to MinIO
-                            success = await self._upload_file_to_minio(
-                                full_path, minio_path, mime_type
-                            )
-
-                            if success:
-                                file_record.file_path = minio_path
-                                await file_record.save()
-
-                                processed_files.append(
+                            # Check for deeper nested archives
+                            if self.is_archive_file(file_name):
+                                print(f"Found deeper nested archive: {file_name}")
+                                deeper_nested_archives.append(
                                     {
+                                        "full_path": full_path,
+                                        "rel_path": rel_path,
                                         "file_name": file_name,
-                                        "file_path": minio_path,
-                                        "size": file_size,
-                                        "type": "nested_archive_file",
+                                        "file_size": file_size,
+                                        "extension": extension,
+                                        "folder_id": self._get_nested_folder_id(
+                                            rel_path,
+                                            archive_info["folder_id"],
+                                            nested_folder_map,
+                                        ),
+                                    }
+                                )
+                                continue
+
+                            # Determine folder ID
+                            folder_id = self._get_nested_folder_id(
+                                rel_path, archive_info["folder_id"], nested_folder_map
+                            )
+
+                            # Check if file should be processed with docling
+                            if extension in self.DOCLING_SUPPORTED_EXTENSIONS:
+                                docling_files.append(
+                                    {
+                                        "full_path": full_path,
+                                        "rel_path": rel_path,
+                                        "file_name": file_name,
+                                        "file_size": file_size,
+                                        "extension": extension,
                                         "mime_type": mime_type,
-                                        "parent_archive": archive_info["file_name"],
+                                        "folder_id": folder_id,
+                                    }
+                                )
+                            else:
+                                regular_files.append(
+                                    {
+                                        "full_path": full_path,
+                                        "rel_path": rel_path,
+                                        "file_name": file_name,
+                                        "file_size": file_size,
+                                        "extension": extension,
+                                        "mime_type": mime_type,
+                                        "folder_id": folder_id,
                                     }
                                 )
 
-                                print(f"Uploaded nested file: {file_name}")
+                    # Process regular files
+                    for file_info in regular_files:
+                        file_record = File(
+                            name=file_info["file_name"],
+                            file_path="",  # Will be updated after MinIO upload
+                            folder_id=(
+                                str(file_info["folder_id"])
+                                if file_info["folder_id"]
+                                else None
+                            ),
+                            channel_id=channel_id,
+                            user_id=user_id,
+                            file_size=file_info["file_size"],
+                            file_type=file_info["extension"],
+                            mime_type=file_info["mime_type"],
+                        )
+                        await file_record.insert()
+
+                        # Generate MinIO path
+                        extension = file_info["extension"]
+                        minio_path = (
+                            f"{channel_id}/{file_record.id}{extension}"
+                            if extension
+                            else f"{channel_id}/{file_record.id}"
+                        )
+
+                        # Upload to MinIO
+                        success = await self._upload_file_to_minio(
+                            file_info["full_path"], minio_path, file_info["mime_type"]
+                        )
+
+                        if success:
+                            file_record.file_path = minio_path
+                            await file_record.save()
+
+                            processed_files.append(
+                                {
+                                    "file_name": file_info["file_name"],
+                                    "file_path": minio_path,
+                                    "size": file_info["file_size"],
+                                    "type": "nested_archive_file",
+                                    "mime_type": file_info["mime_type"],
+                                    "parent_archive": archive_info["file_name"],
+                                }
+                            )
+
+                            print(f"Uploaded nested file: {file_info['file_name']}")
+
+                    # Process docling files
+                    if docling_files:
+                        print(
+                            f"Processing {len(docling_files)} docling files from nested archive..."
+                        )
+                        await self._process_docling_files_batch(
+                            docling_files,
+                            archive_id,
+                            channel_id,
+                            user_id,
+                            processed_files,
+                            batch_size=5,
+                        )
+
+                    # Process deeper nested archives recursively
+                    if deeper_nested_archives:
+                        print(
+                            f"Processing {len(deeper_nested_archives)} deeper nested archives..."
+                        )
+                        await self._process_nested_archives(
+                            deeper_nested_archives,
+                            archive_id,
+                            channel_id,
+                            user_id,
+                            {**folder_map, **nested_folder_map},
+                            processed_files,
+                        )
 
                 finally:
                     # Clean up nested temporary directory
@@ -826,110 +926,246 @@ class ArchiveService:
                 )
                 traceback.print_exc()
 
-    async def _process_docling_files(
+    async def _create_nested_folder_structure(
+        self,
+        extract_dir: str,
+        parent_folder_id: Optional[str],
+        channel_id: str,
+    ) -> Dict[str, str]:
+        """Create folder structure for nested archive"""
+        folder_map = {}
+
+        # Find all directories
+        all_dirs = []
+        for root, dirs, _ in os.walk(extract_dir):
+            for dir_name in dirs:
+                full_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(full_path, extract_dir)
+                all_dirs.append(rel_path)
+
+        # Sort to ensure parents are created before children
+        all_dirs.sort()
+
+        for rel_path in all_dirs:
+            rel_path = rel_path.replace("\\", "/")
+            path_obj = Path(rel_path)
+            folder_name = path_obj.name
+
+            # Get parent folder path
+            parent_path = str(path_obj.parent)
+            if parent_path == ".":
+                # Top-level nested folder: use parent folder of nested archive
+                folder_parent_id = parent_folder_id
+            else:
+                # Child folder: find parent in folder_map
+                parent_path = f"/{parent_path}".replace("\\", "/")
+                folder_parent_id = folder_map.get(parent_path)
+
+            # Create folder record
+            folder = Folder(
+                name=folder_name,
+                folder_path=f"/{rel_path}",
+                father=str(folder_parent_id) if folder_parent_id else None,
+                channel_id=channel_id,
+            )
+            await folder.insert()
+            folder_id = str(folder.id)
+            folder_map[f"/{rel_path}"] = folder_id
+
+            print(f"Created nested folder: /{rel_path} -> ID: {folder_id}")
+
+        return folder_map
+
+    def _get_nested_folder_id(
+        self,
+        rel_path: str,
+        parent_folder_id: Optional[str],
+        nested_folder_map: Dict[str, str],
+    ) -> Optional[str]:
+        """Get folder ID for a file in nested archive"""
+        path_obj = Path(rel_path)
+        parent_path = str(path_obj.parent)
+
+        if parent_path == ".":
+            # File at root of nested archive
+            return parent_folder_id
+        else:
+            # File in subfolder
+            parent_path = f"/{parent_path}".replace("\\", "/")
+            return nested_folder_map.get(parent_path)
+
+    async def _process_docling_files_batch(
         self,
         docling_files: List[Dict],
         archive_id: str,
         channel_id: str,
         user_id: Optional[str],
         processed_files: List[Dict],
+        batch_size: int = 5,
     ):
-        """Process files using docling - upload to MinIO first, then process from temp file"""
-        # Import docling service for local processing
+        """
+        Process docling files in parallel batches
+
+        Args:
+            docling_files: List of file info dicts
+            archive_id: Archive ID for reference
+            channel_id: Channel ID
+            user_id: User ID
+            processed_files: List to append results to
+            batch_size: Number of files to process in parallel
+        """
         from services.docling_service import docling_service
 
-        for file_info in docling_files:
+        total_files = len(docling_files)
+        processed_count = 0
+
+        # Process files in batches
+        for i in range(0, total_files, batch_size):
+            batch = docling_files[i : i + batch_size]
+            print(
+                f"Processing batch {i//batch_size + 1}: files {i+1}-{min(i+batch_size, total_files)}"
+            )
+
+            # Create asyncio tasks for this batch
+            tasks = []
+            for file_info in batch:
+                task = asyncio.create_task(
+                    self._process_single_docling_file(
+                        file_info, archive_id, channel_id, user_id, docling_service
+                    )
+                )
+                tasks.append(task)
+
+            # Wait for all files in batch to complete
             try:
-                print(f"Processing docling file: {file_info['file_name']}")
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Process file directly from temp path (no download needed)
-                result = await docling_service.extract_and_chunk(file_info["full_path"])
-
-                # Create file record first to get ID
-                file_record = File(
-                    name=file_info["file_name"],
-                    file_path="",  # Will be updated after MinIO upload
-                    folder_id=file_info["folder_id"],
-                    channel_id=channel_id,
-                    user_id=user_id,
-                    file_size=file_info["file_size"],
-                    file_type=file_info[
-                        "extension"
-                    ],  # Use file_type to match Meteor model
-                    mime_type=file_info["mime_type"],
-                )
-                await file_record.insert()
-
-                # Generate MinIO path using the same pattern as regular files
-                extension = file_info["extension"]
-                # extension already includes the dot (e.g., ".pdf"), so no need to add another dot
-                minio_path = (
-                    f"{channel_id}/{file_record.id}{extension}"
-                    if extension
-                    else f"{channel_id}/{file_record.id}"
-                )
-
-                # Re-upload with correct path
-                success = await self._upload_file_to_minio(
-                    file_info["full_path"], minio_path, file_info["mime_type"]
-                )
-
-                if not success:
-                    print(f"Failed to upload {file_info['file_name']} to MinIO")
-                    continue
-
-                # Update file record with MinIO path
-                file_record.file_path = minio_path
-                await file_record.save()
-
-                # Upload chunks to Weaviate if available
-                chunks = result.get("chunks", [])
-                if chunks:
-                    print(f"Uploading {len(chunks)} chunks to Weaviate...")
-                    from services.weaviate_service import weaviate_service
-
-                    # Create collection name based on channel_id (sanitize for Weaviate)
-                    collection_name = channel_id.replace("-", "_")
-
-                    # Try to upload chunks to Weaviate
-                    try:
-                        success = await weaviate_service.upload_chunks(
-                            file_path=minio_path,  # This is the correct path for deletion
-                            file_name=file_info["file_name"],
-                            chunks=chunks,
-                            collection_name=collection_name,
+                # Process results
+                for idx, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        print(
+                            f"Error processing file {batch[idx]['file_name']}: {result}"
                         )
-                        if success:
-                            print(
-                                f"✓ Successfully uploaded chunks to Weaviate collection: {collection_name}"
-                            )
-                            result["weaviate_uploaded"] = True
-                            result["weaviate_collection"] = collection_name
-                        else:
-                            print("✗ Failed to upload chunks to Weaviate")
-                            result["weaviate_uploaded"] = False
-                    except Exception as e:
-                        print(f"✗ Error uploading chunks to Weaviate: {e}")
-                        result["weaviate_uploaded"] = False
-                        result["weaviate_error"] = str(e)
-
-                processed_files.append(
-                    {
-                        "file_name": file_info["file_name"],
-                        "file_path": minio_path,  # MinIO path for download
-                        "size": file_info["file_size"],
-                        "type": "docling",
-                        "mime_type": file_info["mime_type"],
-                        "processed": True,
-                        "result": result,  # Include docling processing result with Weaviate info
-                    }
-                )
-
-                print(f"Successfully processed docling file: {file_info['file_name']}")
+                    else:
+                        processed_files.append(result)
+                        processed_count += 1
+                        print(f"✓ Processed docling file: {result['file_name']}")
 
             except Exception as e:
-                print(f"Error processing docling file {file_info['file_name']}: {e}")
-                traceback.print_exc()
+                print(f"Error processing batch {i//batch_size + 1}: {e}")
+
+        print(f"Completed processing {processed_count}/{total_files} docling files")
+
+    async def _process_single_docling_file(
+        self,
+        file_info: Dict,
+        archive_id: str,
+        channel_id: str,
+        user_id: Optional[str],
+        docling_service,
+    ) -> Dict:
+        """Process a single docling file and return result"""
+        try:
+            print(f"Processing docling file: {file_info['file_name']}")
+
+            # Process file directly from temp path (no download needed)
+            result = await docling_service.extract_and_chunk(file_info["full_path"])
+
+            # Create file record first to get ID
+            file_record = File(
+                name=file_info["file_name"],
+                file_path="",  # Will be updated after MinIO upload
+                folder_id=(
+                    str(file_info["folder_id"]) if file_info["folder_id"] else None
+                ),
+                channel_id=channel_id,
+                user_id=user_id,
+                file_size=file_info["file_size"],
+                file_type=file_info["extension"],  # Use file_type to match Meteor model
+                mime_type=file_info["mime_type"],
+            )
+            await file_record.insert()
+
+            # Generate MinIO path
+            extension = file_info["extension"]
+            minio_path = (
+                f"{channel_id}/{file_record.id}{extension}"
+                if extension
+                else f"{channel_id}/{file_record.id}"
+            )
+
+            # Upload to MinIO
+            upload_success = await self._upload_file_to_minio(
+                file_info["full_path"], minio_path, file_info["mime_type"]
+            )
+
+            if not upload_success:
+                print(f"Failed to upload {file_info['file_name']} to MinIO")
+                return {
+                    "file_name": file_info["file_name"],
+                    "file_path": minio_path,
+                    "size": file_info["file_size"],
+                    "type": "docling",
+                    "mime_type": file_info["mime_type"],
+                    "error": "Failed to upload to MinIO",
+                }
+
+            # Update file record with MinIO path
+            file_record.file_path = minio_path
+            await file_record.save()
+
+            # Upload chunks to Weaviate if available
+            chunks = result.get("chunks", [])
+            if chunks:
+                print(
+                    f"Uploading {len(chunks)} chunks to Weaviate for {file_info['file_name']}..."
+                )
+                from services.weaviate_service import weaviate_service
+
+                # Create collection name based on channel_id (sanitize for Weaviate)
+                collection_name = channel_id.replace("-", "_")
+
+                # Try to upload chunks to Weaviate
+                try:
+                    success = await weaviate_service.upload_chunks(
+                        file_path=minio_path,  # This is the correct path for deletion
+                        file_name=file_info["file_name"],
+                        chunks=chunks,
+                        collection_name=collection_name,
+                    )
+                    if success:
+                        print(
+                            f"✓ Successfully uploaded chunks to Weaviate collection: {collection_name}"
+                        )
+                        result["weaviate_uploaded"] = True
+                        result["weaviate_collection"] = collection_name
+                    else:
+                        print("✗ Failed to upload chunks to Weaviate")
+                        result["weaviate_uploaded"] = False
+                except Exception as e:
+                    print(f"✗ Error uploading chunks to Weaviate: {e}")
+                    result["weaviate_uploaded"] = False
+                    result["weaviate_error"] = str(e)
+
+            return {
+                "file_name": file_info["file_name"],
+                "file_path": minio_path,
+                "size": file_info["file_size"],
+                "type": "docling",
+                "mime_type": file_info["mime_type"],
+                "result": result,  # Include docling processing result with Weaviate info
+            }
+
+        except Exception as e:
+            print(f"Error processing docling file {file_info['file_name']}: {e}")
+            return {
+                "file_name": file_info["file_name"],
+                "file_path": "",
+                "size": file_info.get("file_size", 0),
+                "type": "docling",
+                "mime_type": file_info.get("mime_type", ""),
+                "error": str(e),
+            }
 
 
 # Singleton instance
