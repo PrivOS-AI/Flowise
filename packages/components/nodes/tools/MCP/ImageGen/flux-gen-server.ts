@@ -2,7 +2,6 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, Tool } from '@modelcontextprotocol/sdk/types.js'
 import axios from 'axios'
-import sharp from 'sharp'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -14,7 +13,6 @@ const __dirname = path.dirname(__filename)
 // Get configuration from environment variables (set by Flowise)
 const COMFYUI_ENDPOINT = process.env.COMFYUI_ENDPOINT || 'http://localhost:8188'
 const MODEL = process.env.MODEL || 'flux1.safetensors'
-const IMAGE_SIZE = parseInt(process.env.IMAGE_SIZE || '480')
 const STEPS = parseInt(process.env.STEPS || '20')
 const GUIDANCE = parseFloat(process.env.GUIDANCE || '3.5')
 
@@ -41,14 +39,7 @@ function detectModelType(modelFilename: string): string {
 
 const MODEL_TYPE = detectModelType(MODEL)
 
-console.error(`[ComfyUI MCP Server] ==========================================`)
-console.error(`[ComfyUI MCP Server] ComfyUI Endpoint: ${COMFYUI_ENDPOINT}`)
-console.error(`[ComfyUI MCP Server] Model: ${MODEL}`)
-console.error(`[ComfyUI MCP Server] Model Type: ${MODEL_TYPE}`)
-console.error(`[ComfyUI MCP Server] Image Size: ${IMAGE_SIZE}x${IMAGE_SIZE}`)
-console.error(`[ComfyUI MCP Server] Steps: ${STEPS}, Guidance: ${GUIDANCE}`)
-console.error(`[ComfyUI MCP Server] Auth: ${COMFYUI_AUTH_USER ? 'Basic Auth' : COMFYUI_API_KEY ? 'API Key' : 'None'}`)
-console.error(`[ComfyUI MCP Server] ==========================================`)
+console.error(`[ComfyUI MCP Server] Model: ${MODEL}, Endpoint: ${COMFYUI_ENDPOINT}`)
 
 /**
  * Get axios config with authentication if provided
@@ -75,29 +66,6 @@ function getAxiosConfig(): any {
 }
 
 /**
- * Compress image for display in chat UI
- */
-async function compressImageForDisplay(imageBuffer: Buffer): Promise<string> {
-    try {
-        const compressedBuffer = await sharp(imageBuffer)
-            .resize(800, null, {
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .jpeg({
-                quality: 60,
-                progressive: true
-            })
-            .toBuffer()
-
-        return compressedBuffer.toString('base64')
-    } catch (error) {
-        console.error('[ComfyUI MCP Server] Error compressing image:', error)
-        return imageBuffer.toString('base64')
-    }
-}
-
-/**
  * Sleep utility
  */
 function sleep(ms: number): Promise<void> {
@@ -108,7 +76,7 @@ function sleep(ms: number): Promise<void> {
 const TOOLS: Tool[] = [
     {
         name: 'generate_image',
-        description: 'Generate an image from a text prompt using self-hosted FLUX/Stable Diffusion models on ComfyUI. Free and private.',
+        description: 'Generate an image from a text prompt using self-hosted FLUX/Stable Diffusion models on ComfyUI. Returns image URL.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -126,7 +94,8 @@ const TOOLS: Tool[] = [
     },
     {
         name: 'generate_multiple_images',
-        description: 'Generate multiple image variations from a single prompt using self-hosted models.',
+        description:
+            'Generate multiple image variations from a single prompt using self-hosted models. Returns URLs for all images separated by ||IMAGE_SPLIT||',
         inputSchema: {
             type: 'object',
             properties: {
@@ -254,10 +223,9 @@ function buildWorkflowFromTemplate(prompt: string, negativePrompt: string, seed?
                 node.inputs.text = negativePrompt || ''
             }
         } else if (node.class_type === 'EmptySD3LatentImage' || node.class_type === 'EmptyLatentImage') {
-            // Inject image dimensions
-            node.inputs.width = IMAGE_SIZE
-            node.inputs.height = IMAGE_SIZE
+            // Keep original image size from template or use default
             node.inputs.batch_size = 1
+            // Don't set width/height to keep original size from ComfyUI template
         } else if (node.class_type === 'FluxGuidance') {
             // Inject guidance scale
             node.inputs.guidance = GUIDANCE
@@ -358,19 +326,91 @@ async function queueAndWaitForImage(workflow: any): Promise<Buffer> {
 }
 
 /**
+ * Upload image directly to S3/MinIO
+ */
+async function uploadDirectToS3(imageBuffer: Buffer, filename: string): Promise<string> {
+    try {
+        const accessKeyId = process.env.S3_STORAGE_ACCESS_KEY_ID
+        const secretAccessKey = process.env.S3_STORAGE_SECRET_ACCESS_KEY
+        const region = process.env.S3_STORAGE_REGION
+        const bucket = process.env.S3_STORAGE_BUCKET_NAME
+        const endpoint = process.env.S3_ENDPOINT_URL
+        const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === 'true'
+
+        if (!accessKeyId || !secretAccessKey || !region || !bucket) {
+            throw new Error('Missing S3_STORAGE_* configuration')
+        }
+
+        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
+
+        const s3Client = new S3Client({
+            region,
+            forcePathStyle,
+            ...(endpoint && { endpoint }),
+            credentials: {
+                accessKeyId,
+                secretAccessKey
+            }
+        })
+
+        // Generate unique key
+        const timestamp = Date.now()
+        const random = Math.random().toString(36).substr(2, 9)
+        const key = `mcp-images/${timestamp}-${random}-${filename}`
+
+        // Upload to S3
+        const command = new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: imageBuffer,
+            ContentType: 'image/jpeg'
+        })
+
+        await s3Client.send(command)
+
+        // Return public URL
+        let imageUrl: string
+        if (endpoint) {
+            // MinIO/S3-compatible endpoint
+            const baseUrl = endpoint.replace(/\/$/, '')
+            imageUrl = `${baseUrl}/${bucket}/${key}`
+        } else {
+            // AWS S3
+            imageUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`
+        }
+
+        console.error(`[ComfyUI MCP Server] Uploaded to S3: ${imageUrl}`)
+        return imageUrl
+    } catch (error: any) {
+        console.error('[ComfyUI MCP Server] Error uploading to S3:', error.message)
+        throw error
+    }
+}
+
+/**
+ * Upload image to storage
+ */
+async function uploadImageToStorage(imageBuffer: Buffer, filename: string): Promise<string> {
+    try {
+        if (process.env.S3_STORAGE_ACCESS_KEY_ID && process.env.STORAGE_TYPE === 's3') {
+            return await uploadDirectToS3(imageBuffer, filename)
+        }
+
+        throw new Error('S3/MinIO storage not configured')
+    } catch (error: any) {
+        console.error('[ComfyUI MCP Server] Error uploading:', error.message)
+        throw new Error(`Failed to upload image: ${error.message}`)
+    }
+}
+
+/**
  * Generate a single image
  */
 async function generateImage(args: any) {
     const prompt = args.prompt as string
     const negativePrompt = args.negative_prompt as string | undefined
 
-    console.error(`[ComfyUI MCP Server] ==========================================`)
-    console.error(`[ComfyUI MCP Server] Generating image...`)
-    console.error(`[ComfyUI MCP Server] Prompt: ${prompt}`)
-    if (negativePrompt) {
-        console.error(`[ComfyUI MCP Server] Negative: ${negativePrompt}`)
-    }
-    console.error(`[ComfyUI MCP Server] ==========================================`)
+    console.error(`[ComfyUI MCP Server] Generating image: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`)
 
     // Build workflow from template
     const workflow = buildWorkflowFromTemplate(prompt, negativePrompt || '')
@@ -380,19 +420,18 @@ async function generateImage(args: any) {
 
     console.error(`[ComfyUI MCP Server] Image received, size: ${(imageBuffer.length / 1024).toFixed(2)} KB`)
 
-    // Compress for display
-    console.error(`[ComfyUI MCP Server] Compressing image...`)
-    const compressedBase64 = await compressImageForDisplay(imageBuffer)
-    const compressedSize = (Math.round(compressedBase64.length * 0.75) / 1024).toFixed(2)
-    console.error(`[ComfyUI MCP Server] Compressed to ~${compressedSize} KB`)
+    // Generate unique filename
+    const timestamp = Date.now()
+    const filename = `mcp-image-${timestamp}.jpg`
 
-    const dataUrl = `data:image/jpeg;base64,${compressedBase64}`
+    // Upload to storage and get URL
+    const imageUrl = await uploadImageToStorage(imageBuffer, filename)
 
     return {
         content: [
             {
                 type: 'text',
-                text: `Image generated successfully using ${MODEL}!\n![Generated Image](${dataUrl})`
+                text: imageUrl
             }
         ]
     }
@@ -406,10 +445,7 @@ async function generateMultipleImages(args: any) {
     const count = Math.min(Math.max(parseInt(args.count) || 2, 1), 4)
     const negativePrompt = args.negative_prompt as string | undefined
 
-    console.error(`[ComfyUI MCP Server] ==========================================`)
-    console.error(`[ComfyUI MCP Server] Generating ${count} images...`)
-    console.error(`[ComfyUI MCP Server] Prompt: ${prompt}`)
-    console.error(`[ComfyUI MCP Server] ==========================================`)
+    console.error(`[ComfyUI MCP Server] Generating ${count} images: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`)
 
     const allImages: string[] = []
 
@@ -422,9 +458,12 @@ async function generateMultipleImages(args: any) {
 
         try {
             const imageBuffer = await queueAndWaitForImage(workflow)
-            const compressedBase64 = await compressImageForDisplay(imageBuffer)
-            const dataUrl = `data:image/jpeg;base64,${compressedBase64}`
-            allImages.push(dataUrl)
+
+            // Upload and get URL
+            const timestamp = Date.now()
+            const filename = `mcp-image-${timestamp}-${i + 1}.jpg`
+            const imageUrl = await uploadImageToStorage(imageBuffer, filename)
+            allImages.push(imageUrl)
         } catch (error: any) {
             console.error(`[ComfyUI MCP Server] Error generating image ${i + 1}:`, error.message)
             // Continue with next image
@@ -435,10 +474,9 @@ async function generateMultipleImages(args: any) {
         throw new Error('Failed to generate any images')
     }
 
-    let responseText = `Generated ${allImages.length} images using ${MODEL}!\n\n`
-    allImages.forEach((dataUrl, idx) => {
-        responseText += `![Image ${idx + 1}](${dataUrl})\n\n`
-    })
+    // Return URLs for all images separated by marker
+    const responseText = allImages.join('||IMAGE_SPLIT||')
+    console.error(`[ComfyUI MCP Server] Generated ${allImages.length} images`)
 
     return {
         content: [

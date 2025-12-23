@@ -530,6 +530,77 @@ const updateBotEnabled = async (req: Request, res: Response, next: NextFunction)
     }
 }
 
+// SUBAGENT MANAGEMENT
+
+const getAllSubAgents = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Get all chatflows with subAgentEnabled = true
+        const subAgents = await chatflowsService.getAllSubAgentEnabledChatflows()
+
+        // Filter by workspace if user has one
+        const workspaceId = req.user?.activeWorkspaceId
+        const filteredSubAgents = workspaceId ? subAgents.filter((subAgent) => subAgent.workspaceId === workspaceId) : subAgents
+
+        // Apply room isolation
+        const roomFilteredSubAgents = req.isRootAdmin
+            ? filteredSubAgents
+            : filteredSubAgents.filter((subAgent) => !subAgent.roomId || subAgent.roomId === req.roomId)
+
+        return res.json(roomFilteredSubAgents)
+    } catch (error) {
+        next(error)
+    }
+}
+
+const updateSubAgentEnabled = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.updateSubAgentEnabled - id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const { enabled } = req.body
+
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `Error: Cannot modify subagent config for global resources`)
+        }
+
+        // Update subAgentEnabled field
+        chatflow.subAgentEnabled = enabled || false
+
+        const orgId = req.user?.activeOrganizationId
+        if (!orgId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Organization not found`)
+        }
+
+        const workspaceId = req.user?.activeWorkspaceId
+        if (!workspaceId) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Workspace not found`)
+        }
+
+        const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
+
+        const updatedChatflow = await chatflowsService.updateChatflow(chatflow, chatflow, orgId, workspaceId, subscriptionId)
+
+        return res.json({
+            message: 'SubAgent configuration updated successfully',
+            chatflowId,
+            subAgentEnabled: updatedChatflow.subAgentEnabled
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
 // Schedule Monitoring Endpoints
 
 const getScheduleMetrics = async (req: Request, res: Response, next: NextFunction) => {
@@ -662,5 +733,7 @@ export default {
     getScheduleHealth,
     getScheduleQueueStats,
     getAllBots,
-    updateBotEnabled
+    updateBotEnabled,
+    getAllSubAgents,
+    updateSubAgentEnabled
 }
