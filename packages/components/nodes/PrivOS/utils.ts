@@ -6,6 +6,7 @@
 import FormData from 'form-data'
 import { secureAxiosRequest } from '../../src/httpSecurity'
 import { PRIVOS_ENDPOINTS, PRIVOS_HEADERS, ERROR_MESSAGES } from './constants'
+import { ICommonObject } from '../../src'
 
 // MIME type mapping for file extensions
 export const MIME_TYPE_MAP: { [key: string]: string } = {
@@ -86,4 +87,103 @@ export async function uploadFileToPrivos(
     }
 
     return response.data.file
+}
+
+/*
+ * Build a map of field definitions from list info data
+ * @param listInfoData - List info data containing field definitions
+ * @returns Map of field definitions keyed by field ID
+ */
+export function buildFieldDefinitionMap(listInfoData: any = {}) {
+    const fieldDefs = listInfoData.list?.fieldDefinitions ?? []
+    return fieldDefs.reduce((acc: any, { _id, name, type, options }: any) => {
+        acc[_id] = {
+            name,
+            type,
+            options: options ?? []
+        }
+        return acc
+    }, {})
+}
+
+/*
+ * Map custom fields from item info data with definitions from list info data
+ * @param itemInfoData - Item info data containing custom fields
+ * @param listInfoData - List info data containing field definitions
+ * @returns Array of mapped custom fields with definitions
+ */
+export function mapCustomFields(itemInfoData: any = {}, listInfoData: any = {}) {
+    const item = itemInfoData.item
+    if (!item || !Array.isArray(item.customFields)) return []
+
+    const fieldDefMap = buildFieldDefinitionMap(listInfoData)
+
+    return item.customFields.map(({ fieldId, value }: any) => {
+        const def = fieldDefMap[fieldId]
+        return {
+            fieldId,
+            name: def?.name ?? null,
+            type: def?.type ?? null,
+            options: def?.options ?? [],
+            value
+        }
+    })
+}
+
+export function extractTextFromHtml(html: string): string {
+    if (!html) return ''
+    const htmlStrip = html
+        ?.toString()
+        .replace(/<[^>]*>/g, '')
+        .trim()
+    return htmlStrip
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+}
+
+export const PrivosErrorHandler = {
+    /**
+     * Chuẩn hóa lỗi từ API hoặc System thành cấu trúc Node Output
+     */
+    wrapError: (nodeName: string, error: any, nodeId: string, state?: ICommonObject) => {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown Internal Error'
+
+        console.error(`[${nodeName}][ID: ${nodeId}] Execution Failed:`, error)
+
+        return {
+            id: nodeId,
+            name: nodeName,
+            state: state || {},
+            output: {
+                content: `🚨 [${nodeName}] Error: ${errorMessage}`,
+                error: true,
+                rawError: error
+            }
+        }
+    }
+}
+
+export const parseMultiSelectFields = (selectedFields: any): string[] => {
+    if (!selectedFields) return []
+    let parsed: any[] = []
+
+    try {
+        parsed = typeof selectedFields === 'string' ? JSON.parse(selectedFields) : selectedFields
+    } catch {
+        parsed = [selectedFields]
+    }
+
+    const flattened: string[] = []
+    parsed.forEach((item) => {
+        try {
+            const innerParsed = typeof item === 'string' ? JSON.parse(item) : item
+            Array.isArray(innerParsed) ? flattened.push(...innerParsed) : flattened.push(String(item))
+        } catch {
+            flattened.push(String(item))
+        }
+    })
+    return flattened
 }

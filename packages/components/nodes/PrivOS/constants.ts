@@ -45,7 +45,11 @@ export const PRIVOS_ENDPOINTS = {
     FILES_UPLOAD: '/files.upload',
     CHANNELS_MEMBERS: '/channels.members',
     GROUPS_MEMBERS: '/groups.members',
-    IM_MEMBERS: '/im.members'
+    IM_MEMBERS: '/im.members',
+
+    // endpoint updated
+    items: { info: '/internal/items.info' },
+    lists: { all: '/internal/lists' }
 } as const
 
 // ============================================================================

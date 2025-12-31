@@ -498,3 +498,10 @@ export interface IHumanInput {
     startNodeId: string
     feedback?: string
 }
+
+export interface IPrivosCredential {
+    baseUrl: string
+    apiKey: string
+    authToken?: string
+    userId?: string
+}

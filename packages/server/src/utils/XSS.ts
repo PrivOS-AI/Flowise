@@ -43,3 +43,20 @@ export function getAllowedIframeOrigins(): string {
     // Also CSP allowed values: self or none
     return process.env.IFRAME_ORIGINS ?? '*'
 }
+
+export function getCorsOptionsV2() {
+    return {
+        origin: (origin: any, callback: any) => {
+            if (!origin || origin?.startsWith('http://localhost')) return callback(null, true)
+
+            const allowed = new RegExp(`^https?:\\/\\/([a-zA-Z0-9-]+\\.)?${'domain'.replace(/\./g, '\\.')}$`)
+            if (allowed.test(origin)) {
+                callback(null, true)
+            } else {
+                callback(new Error('Not allowed by CORS'))
+            }
+        },
+
+        credentials: true
+    }
+}
