@@ -326,9 +326,11 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
                     top: 20,
                     opacity: disabled ? 0.5 : 1,
                     cursor: disabled ? 'not-allowed' : 'pointer',
-                    '&:hover': disabled ? {
-                        backgroundColor: theme.palette.grey[400]
-                    } : {}
+                    '&:hover': disabled
+                        ? {
+                              backgroundColor: theme.palette.grey[400]
+                          }
+                        : {}
                 }}
                 ref={anchorRef}
                 size='small'
@@ -679,7 +681,8 @@ AddNodes.propTypes = {
     node: PropTypes.object,
     onFlowGenerated: PropTypes.func,
     isAgentCanvas: PropTypes.bool,
-    isAgentflowv2: PropTypes.bool
+    isAgentflowv2: PropTypes.bool,
+    disabled: PropTypes.bool
 }
 
 export default memo(AddNodes)
