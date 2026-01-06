@@ -7,8 +7,10 @@ import {
     INodeOutputsValue,
     INodeParams,
     IPrivosCredential,
+    processTemplateVariables,
     secureAxiosRequest
 } from '../../../src'
+import { updateFlowState } from '../../agentflow/utils'
 import { PRIVOS_ENDPOINTS } from '../constants'
 import { extractTextFromHtml, mapCustomFields, parseMultiSelectFields, PrivosErrorHandler } from '../utils'
 
@@ -68,19 +70,36 @@ class GetItemInfo_Privos implements INode {
                     { label: 'Object (Single)', name: 'object' }
                 ],
                 default: 'object'
-            }
-        ]
-        this.outputs = [
+            },
             {
-                label: 'Item Data',
-                name: 'itemResult',
-                baseClasses: [this.type, 'string', 'object']
+                label: 'Update Flow State',
+                name: 'updateFLowState',
+                description: 'Update runtime state during the execution of the workflow',
+                type: 'array',
+                optional: true,
+                acceptVariable: true,
+                array: [
+                    {
+                        label: 'Key',
+                        name: 'key',
+                        type: 'asyncOptions',
+                        loadMethod: 'listRuntimeStateKeys',
+                        freeSolo: true
+                    },
+                    {
+                        label: 'Value',
+                        name: 'value',
+                        type: 'string',
+                        acceptVariable: true,
+                        acceptNodeOutputAsVariable: true
+                    }
+                ]
             }
         ]
         this.output = [
             {
-                label: 'Item Data',
-                name: 'itemResult',
+                label: 'Result Data',
+                name: 'result',
                 baseClasses: [this.type, 'string', 'object']
             }
         ]
@@ -91,7 +110,7 @@ class GetItemInfo_Privos implements INode {
 
         // 1. Fetch Item Info
         const itemRes = await secureAxiosRequest({
-            url: `${baseUrl}${PRIVOS_ENDPOINTS.items.info}`,
+            url: `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_INFO}`,
             headers,
             params: { itemId }
         })
@@ -101,7 +120,7 @@ class GetItemInfo_Privos implements INode {
         let listInfo = null
         if (item?.listId) {
             const listRes = await secureAxiosRequest({
-                url: `${baseUrl}${PRIVOS_ENDPOINTS.lists.all}/${item.listId}`,
+                url: `${baseUrl}${PRIVOS_ENDPOINTS.LISTS}/${item.listId}`,
                 headers
             })
             listInfo = listRes.data
@@ -139,7 +158,7 @@ class GetItemInfo_Privos implements INode {
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        const { itemId, outputStructure, selectedFields } = nodeData.inputs as ICommonObject
+        const { itemId, outputStructure, selectedFields, updateFLowState } = nodeData.inputs as ICommonObject
         if (!itemId) throw new Error('Item ID is required')
 
         const state = options.agentflowRuntime?.state
@@ -163,13 +182,20 @@ class GetItemInfo_Privos implements INode {
 
             const finalOutput = outputStructure === 'object' ? result : [result]
 
+            // Update flow state if needed
+            let newState = { ...state }
+            if (updateFLowState && Array.isArray(updateFLowState) && updateFLowState.length > 0) {
+                newState = updateFlowState(state, updateFLowState)
+            }
+            newState = processTemplateVariables(newState, finalOutput)
+
             return {
                 itemResult: finalOutput,
                 id: nodeData.id,
                 name: this.name,
                 input: { itemId, selectedFields },
                 output: { content: JSON.stringify(finalOutput, null, 2) },
-                state
+                state: newState
             }
         } catch (error) {
             return PrivosErrorHandler.wrapError(this.name, error, nodeData.id, state)

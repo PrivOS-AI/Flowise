@@ -56,6 +56,8 @@ import ChatFeedbackContentDialog from '@/ui-component/dialog/ChatFeedbackContent
 import StarterPromptsCard from '@/ui-component/cards/StarterPromptsCard'
 import AgentReasoningCard from './AgentReasoningCard'
 import AgentExecutedDataCard from './AgentExecutedDataCard'
+import AgentProgressText from './AgentProgressText'
+import LLMThinkingText from './LLMThinkingText'
 import { ImageButton, ImageSrc, ImageBackdrop, ImageMarked } from '@/ui-component/button/ImageButton'
 import CopyToClipboardButton from '@/ui-component/button/CopyToClipboardButton'
 import ThumbsUpButton from '@/ui-component/button/ThumbsUpButton'
@@ -618,6 +620,20 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
         })
     }
 
+    const updateLastMessageThinking = (thinking) => {
+        setMessages((prevMessages) => {
+            let allMessages = [...cloneDeep(prevMessages)]
+            if (allMessages[allMessages.length - 1].type === 'userMessage') return allMessages
+            // Append thinking content to existing thinking or create new
+            if (allMessages[allMessages.length - 1].thinking) {
+                allMessages[allMessages.length - 1].thinking += thinking
+            } else {
+                allMessages[allMessages.length - 1].thinking = thinking
+            }
+            return allMessages
+        })
+    }
+
     const updateAgentFlowEvent = (event) => {
         if (event === 'INPROGRESS') {
             setMessages((prevMessages) => [...prevMessages, { message: '', type: 'apiMessage', agentFlowEventStatus: event }])
@@ -1043,6 +1059,9 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                         break
                     case 'agentReasoning':
                         updateLastMessageAgentReasoning(payload.data)
+                        break
+                    case 'thinking':
+                        updateLastMessageThinking(payload.data)
                         break
                     case 'agentFlowEvent':
                         updateAgentFlowEvent(payload.data)
@@ -2416,13 +2435,23 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                         {message.agentFlowExecutedData &&
                                             Array.isArray(message.agentFlowExecutedData) &&
                                             message.agentFlowExecutedData.length > 0 && (
-                                                <AgentExecutedDataCard
-                                                    status={message.agentFlowEventStatus}
-                                                    execution={message.agentFlowExecutedData}
-                                                    agentflowId={chatflowid}
-                                                    sessionId={chatId}
-                                                />
+                                                <>
+                                                    <AgentExecutedDataCard
+                                                        status={message.agentFlowEventStatus}
+                                                        execution={message.agentFlowExecutedData}
+                                                        agentflowId={chatflowid}
+                                                        sessionId={chatId}
+                                                    />
+                                                    <AgentProgressText
+                                                        execution={message.agentFlowExecutedData}
+                                                        status={message.agentFlowEventStatus}
+                                                    />
+                                                </>
                                             )}
+                                        {/* LLM Thinking Process */}
+                                        {message.thinking && (
+                                            <LLMThinkingText thinking={message.thinking} status={message.agentFlowEventStatus} />
+                                        )}
                                         {message.usedTools && (
                                             <div
                                                 style={{

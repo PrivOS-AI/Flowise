@@ -26,7 +26,9 @@ class FormatAgentOutput_PrivosUtilities implements INode {
         this.version = 1.0
         this.type = 'ResponseFormatter'
         this.category = 'Privos-Utilities'
-        ;(this.description = 'Convert agent output to structured JSON string'), (this.icon = 'privos.svg')
+        // this.category = 'Agent Flows'
+        this.description = 'Convert agent output to structured JSON string'
+        this.icon = 'privos.svg'
         this.baseClasses = [this.type]
         this.color = '#6c757d'
         this.inputs = [
@@ -36,21 +38,22 @@ class FormatAgentOutput_PrivosUtilities implements INode {
                 type: 'string',
                 description: 'Raw output from previous agent or node',
                 acceptVariable: true,
-                acceptNodeOutputAsVariable: true,
-                rows: 3
+                optional: true,
+                acceptNodeOutputAsVariable: true
+            },
+            {
+                label: 'Message',
+                name: 'message',
+                type: 'string',
+                acceptVariable: true,
+                default: 'Success',
+                optional: true
             },
             {
                 label: 'Is Modify?',
                 name: 'isModify',
                 type: 'boolean',
                 default: false
-            }
-        ]
-        this.outputs = [
-            {
-                label: 'JSON String',
-                name: 'jsonString',
-                baseClasses: ['string']
             }
         ]
     }
@@ -71,7 +74,7 @@ class FormatAgentOutput_PrivosUtilities implements INode {
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        const { agentOutput, isModify } = nodeData.inputs as { agentOutput: any; isModify: boolean }
+        const { agentOutput, isModify } = nodeData.inputs as ICommonObject
         const state = options.agentflowRuntime?.state
 
         try {
