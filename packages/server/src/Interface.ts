@@ -274,6 +274,7 @@ export interface IDepthQueue {
 
 export interface IAgentflowExecutedData {
     nodeLabel: string
+    executionLabel?: string
     nodeId: string
     data: INodeExecutionData
     previousNodeIds: string[]
