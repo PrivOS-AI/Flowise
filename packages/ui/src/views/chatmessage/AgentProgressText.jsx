@@ -1,142 +1,147 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import PropTypes from 'prop-types'
-import { Box, Typography, LinearProgress } from '@mui/material'
-import { IconLoader } from '@tabler/icons-react'
+import { Box, Typography, Collapse, IconButton } from '@mui/material'
+import { IconLoader, IconCheck, IconAlertCircle, IconChevronDown } from '@tabler/icons-react'
 import { useTheme } from '@mui/material/styles'
 
-/**
- * AgentProgressText - Component hiển thị tiến độ agent dạng text đơn giản
- * Hiển thị: "Đang thực hiện 1/3" hoặc "Đã hoàn thành 3/3 bước"
- */
-const AgentProgressText = ({ execution, status }) => {
-    const theme = useTheme()
-    const [progress, setProgress] = useState({ current: 0, total: 0, text: '' })
-
-    useEffect(() => {
-        if (!execution || !Array.isArray(execution) || execution.length === 0) {
-            setProgress({ current: 0, total: 0, text: '' })
-            return
-        }
-
-        // Đếm tổng số node và số node đã hoàn thành
-        const totalNodes = execution.length
-        const finishedNodes = execution.filter((node) => node.status === 'FINISHED').length
-        const inProgressNodes = execution.filter((node) => node.status === 'INPROGRESS').length
-        const errorNodes = execution.filter((node) => node.status === 'ERROR' || node.status === 'TIMEOUT').length
-        const stoppedNodes = execution.filter((node) => node.status === 'STOPPED' || node.status === 'TERMINATED').length
-
-        // Tính current step
-        let current = finishedNodes
-        if (inProgressNodes > 0) {
-            current = finishedNodes + 1 // Đang thực hiện = finished + 1
-        }
-
-        // Xác định trạng thái tổng thể
-        const isCompleted = status === 'FINISHED' || (finishedNodes === totalNodes && totalNodes > 0)
-        const isError = status === 'ERROR' || errorNodes > 0
-        const isStopped = status === 'STOPPED' || status === 'TERMINATED' || stoppedNodes > 0
-        const isInProgress = inProgressNodes > 0 || (!isCompleted && !isError && !isStopped)
-
-        // Tạo text hiển thị
-        let progressText = ''
-        if (isCompleted) {
-            progressText = `✅ Đã hoàn thành ${totalNodes} bước`
-        } else if (isError) {
-            progressText = `❌ Lỗi tại bước ${current}/${totalNodes}`
-        } else if (isStopped) {
-            progressText = `⏸️ Đã dừng tại bước ${current}/${totalNodes}`
-        } else if (isInProgress) {
-            progressText = `⏳ Đang thực hiện ${current}/${totalNodes}`
-        } else {
-            progressText = `🚀 Chuẩn bị thực hiện ${totalNodes} bước`
-        }
-
-        setProgress({
-            current,
-            total: totalNodes,
-            text: progressText
-        })
-    }, [execution, status])
-
-    // Không hiển thị nếu không có progress
-    if (progress.total === 0) {
-        return null
-    }
-
-    // Tính % complete cho progress bar
-    const progressPercent = progress.total > 0 ? (progress.current / progress.total) * 100 : 0
-
-    // Xác định màu progress bar
-    const getProgressColor = () => {
-        if (status === 'ERROR') return theme.palette.error.main
-        if (status === 'STOPPED' || status === 'TERMINATED') return theme.palette.warning.main
-        if (status === 'FINISHED') return theme.palette.success.main
-        return theme.palette.primary.main
-    }
+const ExecutionStepItem = memo(function ExecutionStepItem({ step, theme, getStepIcon }) {
+    const content = step.executionLabel || ''
 
     return (
         <Box
             sx={{
                 display: 'flex',
-                flexDirection: 'column',
-                width: '100%',
-                mt: 1,
-                mb: 1,
-                px: 1,
-                py: 1,
-                borderRadius: 1,
-                bgcolor: 'action.hover',
-                border: `1px solid ${theme.palette.divider}`
+                gap: 1.5,
+                px: 1.5,
+                py: 1.2,
+                borderRadius: '8px',
+                border: `1px solid ${theme.palette.divider}`,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.01)',
+                mb: 1
             }}
         >
-            {/* Text progress */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {status === 'INPROGRESS' && <IconLoader size={16} color={theme.palette.primary.main} className='spin-animation' />}
-                    <Typography
-                        variant='body2'
-                        sx={{
-                            fontWeight: 500,
-                            color: 'text.primary'
-                        }}
-                    >
-                        {progress.text}
-                    </Typography>
-                </Box>
-                {/* Hiển thị % */}
+            <Box sx={{ mt: 0.3 }}>{getStepIcon(step.status)}</Box>
+
+            <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
                     variant='caption'
                     sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.75rem',
                         color: 'text.secondary',
-                        fontWeight: 'bold',
-                        fontSize: '0.8rem'
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        display: 'block'
                     }}
                 >
-                    {Math.round(progressPercent)}%
+                    {content}
+                </Typography>
+            </Box>
+        </Box>
+    )
+})
+
+ExecutionStepItem.propTypes = {
+    step: PropTypes.shape({
+        status: PropTypes.string,
+        executionLabel: PropTypes.string,
+        nodeId: PropTypes.string
+    }).isRequired,
+    theme: PropTypes.object.isRequired,
+    getStepIcon: PropTypes.func.isRequired
+}
+
+const AgentProgressText = memo(function AgentProgressText({ execution }) {
+    const theme = useTheme()
+    const [expandedAll, setExpandedAll] = useState(true)
+
+    const getStepIcon = (stepStatus) => {
+        const iconProps = { size: 16, stroke: 1.5 }
+
+        if (stepStatus === 'FINISHED') {
+            return <IconCheck {...iconProps} color={theme.palette.success.main} />
+        }
+
+        if (stepStatus === 'ERROR') {
+            return <IconAlertCircle {...iconProps} color={theme.palette.error.main} />
+        }
+
+        if (stepStatus === 'INPROGRESS') {
+            return (
+                <Box
+                    sx={{
+                        animation: 'spin 2s linear infinite',
+                        '@keyframes spin': {
+                            '100%': { transform: 'rotate(360deg)' }
+                        }
+                    }}
+                >
+                    <IconLoader {...iconProps} color={theme.palette.primary.main} />
+                </Box>
+            )
+        }
+
+        return (
+            <Box
+                sx={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    border: `2px solid ${theme.palette.action.disabled}`
+                }}
+            />
+        )
+    }
+
+    if (!execution.length) return null
+
+    return (
+        <Box sx={{ width: '100%' }}>
+            <Box
+                onClick={() => setExpandedAll(!expandedAll)}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    mb: 1
+                }}
+            >
+                <IconButton
+                    size='small'
+                    sx={{
+                        transform: expandedAll ? 'rotate(180deg)' : 'rotate(0)',
+                        transition: 'transform 0.2s'
+                    }}
+                >
+                    <IconChevronDown size={18} />
+                </IconButton>
+
+                <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                    Tiến trình Agent
                 </Typography>
             </Box>
 
-            {/* Progress bar */}
-            <LinearProgress
-                variant='determinate'
-                value={progressPercent}
-                sx={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: theme.palette.action.selected,
-                    '& .MuiLinearProgress-bar': {
-                        backgroundColor: getProgressColor(),
-                        borderRadius: 3
-                    }
-                }}
-            />
+            <Collapse in={expandedAll}>
+                {execution.map((step, index) => (
+                    <ExecutionStepItem key={step.nodeId || index} step={step} theme={theme} getStepIcon={getStepIcon} />
+                ))}
+            </Collapse>
         </Box>
+    )
+})
+
+AgentProgressText.propTypes = {
+    execution: PropTypes.arrayOf(
+        PropTypes.shape({
+            nodeId: PropTypes.string,
+            status: PropTypes.string,
+            executionLabel: PropTypes.string
+        })
     )
 }
 
-AgentProgressText.propTypes = {
-    execution: PropTypes.array,
-    status: PropTypes.string
+AgentProgressText.defaultProps = {
+    execution: []
 }
 
-export default memo(AgentProgressText)
+export default AgentProgressText

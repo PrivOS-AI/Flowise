@@ -2442,10 +2442,7 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                                         agentflowId={chatflowid}
                                                         sessionId={chatId}
                                                     />
-                                                    <AgentProgressText
-                                                        execution={message.agentFlowExecutedData}
-                                                        status={message.agentFlowEventStatus}
-                                                    />
+                                                    <AgentProgressText execution={message.agentFlowExecutedData} />
                                                 </>
                                             )}
                                         {/* LLM Thinking Process */}
