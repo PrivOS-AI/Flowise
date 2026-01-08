@@ -78,4 +78,7 @@ export class ChatFlow implements IChatFlow {
 
     @Column({ nullable: true, default: false })
     subAgentEnabled?: boolean
+
+    @Column({ nullable: true, type: 'text' })
+    folderId?: string
 }

@@ -102,6 +102,14 @@ const MainRoutes = {
             )
         },
         {
+            path: '/agentflows/:folderId',
+            element: (
+                <RequireAuth permission={'agentflows:view'}>
+                    <Agentflows />
+                </RequireAuth>
+            )
+        },
+        {
             path: '/executions',
             element: (
                 <RequireAuth permission={'executions:view'}>

@@ -1,9 +1,13 @@
 import PropTypes from 'prop-types'
 import { useSelector } from 'react-redux'
+import { useState } from 'react'
 
 // material-ui
 import { styled } from '@mui/material/styles'
-import { Box, Grid, Tooltip, Typography, useTheme } from '@mui/material'
+import { Box, Grid, Tooltip, Typography, useTheme, IconButton, Menu, MenuItem } from '@mui/material'
+
+// icons
+import { IconDots } from '@tabler/icons-react'
 
 // project imports
 import MainCard from '@/ui-component/cards/MainCard'
@@ -30,14 +34,44 @@ const CardWrapper = styled(MainCard)(({ theme }) => ({
 
 // ===========================|| CONTRACT CARD ||=========================== //
 
-const ItemCard = ({ data, images, icons, onClick }) => {
+const ItemCard = ({ data, images, icons, onClick, menuOptions }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
+    const [anchorEl, setAnchorEl] = useState(null)
+    const menuOpen = Boolean(anchorEl)
+
+    const handleMenuClick = (e) => {
+        e.stopPropagation()
+        setAnchorEl(e.currentTarget)
+    }
+
+    const handleMenuClose = () => {
+        setAnchorEl(null)
+    }
+
+    const handleMenuAction = (action) => {
+        action(data)
+        handleMenuClose()
+    }
 
     return (
         <CardWrapper content={false} onClick={onClick} sx={{ border: 1, borderColor: theme.palette.grey[900] + 25, borderRadius: 2 }}>
             <Box sx={{ height: '100%', p: 2.25 }}>
                 <Grid container justifyContent='space-between' direction='column' sx={{ height: '100%', gap: 3 }}>
+                    {menuOptions && (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                            <IconButton size='small' onClick={handleMenuClick}>
+                                <IconDots size={18} />
+                            </IconButton>
+                            <Menu anchorEl={anchorEl} open={menuOpen} onClose={handleMenuClose}>
+                                {menuOptions.map((option, index) => (
+                                    <MenuItem key={index} onClick={() => handleMenuAction(option.action)}>
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </Menu>
+                        </Box>
+                    )}
                     <Box display='flex' flexDirection='column' sx={{ width: '100%' }}>
                         <div
                             style={{
@@ -187,7 +221,13 @@ ItemCard.propTypes = {
     data: PropTypes.object,
     images: PropTypes.array,
     icons: PropTypes.array,
-    onClick: PropTypes.func
+    onClick: PropTypes.func,
+    menuOptions: PropTypes.arrayOf(
+        PropTypes.shape({
+            label: PropTypes.string,
+            action: PropTypes.func
+        })
+    )
 }
 
 export default ItemCard

@@ -34,7 +34,7 @@ import { closeSnackbar as closeSnackbarAction, enqueueSnackbar as enqueueSnackba
 
 // ==============================|| CANVAS HEADER ||============================== //
 
-const CanvasHeader = ({ chatflow, isAgentCanvas, isAgentflowV2, handleSaveFlow, handleDeleteFlow, handleLoadFlow }) => {
+const CanvasHeader = ({ chatflow, isAgentCanvas, isAgentflowV2, handleSaveFlow, handleDeleteFlow, handleLoadFlow, folderId }) => {
     const theme = useTheme()
     const dispatch = useDispatch()
     const navigate = useNavigate()
@@ -272,7 +272,9 @@ const CanvasHeader = ({ chatflow, isAgentCanvas, isAgentflowV2, handleSaveFlow, 
                                     if (window.history.state && window.history.state.idx > 0) {
                                         navigate(-1)
                                     } else {
-                                        navigate('/', { replace: true })
+                                        // Navigate back to agentflows, respecting folder context
+                                        const backPath = folderId ? `/agentflows/${folderId}` : '/agentflows'
+                                        navigate(backPath, { replace: true })
                                     }
                                 }}
                             >
@@ -508,7 +510,8 @@ CanvasHeader.propTypes = {
     handleDeleteFlow: PropTypes.func,
     handleLoadFlow: PropTypes.func,
     isAgentCanvas: PropTypes.bool,
-    isAgentflowV2: PropTypes.bool
+    isAgentflowV2: PropTypes.bool,
+    folderId: PropTypes.string
 }
 
 export default CanvasHeader
