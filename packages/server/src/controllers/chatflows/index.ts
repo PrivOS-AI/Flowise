@@ -601,6 +601,41 @@ const updateSubAgentEnabled = async (req: Request, res: Response, next: NextFunc
     }
 }
 
+const updateChatflowFolder = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (typeof req.params === 'undefined' || !req.params.id) {
+            throw new InternalFlowiseError(
+                StatusCodes.PRECONDITION_FAILED,
+                `Error: chatflowsController.updateChatflowFolder - chatflow id not provided!`
+            )
+        }
+
+        const chatflowId = req.params.id
+        const { folderId } = req.body
+
+        const chatflow = await chatflowsService.getChatflowById(chatflowId)
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Error: Chatflow ${chatflowId} not found`)
+        }
+
+        // Room isolation check
+        if (!req.isRootAdmin && req.roomId && !chatflow.roomId) {
+            throw new InternalFlowiseError(StatusCodes.FORBIDDEN, `Error: Cannot modify folder for global resources`)
+        }
+
+        // Update folder
+        const updatedChatflow = await chatflowsService.updateChatflowFolder(chatflowId, folderId ?? null)
+
+        return res.json({
+            message: 'Chatflow folder updated successfully',
+            chatflowId,
+            folderId: updatedChatflow.folderId
+        })
+    } catch (error) {
+        next(error)
+    }
+}
+
 // Schedule Monitoring Endpoints
 
 const getScheduleMetrics = async (req: Request, res: Response, next: NextFunction) => {
@@ -735,5 +770,6 @@ export default {
     getAllBots,
     updateBotEnabled,
     getAllSubAgents,
-    updateSubAgentEnabled
+    updateSubAgentEnabled,
+    updateChatflowFolder
 }

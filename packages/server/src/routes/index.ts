@@ -1,4 +1,5 @@
 import express from 'express'
+import agentflowFoldersRouter from './agentflow-folders'
 import apikeyRouter from './apikey'
 import assistantsRouter from './assistants'
 import attachmentsRouter from './attachments'
@@ -74,6 +75,7 @@ const router = express.Router()
 
 router.use('/ping', pingRouter)
 router.use('/apikey', apikeyRouter)
+router.use('/agentflow-folders', agentflowFoldersRouter)
 router.use('/assistants', assistantsRouter)
 router.use('/attachments', attachmentsRouter)
 router.use('/chatflows', chatflowsRouter)

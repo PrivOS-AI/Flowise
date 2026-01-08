@@ -41,4 +41,7 @@ router.post('/bot/:id', chatflowsController.updateBotEnabled)
 router.get('/subagents/all', chatflowsController.getAllSubAgents)
 router.post('/subagent/:id', chatflowsController.updateSubAgentEnabled)
 
+// FOLDER MANAGEMENT
+router.put('/:id/folder', checkPermission('chatflows:update'), chatflowsController.updateChatflowFolder)
+
 export default router
