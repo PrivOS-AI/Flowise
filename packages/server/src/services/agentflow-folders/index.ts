@@ -5,6 +5,7 @@ import { IAgentflowFolder, IAgentflowFolderInput } from '../../Interface'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
+import { v4 as uuidv4 } from 'uuid'
 
 // Get all folders for a workspace, optionally by parentId (null = root folders)
 export const getAllFolders = async (workspaceId?: string | null, parentId?: string | null): Promise<IAgentflowFolder[]> => {
@@ -82,7 +83,11 @@ export const createFolder = async (input: IAgentflowFolderInput): Promise<IAgent
         const appServer = getRunningExpressApp()
         const repository = appServer.AppDataSource.getRepository(AgentflowFolder)
 
-        const folder = repository.create(input)
+        // Generate UUID for PostgreSQL compatibility
+        const folder = repository.create({
+            ...input,
+            id: uuidv4()
+        })
         const savedFolder = await repository.save(folder)
         return savedFolder
     } catch (error) {
