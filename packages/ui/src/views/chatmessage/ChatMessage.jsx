@@ -56,7 +56,6 @@ import ChatFeedbackContentDialog from '@/ui-component/dialog/ChatFeedbackContent
 import StarterPromptsCard from '@/ui-component/cards/StarterPromptsCard'
 import AgentReasoningCard from './AgentReasoningCard'
 import AgentExecutedDataCard from './AgentExecutedDataCard'
-import AgentProgressText from './AgentProgressText'
 import LLMThinkingText from './LLMThinkingText'
 import { ImageButton, ImageSrc, ImageBackdrop, ImageMarked } from '@/ui-component/button/ImageButton'
 import CopyToClipboardButton from '@/ui-component/button/CopyToClipboardButton'
@@ -2442,7 +2441,7 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                                         agentflowId={chatflowid}
                                                         sessionId={chatId}
                                                     />
-                                                    <AgentProgressText execution={message.agentFlowExecutedData} />
+                                                    {/* <AgentProgressText execution={message.agentFlowExecutedData} /> */}
                                                 </>
                                             )}
                                         {/* LLM Thinking Process */}

@@ -3,6 +3,7 @@ import {
     ICommonObject,
     INode,
     INodeData,
+    INodeOptionsValue,
     INodeOutputsValue,
     INodeParams,
     IPrivosCredential,
@@ -31,7 +32,6 @@ class GetListByTemplateListKey_Privos implements INode {
     baseClasses: string[]
     credential: INodeParams
     inputs: INodeParams[]
-    outputs: INodeOutputsValue[]
     output?: INodeOutputsValue[] | undefined
 
     constructor() {
@@ -39,8 +39,7 @@ class GetListByTemplateListKey_Privos implements INode {
         this.name = 'getListByTemplateListKeyPrivos'
         this.version = 1.0
         this.type = 'ListProcessor'
-        // this.category = 'PrivOS'
-        this.category = 'Agent Flows'
+        this.category = 'PrivOS'
         this.description = 'Fetch list by template list key from Privos API'
         this.icon = 'privos.svg'
         this.color = '#4318FF'
@@ -116,6 +115,16 @@ class GetListByTemplateListKey_Privos implements INode {
                 baseClasses: [this.type, 'string', 'object']
             }
         ]
+    }
+
+    //@ts-ignore
+    loadMethods = {
+        async listRuntimeStateKeys(_: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
+            const previousNodes = options.previousNodes as ICommonObject[]
+            const startAgentflowNode = previousNodes.find((node) => node.name === 'startAgentflow')
+            const state = startAgentflowNode?.inputs?.startState as ICommonObject[]
+            return state.map((item) => ({ label: item.key, name: item.key }))
+        }
     }
 
     private async fetchPrivosData(baseUrl: string, apiKey: string, payload: { roomId: string; templateLK: string }) {

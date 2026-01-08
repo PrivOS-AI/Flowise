@@ -3,6 +3,7 @@ import {
     ICommonObject,
     INode,
     INodeData,
+    INodeOptionsValue,
     INodeOutputsValue,
     INodeParams,
     IPrivosCredential,
@@ -100,6 +101,16 @@ class GetDocumentByTemplateDocumentKey_Privos implements INode {
                 baseClasses: [this.type, 'string', 'object']
             }
         ]
+    }
+
+    //@ts-ignore
+    loadMethods = {
+        async listRuntimeStateKeys(_: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
+            const previousNodes = options.previousNodes as ICommonObject[]
+            const startAgentflowNode = previousNodes.find((node) => node.name === 'startAgentflow')
+            const state = startAgentflowNode?.inputs?.startState as ICommonObject[]
+            return state.map((item) => ({ label: item.key, name: item.key }))
+        }
     }
 
     private async fetchPrivosData(baseUrl: string, apiKey: string, payload: { roomId: string; templateDK: string }) {

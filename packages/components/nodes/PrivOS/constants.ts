@@ -43,8 +43,9 @@ export const PRIVOS_ENDPOINTS = {
     DOCUMENTS_UPDATE: '/external.documents',
     DOCUMENTS_BY_ROOM_ID: '/external.documents.byRoomId',
     FILES_UPLOAD: '/files.upload',
-    CHANNELS_MEMBERS: '/channels.members',
-    GROUPS_MEMBERS: '/groups.members',
+
+    CHANNELS_MEMBERS: '/internal/channels.members',
+    GROUPS_MEMBERS: '/internal/groups.members',
     IM_MEMBERS: '/im.members',
 
     // endpoint updated
@@ -52,7 +53,8 @@ export const PRIVOS_ENDPOINTS = {
     LISTS: '/internal/lists',
     DOCUMENTS: '/internal/documents',
     DOCUMENTS_TEMPLATE_DK: '/internal/documents.byTemplateDocumentKey',
-    LISTS_TEMPLATE_DK: '/internal/lists.byTemplateListKey'
+    LISTS_TEMPLATE_DK: '/internal/lists.byTemplateListKey',
+    ROOMS: '/internal/rooms.get'
 } as const
 
 // ============================================================================

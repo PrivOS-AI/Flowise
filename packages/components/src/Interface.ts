@@ -148,6 +148,7 @@ export interface INodeProperties {
     color?: string
     hint?: string
     warning?: string
+    executionLabel?: string
 }
 
 export interface INode extends INodeProperties {
