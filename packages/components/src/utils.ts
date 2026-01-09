@@ -617,27 +617,26 @@ const decryptCredentialData = async (encryptedData: string): Promise<ICommonObje
  * @param {ICommonObject} options
  * @returns {Promise<ICommonObject>}
  */
-export const getCredentialData = async (selectedCredentialId: string, options: ICommonObject): Promise<ICommonObject> => {
+export const getCredentialData = async (selectedCredentialId: string = '', options: ICommonObject): Promise<ICommonObject> => {
     const appDataSource = options.appDataSource as DataSource
     const databaseEntities = options.databaseEntities as IDatabaseEntity
 
     try {
-        if (!selectedCredentialId) {
-            return {}
-        }
+        if (!selectedCredentialId) throw new Error('Credential ID is missing')
 
         const credential = await appDataSource.getRepository(databaseEntities['Credential']).findOneBy({
             id: selectedCredentialId
         })
 
-        if (!credential) return {}
+        if (!credential || Object.keys(credential).length === 0) throw new Error('Credential data not found')
 
         // Decrypt credentialData
         const decryptedCredentialData = await decryptCredentialData(credential.encryptedData)
 
         return decryptedCredentialData
     } catch (e) {
-        throw new Error(e)
+        if (process.env.DEBUG === 'true') console.error('Error in getCredentialData:', e)
+        throw new Error('Failed to get credential data')
     }
 }
 

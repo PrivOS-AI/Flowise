@@ -303,4 +303,15 @@ export class SSEStreamer implements IServerSideEventStreamer {
             delete this.clients[chatId]
         }
     }
+
+    streamThinkingEvent(chatId: string, data: string): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'thinking',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
 }

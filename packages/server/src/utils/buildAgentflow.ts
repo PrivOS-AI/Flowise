@@ -1014,6 +1014,7 @@ const executeNode = async ({
         sseStreamer?.streamNextAgentFlowEvent(chatId, {
             nodeId,
             nodeLabel: reactFlowNode.data.label,
+            executionLabel: reactFlowNode.data.executionLabel,
             status: 'INPROGRESS'
         })
 
@@ -1319,6 +1320,7 @@ const executeNode = async ({
             const newWorkflowExecutedData: IAgentflowExecutedData = {
                 nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 data: {
                     ...results,
                     output: {
@@ -1334,6 +1336,7 @@ const executeNode = async ({
             sseStreamer?.streamNextAgentFlowEvent(chatId, {
                 nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 status: 'STOPPED'
             })
             sseStreamer?.streamAgentFlowExecutedDataEvent(chatId, agentFlowExecutedData)
@@ -1366,6 +1369,7 @@ const executeNode = async ({
             const newWorkflowExecutedData: IAgentflowExecutedData = {
                 nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 data: {
                     ...results,
                     output: {
@@ -1381,6 +1385,7 @@ const executeNode = async ({
             sseStreamer?.streamNextAgentFlowEvent(chatId, {
                 nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 status: 'STOPPED'
             })
             sseStreamer?.streamAgentFlowExecutedDataEvent(chatId, agentFlowExecutedData)
@@ -1945,6 +1950,7 @@ export const executeAgentFlow = async ({
             agentFlowExecutedData.push({
                 nodeId: currentNode.nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 data: nodeResult,
                 previousNodeIds: reversedGraph[currentNode.nodeId],
                 status: 'FINISHED'
@@ -1953,6 +1959,7 @@ export const executeAgentFlow = async ({
             sseStreamer?.streamNextAgentFlowEvent(chatId, {
                 nodeId: currentNode.nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 status: 'FINISHED'
             })
 
@@ -2006,6 +2013,7 @@ export const executeAgentFlow = async ({
             agentFlowExecutedData.push({
                 nodeId: currentNode.nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 previousNodeIds: reversedGraph[currentNode.nodeId] || [],
                 data: {
                     id: currentNode.nodeId,
@@ -2019,6 +2027,7 @@ export const executeAgentFlow = async ({
             sseStreamer?.streamNextAgentFlowEvent(chatId, {
                 nodeId: currentNode.nodeId,
                 nodeLabel: reactFlowNode.data.label,
+                executionLabel: reactFlowNode.data.executionLabel,
                 status: errorStatus,
                 error: isAborted ? undefined : errorMessage
             })

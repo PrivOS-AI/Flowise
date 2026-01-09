@@ -63,7 +63,8 @@ export async function checkDenyList(url: string): Promise<void> {
 export async function secureAxiosRequest(config: AxiosRequestConfig, maxRedirects: number = 5): Promise<AxiosResponse> {
     let currentUrl = config.url
     let redirectCount = 0
-    let currentConfig = { ...config, maxRedirects: 0 } // Disable automatic redirects
+    const defaultConfig = { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    let currentConfig = { ...defaultConfig, ...config, headers: { ...defaultConfig.headers, ...config.headers }, maxRedirects: 0 } // Disable automatic redirects
 
     // Validate the initial URL
     if (currentUrl) {

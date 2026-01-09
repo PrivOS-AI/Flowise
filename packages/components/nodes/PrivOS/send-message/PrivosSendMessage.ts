@@ -1,5 +1,5 @@
-import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
-import { getCredentialData, getCredentialParam, handleEscapeCharacters } from '../../../src/utils'
+import { ICommonObject, INode, INodeData, INodeParams, IPrivosCredential } from '../../../src/Interface'
+import { getCredentialData, handleEscapeCharacters } from '../../../src/utils'
 import { secureAxiosRequest } from '../../../src/httpSecurity'
 
 class PrivosSendMessage_Agentflow implements INode {
@@ -26,10 +26,10 @@ class PrivosSendMessage_Agentflow implements INode {
         this.description = 'Send message to user via Privos Chat API'
         this.baseClasses = [this.type]
         this.credential = {
-            label: 'Privos Chat API Credential',
+            label: 'Privos API Credential',
             name: 'credential',
             type: 'credential',
-            credentialNames: ['privosChatApi']
+            credentialNames: ['privosApi']
         }
         this.inputs = [
             {
@@ -85,9 +85,7 @@ class PrivosSendMessage_Agentflow implements INode {
             message = handleEscapeCharacters(message, true)
 
             // Get credentials
-            const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            const baseUrl = getCredentialParam('baseUrl', credentialData, nodeData) || 'https://privos.roxane.one'
-            const apiKey = getCredentialParam('apiKey', credentialData, nodeData)
+            const { baseUrl, apiKey } = (await getCredentialData(nodeData.credential, options)) as IPrivosCredential
 
             if (!apiKey) {
                 throw new Error('API Key is not configured in credential')

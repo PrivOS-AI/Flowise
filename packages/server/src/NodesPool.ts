@@ -46,6 +46,10 @@ export class NodesPool {
                                     newNodeInstance.icon.endsWith('.jpg'))
                             ) {
                                 const filePath = file.replace(/\\/g, '/').split('/')
+                                if (newNodeInstance.icon === 'privos.svg') {
+                                    // current using only icon default
+                                    filePath.pop()
+                                }
                                 filePath.pop()
                                 const nodeIconAbsolutePath = `${filePath.join('/')}/${newNodeInstance.icon}`
                                 newNodeInstance.icon = nodeIconAbsolutePath

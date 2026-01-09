@@ -612,7 +612,8 @@ export const getAvailableNodesForVariable = (nodes, edges, target, targetHandle,
     //                    {source}  -{sourceHandle}                           -{target}  -{targetHandle}
     const parentNodes = []
 
-    const isAgentFlowV2 = nodes.find((nd) => nd.id === target)?.data?.category === 'Agent Flows'
+    const targetNode = nodes.find((nd) => nd.id === target)
+    const isAgentFlowV2 = targetNode?.data?.category === 'Agent Flows' || targetNode?.data?.category === 'PrivOS'
 
     const isSeqAgent = nodes.find((nd) => nd.id === target)?.data?.category === 'Sequential Agents'
 

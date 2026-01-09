@@ -148,6 +148,7 @@ export interface INodeProperties {
     color?: string
     hint?: string
     warning?: string
+    executionLabel?: string
 }
 
 export interface INode extends INodeProperties {
@@ -458,6 +459,7 @@ export interface IServerSideEventStreamer {
     streamTTSStartEvent(chatId: string, chatMessageId: string, format: string): void
     streamTTSDataEvent(chatId: string, chatMessageId: string, audioChunk: string): void
     streamTTSEndEvent(chatId: string, chatMessageId: string): void
+    streamThinkingEvent(chatId: string, data: string): void
 }
 
 export enum FollowUpPromptProvider {
@@ -497,4 +499,11 @@ export interface IHumanInput {
     type: 'proceed' | 'reject'
     startNodeId: string
     feedback?: string
+}
+
+export interface IPrivosCredential {
+    baseUrl: string
+    apiKey: string
+    authToken?: string
+    userId?: string
 }
