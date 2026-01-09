@@ -123,7 +123,6 @@ class GetItemInfo_Privos implements INode {
         // 2. Fetch List Definitions (if listId exists)
         let listInfo = null
         if (item?.listId) {
-            console.log('Fetching list info for listId:', item.listId)
             const listRes = await secureAxiosRequest({
                 url: `${baseUrl}${PRIVOS_ENDPOINTS.LISTS}/${item.listId}`,
                 headers
@@ -249,9 +248,6 @@ class GetItemInfo_Privos implements INode {
 
             if (userField && userField._id) {
                 assigneeFieldId = userField._id
-                console.log(`Found assignee field: ${userField.name} (ID: ${assigneeFieldId})`)
-            } else {
-                console.log('No USER type field found in fieldDefinitions')
             }
         }
 
@@ -266,7 +262,6 @@ class GetItemInfo_Privos implements INode {
                         const firstValue = cf.value[0]
                         if (firstValue && firstValue._id && (firstValue.username || firstValue.name)) {
                             assigneeFieldId = cf.fieldId
-                            console.log(`Detected assignee field from items: ${assigneeFieldId}`)
                             break
                         }
                     }
@@ -277,7 +272,6 @@ class GetItemInfo_Privos implements INode {
 
         if (!assigneeFieldId) {
             assigneeFieldId = 'no_assignee_field'
-            console.log('Could not detect assignee field ID - using placeholder')
         }
 
         // PARSE ITEMS WITH ASSIGNEES
@@ -333,7 +327,7 @@ class GetItemInfo_Privos implements INode {
             const room = (res.data?.update || []).find((r: any) => r._id === listInfo.list.roomId)
             return room?.t || 'c'
         } catch (error) {
-            console.log('Error fetching room type:', error?.message)
+            console.error('Error fetching room type:', error?.message)
             return 'c'
         }
     }
@@ -367,7 +361,7 @@ class GetItemInfo_Privos implements INode {
             }))
             return membersInfo
         } catch (error) {
-            console.log('Error fetching members info:', error?.message)
+            console.error('Error fetching members info:', error?.message)
             return []
         }
     }

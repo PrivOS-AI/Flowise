@@ -5,21 +5,18 @@ import { IconBrain } from '@tabler/icons-react'
 import { useTheme } from '@mui/material/styles'
 
 /**
- * LLMThinkingText - Component hiển thị thinking process của LLM
- * Hiển thị process thinking của Claude khi extended thinking được bật
+ * LLMThinkingText - Display LLM thinking process
  */
 const LLMThinkingText = ({ thinking, status }) => {
     const theme = useTheme()
     const [isThinkingComplete, setIsThinkingComplete] = useState(false)
 
     useEffect(() => {
-        // Thinking hoàn thành khi status là FINISHED hoặc có thinking content
         if (status === 'FINISHED' || (thinking && thinking.length > 0)) {
             setIsThinkingComplete(true)
         }
     }, [thinking, status])
 
-    // Không hiển thị nếu không có thinking
     if (!thinking || thinking.trim().length === 0) {
         return null
     }
@@ -74,7 +71,7 @@ const LLMThinkingText = ({ thinking, status }) => {
                                 fontSize: '0.75rem'
                             }}
                         >
-                            Đang suy nghĩ...
+                            Thinking...
                         </Typography>
                     )}
                 </AccordionSummary>

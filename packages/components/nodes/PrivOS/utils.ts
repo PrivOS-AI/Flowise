@@ -146,7 +146,7 @@ export function extractTextFromHtml(html: string): string {
 
 export const PrivosErrorHandler = {
     /**
-     * Chuẩn hóa lỗi từ API hoặc System thành cấu trúc Node Output
+     * Wrap error into standardized output format
      */
     wrapError: (nodeName: string, error: any, nodeId: string, state?: ICommonObject) => {
         const errorMessage = error instanceof Error ? error.message : 'Unknown Internal Error'
@@ -158,6 +158,7 @@ export const PrivosErrorHandler = {
             name: nodeName,
             state: state || {},
             output: {
+                success: false,
                 content: `🚨 [${nodeName}] Error: ${errorMessage}`,
                 error: true,
                 rawError: error

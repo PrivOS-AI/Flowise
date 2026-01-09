@@ -33,7 +33,6 @@ export const PRIVOS_ENDPOINTS = {
     LIST_DETAIL: '/external.lists',
     ITEMS_BATCH_CREATE: '/external.items.batch-create',
     ITEMS_UPDATE: '/external.items.update',
-    // ITEMS_INFO: '/external.items.info',
     ITEMS_BY_STAGE_ID: '/external.items.byStageId',
     ITEMS_BY_LIST_ID: '/external.items.byListId',
     ITEMS_MOVE: '/external.items.move',
@@ -43,7 +42,6 @@ export const PRIVOS_ENDPOINTS = {
     DOCUMENTS_UPDATE: '/external.documents',
     DOCUMENTS_BY_ROOM_ID: '/external.documents.byRoomId',
     FILES_UPLOAD: '/files.upload',
-
     CHANNELS_MEMBERS: '/internal/channels.members',
     GROUPS_MEMBERS: '/internal/groups.members',
     IM_MEMBERS: '/im.members',
@@ -54,7 +52,8 @@ export const PRIVOS_ENDPOINTS = {
     DOCUMENTS: '/internal/documents',
     DOCUMENTS_TEMPLATE_DK: '/internal/documents.byTemplateDocumentKey',
     LISTS_TEMPLATE_DK: '/internal/lists.byTemplateListKey',
-    ROOMS: '/internal/rooms.get'
+    ROOMS: '/internal/rooms.get',
+    USERS: '/internal/users.list'
 } as const
 
 // ============================================================================

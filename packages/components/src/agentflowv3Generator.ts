@@ -147,38 +147,22 @@ interface Edge {
 
 export const generateAgentflowv3 = async (config: Record<string, any>, question: string, options: ICommonObject) => {
     try {
-        console.log('[generateAgentflowv3] ===== Starting AgentflowV3 Generation =====')
-        console.log('[generateAgentflowv3] Question:', question)
-        console.log('[generateAgentflowv3] Available componentNodes:', Object.keys(config.componentNodes || {}).length)
-
         const result = await generateWorkflow(config, question, options)
 
         // Check for error in result
         if ('error' in result) {
-            console.error('[generateAgentflowv3] Error in generateWorkflow:', (result as any).error)
             return result
         }
 
         const { nodes, edges } = initializeNodesData(result, config)
 
         if (!nodes || nodes.length === 0) {
-            console.error('[generateAgentflowv3] No valid nodes generated')
             return { error: 'No valid nodes generated from LLM response' }
         }
 
-        console.log('[generateAgentflowv3] Before generateSelectedTools:', nodes.length, 'nodes')
-
         const updatedNodes = await generateSelectedTools(nodes, config, question, options)
 
-        console.log('[generateAgentflowv3] After generateSelectedTools:', updatedNodes.length, 'nodes')
-
         const updatedEdges = updateEdges(edges, updatedNodes)
-
-        console.log('[generateAgentflowv3] ===== Final Result =====')
-        console.log('[generateAgentflowv3] Total nodes:', updatedNodes.length)
-        console.log('[generateAgentflowv3] Total edges:', updatedEdges.length)
-        console.log('[generateAgentflowv3] Node IDs:', updatedNodes.map((n) => `${n.id}(${n.data?.name})`).join(', '))
-        console.log('[generateAgentflowv3] ===== Generation Complete =====')
 
         return { nodes: updatedNodes, edges: updatedEdges }
     } catch (error) {
@@ -192,8 +176,6 @@ export const generateAgentflowv3 = async (config: Record<string, any>, question:
 // ============================================================================
 
 const updateEdges = (edges: Edge[], nodes: Node[]): Edge[] => {
-    console.log('[updateEdges] Processing', edges.length, 'edges with', nodes.length, 'nodes')
-
     const isMultiOutput = (source: string) => {
         return source.includes('conditionAgentflow') || source.includes('conditionAgentAgentflow') || source.includes('humanInputAgentflow')
     }
@@ -205,7 +187,6 @@ const updateEdges = (edges: Edge[], nodes: Node[]): Edge[] => {
 
     // Log all node IDs for debugging
     const nodeIds = nodes.map((n) => n.id)
-    console.log('[updateEdges] Available node IDs:', nodeIds)
 
     // Filter out edges that reference non-existent nodes
     const originalEdgesLength = edges.length
@@ -220,7 +201,6 @@ const updateEdges = (edges: Edge[], nodes: Node[]): Edge[] => {
         }
         return sourceExists && targetExists
     })
-    console.log(`[updateEdges] Filtered out ${originalEdgesLength - edges.length} edges with missing nodes`)
 
     // Filter out edges with hideInput/hideOutput
     const indexToDelete = []
@@ -270,11 +250,6 @@ const updateEdges = (edges: Edge[], nodes: Node[]): Edge[] => {
             }
         })
     }
-
-    console.log(`[updateEdges] Final edges count: ${updatedEdges.length}`)
-    updatedEdges.forEach((edge, idx) => {
-        console.log(`[updateEdges] Edge ${idx}: ${edge.source} (${edge.sourceHandle}) -> ${edge.target} (${edge.targetHandle})`)
-    })
 
     return updatedEdges
 }
@@ -423,8 +398,6 @@ const _generateSelectedTools = async (config: Record<string, any>, question: str
 
 const generateWorkflow = async (config: Record<string, any>, question: string, options?: ICommonObject) => {
     try {
-        console.log('[generateWorkflow] Starting workflow generation for question:', question)
-
         const chatModelComponent = config.componentNodes[config.selectedChatModel?.name]
         if (!chatModelComponent) {
             throw new Error('Chat model component not found')
@@ -456,16 +429,9 @@ const generateWorkflow = async (config: Record<string, any>, question: string, o
         // @ts-ignore
         if (typeof model.withStructuredOutput === 'function') {
             try {
-                console.log('[generateWorkflow] Using withStructuredOutput')
                 // @ts-ignore
                 const structuredLLM = model.withStructuredOutput(WorkflowType)
                 const structuredResponse = await structuredLLM.invoke(messages)
-                console.log(
-                    '[generateWorkflow] Structured output received, nodes:',
-                    structuredResponse.nodes?.length,
-                    'edges:',
-                    structuredResponse.edges?.length
-                )
                 return structuredResponse
             } catch (structuredError) {
                 console.warn('[generateWorkflow] Structured output failed, falling back:', structuredError)
@@ -473,10 +439,8 @@ const generateWorkflow = async (config: Record<string, any>, question: string, o
         }
 
         // Fallback: Manual parsing
-        console.log('[generateWorkflow] Using manual parsing fallback')
         const response = await model.invoke(messages)
         const responseContent = response.content.toString()
-        console.log('[generateWorkflow] Raw response length:', responseContent.length)
 
         const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || responseContent.match(/{[\s\S]*?}/)
 
@@ -485,9 +449,7 @@ const generateWorkflow = async (config: Record<string, any>, question: string, o
             try {
                 const repairedJson = jsonrepair(jsonStr)
                 const parsedJSON = JSON.parse(repairedJson)
-                console.log('[generateWorkflow] Parsed JSON, nodes:', parsedJSON.nodes?.length, 'edges:', parsedJSON.edges?.length)
                 const validated = WorkflowType.parse(parsedJSON)
-                console.log('[generateWorkflow] Validation passed')
                 return validated
             } catch (parseError) {
                 console.error('[generateWorkflow] Error parsing JSON:', parseError)
@@ -627,24 +589,13 @@ const initializeNodesData = (result: Record<string, any>, config: Record<string,
         const validNodes = []
         const invalidNodes = []
 
-        console.log('[initializeNodesData] Processing', nodes.length, 'nodes')
-
         for (let i = 0; i < nodes.length; i += 1) {
             const node = nodes[i]
             let nodeName = node.data?.name
 
-            console.log(`[initializeNodesData] Processing node ${i}:`, {
-                id: node.id,
-                dataName: nodeName,
-                nodeType: node.type
-            })
-
             // If nodeName is not found in data.name, try extracting from node.id
             if (!nodeName || !config.componentNodes[nodeName]) {
                 const extractedName = node.id.split('_')[0]
-                console.log(
-                    `[initializeNodesData] nodeName "${nodeName}" not found in componentNodes, trying extracted name: "${extractedName}"`
-                )
                 nodeName = extractedName
             }
 
@@ -705,8 +656,6 @@ const initializeNodesData = (result: Record<string, any>, config: Record<string,
         if (invalidNodes.length > 0) {
             console.warn(`[initializeNodesData] Skipped ${invalidNodes.length} invalid nodes:`, invalidNodes)
         }
-
-        console.log(`[initializeNodesData] Successfully processed ${validNodes.length} out of ${nodes.length} nodes`)
 
         return { nodes: validNodes, edges: result.edges }
     } catch (error) {
