@@ -1,37 +1,37 @@
-import { ChatOllama as LCChatOllama, ChatOllamaInput } from '@langchain/ollama'
+import { ChatOpenAI as LangchainChatOpenAI, ChatOpenAIFields } from '@langchain/openai'
 import { IMultiModalOption, IVisionChatModal } from '../../../src'
 import { BaseMessage, AIMessageChunk } from '@langchain/core/messages'
 import { ChatGenerationChunk } from '@langchain/core/outputs'
 import { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager'
+import OpenAI from 'openai'
 
-interface OllamaStreamChunk {
-    message: {
-        role: string
-        content: string
-        thinking?: string
-    }
-    done?: boolean
-    prompt_eval_count?: number
-    eval_count?: number
-    [key: string]: any
-}
-
-export class ChatOllama extends LCChatOllama implements IVisionChatModal {
+export class ChatOpenAICustom extends LangchainChatOpenAI implements IVisionChatModal {
     configuredModel: string
     configuredMaxToken?: number
     multiModalOption: IMultiModalOption
     id: string
     private thinkingBuffer: string = ''
     private isInThinking: boolean = false
+    // Store custom API configuration
+    private customBaseURL?: string
+    private customDefaultHeaders?: any
 
-    constructor(id: string, fields?: ChatOllamaInput) {
+    constructor(id: string, fields?: ChatOpenAIFields) {
         super(fields)
         this.id = id
         this.configuredModel = fields?.model ?? ''
+        this.configuredMaxToken = fields?.maxTokens
+        // Store configuration for our custom streaming
+        const config = (fields as any)?.configuration
+        if (config) {
+            this.customBaseURL = config.baseURL
+            this.customDefaultHeaders = config.defaultHeaders
+        }
     }
 
     revertToOriginalModel(): void {
         this.model = this.configuredModel
+        this.maxTokens = this.configuredMaxToken
     }
 
     setMultiModalOption(multiModalOption: IMultiModalOption): void {
@@ -43,8 +43,8 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
     }
 
     /**
-     * Override _streamResponseChunks to handle thinking field from Ollama
-     * This extracts reasoning content from thinking models
+     * Override _streamResponseChunks to handle reasoning field from OpenAI-compatible APIs
+     * Similar to FlowiseChatOllama which handles responseMessage.thinking
      */
     async *_streamResponseChunks(
         messages: BaseMessage[],
@@ -59,56 +59,35 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
         const parentStream = super._streamResponseChunks(messages, options, runManager)
 
         try {
-            const client = (this as any).client
+            // Create OpenAI client from stored configuration
+            const client = new OpenAI({
+                apiKey: this.apiKey || '',
+                baseURL: this.customBaseURL,
+                defaultHeaders: this.customDefaultHeaders,
+                timeout: this.timeout ?? 4000 * 60,
+                maxRetries: 0
+            })
 
-            // Build request params - match parent's invocationParams structure
+            // Build request params
             const params: any = {
                 model: this.model,
-                format: options?.format ?? this.format,
-                keep_alive: this.keepAlive,
-                options: {
-                    numa: (this as any).numa,
-                    num_ctx: (this as any).numCtx,
-                    num_batch: (this as any).numBatch,
-                    num_gpu: (this as any).numGpu,
-                    main_gpu: (this as any).mainGpu,
-                    low_vram: (this as any).lowVram,
-                    f16_kv: (this as any).f16Kv,
-                    logits_all: (this as any).logitsAll,
-                    vocab_only: (this as any).vocabOnly,
-                    use_mmap: (this as any).useMmap,
-                    use_mlock: (this as any).useMlock,
-                    embedding_only: (this as any).embeddingOnly,
-                    num_thread: (this as any).numThread,
-                    num_keep: (this as any).numKeep,
-                    seed: (this as any).seed,
-                    num_predict: (this as any).numPredict,
-                    top_k: (this as any).topK,
-                    top_p: (this as any).topP,
-                    tfs_z: (this as any).tfsZ,
-                    typical_p: (this as any).typicalP,
-                    repeat_last_n: (this as any).repeatLastN,
-                    temperature: this.temperature,
-                    repeat_penalty: (this as any).repeatPenalty,
-                    presence_penalty: (this as any).presencePenalty,
-                    frequency_penalty: (this as any).frequencyPenalty,
-                    mirostat: (this as any).mirostat,
-                    mirostat_tau: (this as any).mirostatTau,
-                    mirostat_eta: (this as any).mirostatEta,
-                    penalize_newline: (this as any).penalizeNewline,
-                    stop: options?.stop
-                },
-                tools: options?.tools?.length ? options.tools : undefined
+                stream: true,
+                stream_options: { include_usage: true },
+                temperature: this.temperature,
+                max_tokens: this.maxTokens,
+                top_p: this.topP,
+                frequency_penalty: this.frequencyPenalty,
+                presence_penalty: this.presencePenalty,
+                stop: options?.stop
             }
 
-            // Convert messages to Ollama format
-            const ollamaMessages = this.convertMessagesToOllama(messages)
+            // Convert messages to OpenAI format
+            const openaiMessages = this.convertMessagesToOpenAI(messages)
 
-            const stream = await client.chat({
+            const stream = (await client.chat.completions.create({
                 ...params,
-                messages: ollamaMessages,
-                stream: true
-            })
+                messages: openaiMessages
+            })) as any
 
             let lastMetadata: any = {}
             const usageMetadata = {
@@ -117,26 +96,33 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
                 total_tokens: 0
             }
 
-            for await (const chunk of stream as unknown as OllamaStreamChunk[]) {
+            for await (const chunk of stream) {
                 if (options.signal?.aborted) {
-                    client.abort()
+                    break
                 }
 
-                const { message: responseMessage, ...rest } = chunk
+                const choice = chunk.choices?.[0]
+                if (!choice) continue
+
+                const delta = choice.delta
+                const { delta: _, ...rest } = choice
 
                 // Update usage metadata
-                usageMetadata.input_tokens += rest.prompt_eval_count ?? 0
-                usageMetadata.output_tokens += rest.eval_count ?? 0
-                usageMetadata.total_tokens = usageMetadata.input_tokens + usageMetadata.output_tokens
+                if (chunk.usage) {
+                    usageMetadata.input_tokens = chunk.usage.prompt_tokens || 0
+                    usageMetadata.output_tokens = chunk.usage.completion_tokens || 0
+                    usageMetadata.total_tokens = chunk.usage.total_tokens || 0
+                }
                 lastMetadata = rest
 
-                // Handle thinking field
-                if (responseMessage.thinking) {
+                // Handle reasoning field (gpt-oss uses delta.reasoning, DeepSeek uses reasoning_content)
+                const reasoningContent = delta?.reasoning || delta?.reasoning_content
+                if (reasoningContent) {
                     if (!this.isInThinking) {
                         this.isInThinking = true
                         this.thinkingBuffer = ''
                     }
-                    this.thinkingBuffer += responseMessage.thinking
+                    this.thinkingBuffer += reasoningContent
 
                     // Yield thinking content in additional_kwargs
                     yield new ChatGenerationChunk({
@@ -152,11 +138,11 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
                 }
 
                 // Handle regular content
-                if (responseMessage.content) {
+                if (delta?.content) {
                     yield new ChatGenerationChunk({
-                        text: responseMessage.content,
+                        text: delta.content,
                         message: new AIMessageChunk({
-                            content: responseMessage.content,
+                            content: delta.content,
                             additional_kwargs: {
                                 thinking: this.thinkingBuffer || undefined,
                                 isThinking: false
@@ -164,7 +150,21 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
                         })
                     })
 
-                    await runManager?.handleLLMNewToken(responseMessage.content)
+                    await runManager?.handleLLMNewToken(delta.content)
+                }
+
+                // Handle finish
+                if (choice?.finish_reason) {
+                    yield new ChatGenerationChunk({
+                        text: '',
+                        message: new AIMessageChunk({
+                            content: '',
+                            additional_kwargs: {
+                                finish_reason: choice.finish_reason,
+                                thinking: this.thinkingBuffer || undefined
+                            }
+                        })
+                    })
                 }
             }
 
@@ -178,7 +178,7 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
                 })
             })
         } catch (error) {
-            console.error('Error in ChatOllama._streamResponseChunks:', error)
+            console.error('Error in ChatOpenAICustom._streamResponseChunks:', error)
             // Fallback to parent implementation on error
             for await (const chunk of parentStream) {
                 yield chunk
@@ -187,9 +187,9 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
     }
 
     /**
-     * Helper to convert LangChain messages to Ollama format
+     * Helper to convert LangChain messages to OpenAI format
      */
-    private convertMessagesToOllama(messages: BaseMessage[]): any[] {
+    private convertMessagesToOpenAI(messages: BaseMessage[]): any[] {
         return messages.flatMap((msg) => {
             const type = msg._getType()
 
@@ -202,8 +202,10 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
                     if (c.type === 'text') {
                         return { role: 'user', content: c.text }
                     } else if (c.type === 'image_url') {
-                        const base64 = this.extractBase64FromDataUrl(typeof c.image_url === 'string' ? c.image_url : c.image_url.url)
-                        return { role: 'user', content: '', images: [base64] }
+                        return {
+                            role: 'user',
+                            content: typeof c.image_url === 'string' ? c.image_url : c.image_url.url
+                        }
                     }
                     return { role: 'user', content: '' }
                 })
@@ -234,13 +236,5 @@ export class ChatOllama extends LCChatOllama implements IVisionChatModal {
 
             throw new Error(`Unsupported message type: ${type}`)
         })
-    }
-
-    /**
-     * Extract base64 from data URL
-     */
-    private extractBase64FromDataUrl(dataUrl: string): string {
-        const match = dataUrl.match(/^data:.*?;base64,(.*)$/)
-        return match ? match[1] : ''
     }
 }
