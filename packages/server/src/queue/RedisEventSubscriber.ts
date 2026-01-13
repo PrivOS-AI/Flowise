@@ -180,6 +180,9 @@ export class RedisEventSubscriber {
             case 'tts_abort':
                 this.sseStreamer.streamTTSAbortEvent(chatId, chatMessageId)
                 break
+            case 'thinking':
+                this.sseStreamer.streamThinkingEvent(chatId, data)
+                break
         }
     }
 
