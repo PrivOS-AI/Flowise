@@ -1,4 +1,4 @@
-import { Box, Typography, Badge } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { IconFolder } from '@tabler/icons-react'
 import MainCard from '@/ui-component/cards/MainCard'
 import PropTypes from 'prop-types'
@@ -9,26 +9,38 @@ const FolderCard = ({ folder, count, onClick }) => {
             sx={{
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: 1.5,
                 cursor: 'pointer',
-                minHeight: 100,
-                '&:hover': { borderColor: 'primary.main' }
+                minHeight: 'auto',
+                height: 80,
+                '&:hover': {
+                    borderColor: 'primary.main',
+                    bgcolor: 'action.hover'
+                },
+                transition: 'all 0.2s ease-in-out'
             }}
             onClick={onClick}
         >
-            <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box display='flex' alignItems='center' gap={1.5}>
-                    <IconFolder size={24} color='#ffd700' />
-                    <Typography variant='h3' noWrap sx={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
+            <Box sx={{ p: 1.5, height: '100%', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconFolder size={32} color='#ffd700' />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                        variant='body1'
+                        noWrap
+                        sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontWeight: 500,
+                            fontSize: '0.95rem'
+                        }}
+                    >
                         {folder.name}
                     </Typography>
-                </Box>
-                <Box>
-                    <Badge badgeContent={count} color='primary'>
-                        <Typography variant='body2' color='text.secondary'>
-                            Agentflows
+                    {count > 0 && (
+                        <Typography variant='caption' color='text.secondary'>
+                            {count} item{count !== 1 ? 's' : ''}
                         </Typography>
-                    </Badge>
+                    )}
                 </Box>
             </Box>
         </MainCard>
