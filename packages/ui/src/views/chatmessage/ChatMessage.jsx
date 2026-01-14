@@ -91,7 +91,6 @@ import FollowUpPromptsCard from '@/ui-component/cards/FollowUpPromptsCard'
 
 // History
 import { ChatInputHistory } from './ChatInputHistory'
-import AgentProgressText from './AgentProgressText'
 
 const messageImageStyle = {
     width: '128px',
@@ -2442,7 +2441,7 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                                         agentflowId={chatflowid}
                                                         sessionId={chatId}
                                                     />
-                                                    <AgentProgressText execution={message.agentFlowExecutedData} />
+                                                    {/* <AgentProgressText execution={message.agentFlowExecutedData} /> */}
                                                 </>
                                             )}
                                         {/* LLM Thinking Process */}

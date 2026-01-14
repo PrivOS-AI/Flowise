@@ -512,7 +512,7 @@ const updateChatflowFolder = async (chatflowId: string, folderId: string | null)
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found`)
         }
 
-        chatflow.folderId = folderId as any
+        chatflow.folderId = folderId ?? undefined
         const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).save(chatflow)
         return dbResponse
     } catch (error) {

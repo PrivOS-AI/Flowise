@@ -379,18 +379,15 @@ export class CustomChainHandler extends BaseCallbackHandler {
                 }
             }
             if (this.sseStreamer) {
-                const chunk = fields?.chunk as ChatGenerationChunk
-                const message = chunk?.message as AIMessageChunk
-                const additionalKwargs = message?.additional_kwargs
-                const toolCalls = message?.tool_call_chunks || []
+                if (token) {
+                    const chunk = fields?.chunk as ChatGenerationChunk
+                    const message = chunk?.message as AIMessageChunk
+                    const toolCalls = message?.tool_call_chunks || []
 
-                // Handle thinking/reasoning event from LLM (e.g., DeepSeek, Ollama, OpenAI o1)
-                if (additionalKwargs?.thinking && additionalKwargs?.isThinking === true) {
-                    this.sseStreamer.streamThinkingEvent(this.chatId, additionalKwargs.thinking as string)
-                }
-                // Only stream when token is not empty and not a tool call
-                else if (token && toolCalls.length === 0) {
-                    this.sseStreamer.streamTokenEvent(this.chatId, token)
+                    // Only stream when token is not empty and not a tool call
+                    if (toolCalls.length === 0) {
+                        this.sseStreamer.streamTokenEvent(this.chatId, token)
+                    }
                 }
             }
         }
