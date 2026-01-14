@@ -16,6 +16,7 @@ import { RateLimiterManager } from './utils/rateLimit'
 import { getAllowedIframeOrigins, getCorsOptions, sanitizeMiddleware } from './utils/XSS'
 import { Telemetry } from './utils/telemetry'
 import flowiseApiV1Router from './routes'
+import webhookTriggersRouter from './routes/webhook-triggers'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
@@ -242,6 +243,9 @@ export class App {
         const whitelistURLs = WHITELIST_URLS.filter((url) => !denylistURLs.includes(url))
         const URL_CASE_INSENSITIVE_REGEX: RegExp = /\/api\/v1\//i
         const URL_CASE_SENSITIVE_REGEX: RegExp = /\/api\/v1\//
+
+        // public route
+        this.app.use('/api/v1/webhook', webhookTriggersRouter)
 
         await initializeJwtCookieMiddleware(this.app, this.identityManager)
 

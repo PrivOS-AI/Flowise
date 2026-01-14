@@ -317,7 +317,10 @@ export const executeFlow = async ({
     orgId,
     workspaceId,
     subscriptionId,
-    productId
+    productId,
+    isTrigger,
+    eventTrigger,
+    triggerData
 }: IExecuteFlowParams) => {
     // Ensure incomingInput has all required properties with default values
     incomingInput = {
@@ -490,7 +493,10 @@ export const executeFlow = async ({
             orgId,
             workspaceId,
             subscriptionId,
-            productId
+            productId,
+            isTrigger,
+            eventTrigger,
+            triggerData
         })
     }
 
@@ -969,7 +975,7 @@ const checkIfStreamValid = async (
  * @param {Request} req
  * @param {boolean} isInternal
  */
-export const utilBuildChatflow = async (req: Request, isInternal: boolean = false): Promise<any> => {
+export const utilBuildChatflow = async (req: Request, isInternal: boolean = false, isTrigger: boolean = false): Promise<any> => {
     const appServer = getRunningExpressApp()
 
     const chatflowid = req.params.id
@@ -1061,7 +1067,10 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             orgId,
             workspaceId,
             subscriptionId,
-            productId
+            productId,
+            isTrigger,
+            eventTrigger: req.body.event,
+            triggerData: req.body.triggerData
         }
 
         if (process.env.MODE === MODE.QUEUE) {

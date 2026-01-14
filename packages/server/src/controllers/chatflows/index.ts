@@ -215,6 +215,54 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         }
         const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
         const body = req.body
+
+        //  === validate bot credential for trigger ===
+        const flowData = JSON.parse(body.flowData)
+        const nodes = flowData.nodes ?? []
+        const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor' && node.data.triggerType)
+        const triggerTypeCredentialMap = new Map<string, Set<string>>()
+        // Check duplicate credential in the same flow
+        for (const node of triggerNodes) {
+            const { triggerType, credential, label } = node.data
+
+            if (!triggerTypeCredentialMap.has(triggerType)) {
+                triggerTypeCredentialMap.set(triggerType, new Set())
+            }
+
+            const credentialSet = triggerTypeCredentialMap.get(triggerType)!
+
+            if (credentialSet.has(credential)) {
+                throw new InternalFlowiseError(
+                    StatusCodes.BAD_REQUEST,
+                    `Duplicate credential found for trigger '${label}'. Each trigger must have a unique credential.`
+                )
+            }
+
+            credentialSet.add(credential)
+        }
+
+        // Check credential used in other flows, optimize using table (later)
+        const allFlows = (await chatflowsService.getAllChatflows('AGENTFLOW', workspaceId)) as ChatFlow[]
+        for (const [triggerType, credentialSet] of triggerTypeCredentialMap) {
+            for (const flow of allFlows) {
+                if (flow.id === chatflow.id) continue
+                const flowData = JSON.parse(flow.flowData)
+                const nodes = flowData.nodes ?? []
+
+                const triggerNodes = nodes.filter(
+                    (node: any) => node.data.type === 'triggerProcessor' && node.data.triggerType === triggerType
+                )
+                for (const node of triggerNodes) {
+                    if (credentialSet.has(node.data.credential)) {
+                        throw new InternalFlowiseError(
+                            StatusCodes.BAD_REQUEST,
+                            `Credential for '${node.data.label}' is already in use in another flow '${flow.name}'.`
+                        )
+                    }
+                }
+            }
+        }
+
         const updateChatFlow = new ChatFlow()
         Object.assign(updateChatFlow, body)
 

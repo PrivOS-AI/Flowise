@@ -149,6 +149,7 @@ export interface INodeProperties {
     hint?: string
     warning?: string
     executionLabel?: string
+    triggerType?: string
 }
 
 export interface INode extends INodeProperties {
@@ -506,4 +507,5 @@ export interface IPrivosCredential {
     apiKey: string
     authToken?: string
     userId?: string
+    secretKey?: string
 }

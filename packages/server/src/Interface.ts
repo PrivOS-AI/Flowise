@@ -431,6 +431,12 @@ export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     parentExecutionId?: string
     iterationContext?: ICommonObject
     isTool?: boolean
+    isTrigger?: boolean
+    eventTrigger?: string
+    triggerData?: {
+        botCredentialId?: string
+        roomId?: string
+    }
 }
 
 export interface INodeOverrides {
