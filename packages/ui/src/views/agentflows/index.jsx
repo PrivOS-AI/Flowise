@@ -150,33 +150,30 @@ const Agentflows = () => {
     const [total, setTotal] = useState(0)
 
     const onChange = (page, pageLimit) => {
-        // Client-side pagination - no API call needed
         setCurrentPage(page)
         setPageLimit(pageLimit)
+        refresh(page, pageLimit, agentflowVersion)
     }
 
-    const refresh = () => {
-        // ALWAYS fetch ALL flows - pagination is done client-side
-        // This ensures folder counts are always correct across all pages
+    const refresh = (page, limit, nextView) => {
         const params = {
-            page: 1,
-            limit: 999999
+            page: page || currentPage,
+            limit: limit || pageLimit
         }
-        console.log('[Agentflows refresh] Fetching ALL flows for correct folder counts')
-        getAllAgentflows.request(agentflowVersion === 'v2' ? 'AGENTFLOW' : 'MULTIAGENT', params)
+        getAllAgentflows.request(nextView === 'v2' ? 'AGENTFLOW' : 'MULTIAGENT', params)
     }
 
-    const handleChange = (_event, nextView) => {
+    const handleChange = (event, nextView) => {
         if (nextView === null) return
         localStorage.setItem('flowDisplayStyle', nextView)
         setView(nextView)
     }
 
-    const handleVersionChange = (_event, nextView) => {
+    const handleVersionChange = (event, nextView) => {
         if (nextView === null) return
         localStorage.setItem('agentFlowVersion', nextView)
         setAgentflowVersion(nextView)
-        refresh()
+        refresh(1, pageLimit, nextView)
     }
 
     const onSearchChange = (event) => {
@@ -278,46 +275,14 @@ const Agentflows = () => {
         return path
     }
 
-    // Filter agentflows by selected folder with client-side pagination
+    // Filter agentflows by selected folder
     const getFilteredAgentflows = () => {
-        const allFlows = getAllAgentflows.data?.data || []
-        const filtered = !selectedFolder
-            ? allFlows.filter((flow) => !flow.folderId) // Show only unassigned
-            : allFlows.filter((flow) => flow.folderId === selectedFolder.id) // Show folder flows
-
-        // In main view, apply client-side pagination
-        // In folder view, show all flows (no pagination)
-        const startIndex = selectedFolder ? 0 : (currentPage - 1) * pageLimit
-        const endIndex = selectedFolder ? filtered.length : startIndex + pageLimit
-        const paginated = filtered.slice(startIndex, endIndex)
-
-        console.log(
-            '[getFilteredAgentflows] selectedFolder:',
-            selectedFolder?.name,
-            'allFlows:',
-            allFlows.length,
-            'filtered:',
-            filtered.length,
-            'paginated:',
-            paginated.length,
-            'page:',
-            currentPage,
-            'limit:',
-            pageLimit
-        )
-        return paginated
-    }
-
-    // Get ALL filtered flows (without pagination) for folder counts
-    const getAllFilteredAgentflows = () => {
-        const allFlows = getAllAgentflows.data?.data || []
-        return !selectedFolder ? allFlows.filter((flow) => !flow.folderId) : allFlows.filter((flow) => flow.folderId === selectedFolder.id)
-    }
-
-    // Get count of flows in a specific folder (for FolderGrid)
-    const getFolderFlowCount = (folderId) => {
-        const allFlows = getAllAgentflows.data?.data || []
-        return allFlows.filter((flow) => flow.folderId === folderId).length
+        if (!selectedFolder) {
+            // Show only unassigned agentflows (without folderId)
+            return getAllAgentflows.data?.data.filter((flow) => !flow.folderId) || []
+        }
+        // Show agentflows in the selected folder
+        return getAllAgentflows.data?.data.filter((flow) => flow.folderId === selectedFolder.id) || []
     }
 
     // Sync folderId from URL to selectedFolder state
@@ -367,7 +332,7 @@ const Agentflows = () => {
             const folderId = over.id === 'breadcrumb-root' ? null : over.id.replace('breadcrumb-', '')
             try {
                 await agentflowFoldersApi.moveChatflowToFolder(active.id, { folderId })
-                await Promise.all([loadFolders(), refresh()])
+                await Promise.all([loadFolders(), refresh(currentPage, pageLimit, agentflowVersion)])
             } catch (err) {
                 console.error('Failed to move agentflow to folder:', err)
             }
@@ -379,7 +344,7 @@ const Agentflows = () => {
         if (folder) {
             try {
                 await agentflowFoldersApi.moveChatflowToFolder(active.id, { folderId: folder.id })
-                await Promise.all([loadFolders(), refresh()])
+                await Promise.all([loadFolders(), refresh(currentPage, pageLimit, agentflowVersion)])
             } catch (err) {
                 console.error('Failed to move agentflow:', err)
             }
@@ -387,7 +352,7 @@ const Agentflows = () => {
             // Move to unassigned (remove from folder)
             try {
                 await agentflowFoldersApi.moveChatflowToFolder(active.id, { folderId: null })
-                await Promise.all([loadFolders(), refresh()])
+                await Promise.all([loadFolders(), refresh(currentPage, pageLimit, agentflowVersion)])
             } catch (err) {
                 console.error('Failed to remove agentflow from folder:', err)
             }
@@ -396,7 +361,7 @@ const Agentflows = () => {
 
     useEffect(() => {
         const initializeFolders = async () => {
-            refresh()
+            refresh(currentPage, pageLimit, agentflowVersion)
             await loadFolders()
             setIsFoldersInitialized(true)
         }
@@ -404,13 +369,6 @@ const Agentflows = () => {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
-
-    // Reset page when entering folder view (client-side pagination)
-    useEffect(() => {
-        if (selectedFolder) {
-            setCurrentPage(1)
-        }
-    }, [selectedFolder])
 
     useEffect(() => {
         if (getAllAgentflows.error) {
@@ -428,9 +386,7 @@ const Agentflows = () => {
         if (getAllAgentflows.data) {
             try {
                 const agentflows = getAllAgentflows.data?.data
-                // Use filtered count for total (client-side pagination)
-                const filteredCount = getAllFilteredAgentflows().length
-                setTotal(filteredCount)
+                setTotal(getAllAgentflows.data?.total)
                 const images = {}
                 const icons = {}
                 for (let i = 0; i < agentflows.length; i += 1) {
@@ -677,16 +633,12 @@ const Agentflows = () => {
                                             ? folders.filter((f) => f.parentId === selectedFolder.id) // Show subfolders
                                             : folders.filter((f) => !f.parentId) // Show only root folders
                                     }
-                                    getFlowCount={getFolderFlowCount}
+                                    agentflows={getAllAgentflows.data?.data || []}
                                     onFolderClick={handleFolderClick}
                                 />
                             )}
-                            {!isLoading && getFilteredAgentflows().length > 0 && (
+                            {!isLoading && total > 0 && (
                                 <>
-                                    {/* Section Header for Agentflows */}
-                                    <Typography variant='h4' sx={{ mb: 2, fontWeight: 700, color: 'text.primary' }}>
-                                        Agentflows
-                                    </Typography>
                                     {!view || view === 'card' ? (
                                         <DroppableArea id='unassigned'>
                                             <Box display='grid' gridTemplateColumns='repeat(3, 1fr)' gap={gridSpacing}>
@@ -717,14 +669,12 @@ const Agentflows = () => {
                                             setError={setError}
                                         />
                                     )}
-                                    {/* Pagination and Page Size Controls - only show in main view */}
-                                    {!selectedFolder && (
-                                        <TablePagination currentPage={currentPage} limit={pageLimit} total={total} onChange={onChange} />
-                                    )}
+                                    {/* Pagination and Page Size Controls */}
+                                    <TablePagination currentPage={currentPage} limit={pageLimit} total={total} onChange={onChange} />
                                 </>
                             )}
 
-                            {!isLoading && getFilteredAgentflows().length === 0 && (
+                            {!isLoading && total === 0 && (
                                 <Stack sx={{ alignItems: 'center', justifyContent: 'center' }} flexDirection='column'>
                                     <Box sx={{ p: 2, height: 'auto' }}>
                                         <img

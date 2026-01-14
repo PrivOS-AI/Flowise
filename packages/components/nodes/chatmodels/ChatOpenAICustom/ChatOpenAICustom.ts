@@ -1,8 +1,7 @@
-import { ChatOpenAI as LangchainChatOpenAI, ChatOpenAIFields } from '@langchain/openai'
+import { ChatOpenAI, ChatOpenAIFields } from '@langchain/openai'
 import { BaseCache } from '@langchain/core/caches'
-import { ICommonObject, INode, INodeData, INodeParams, IMultiModalOption } from '../../../src/Interface'
+import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { getBaseClasses, getCredentialData, getCredentialParam } from '../../../src/utils'
-import { ChatOpenAICustom } from './FlowiseChatOpenAICustom'
 
 class ChatOpenAICustom_ChatModels implements INode {
     label: string
@@ -24,7 +23,7 @@ class ChatOpenAICustom_ChatModels implements INode {
         this.icon = 'openai.svg'
         this.category = 'Chat Models'
         this.description = 'Custom/FineTuned model using OpenAI Chat compatible API'
-        this.baseClasses = [this.type, ...getBaseClasses(LangchainChatOpenAI), ...getBaseClasses(ChatOpenAICustom)]
+        this.baseClasses = [this.type, ...getBaseClasses(ChatOpenAI)]
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
@@ -165,14 +164,7 @@ class ChatOpenAICustom_ChatModels implements INode {
             }
         }
 
-        const multiModalOption: IMultiModalOption = {
-            image: {
-                allowImageUploads: false
-            }
-        }
-
-        const model = new ChatOpenAICustom(nodeData.id, obj)
-        model.setMultiModalOption(multiModalOption)
+        const model = new ChatOpenAI(obj)
         return model
     }
 }
