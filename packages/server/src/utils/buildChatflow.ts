@@ -974,7 +974,7 @@ const checkIfStreamValid = async (
  * @param {Request} req
  * @param {boolean} isInternal
  */
-export const utilBuildChatflow = async (req: Request, isInternal: boolean = false): Promise<any> => {
+export const utilBuildChatflow = async (req: Request, isInternal: boolean = false, isTrigger: boolean = false): Promise<any> => {
     const appServer = getRunningExpressApp()
 
     const chatflowid = req.params.id
