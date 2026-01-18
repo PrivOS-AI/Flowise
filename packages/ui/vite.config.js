@@ -45,7 +45,7 @@ export default defineConfig(async ({ mode }) => {
             open: false,
             proxy,
             port: process.env.VITE_PORT ?? 8080,
-            host: process.env.VITE_HOST ?? 'localhost',
+            host: process.env.VITE_HOST,
             watch: {
                 ignored: [
                     '**/node_modules/**',
@@ -57,7 +57,10 @@ export default defineConfig(async ({ mode }) => {
                 usePolling: false,
                 depth: 15
             },
-            hmr: false
+            hmr: {
+                clientPort: process.env.VITE_HMR_CLIENT_PORT ? parseInt(process.env.VITE_HMR_CLIENT_PORT) : undefined,
+                protocol: process.env.VITE_HMR_PROTOCOL ?? 'ws'
+            }
         },
         optimizeDeps: {
             include: ['react', 'react-dom', 'react-redux'],

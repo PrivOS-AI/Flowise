@@ -235,6 +235,7 @@ const PluginManager = ({ server, setError }) => {
 
             {listPluginsApi.loading ? (
                 <Typography>Loading plugins...</Typography>
+<<<<<<< HEAD
             ) : pluginError ? (
                 <Card sx={{ borderRadius: 2, textAlign: 'center', py: 4 }}>
                     <CardContent>
@@ -250,6 +251,8 @@ const PluginManager = ({ server, setError }) => {
                         </Button>
                     </CardContent>
                 </Card>
+=======
+>>>>>>> b1758a43 (feat: add ClaudeWS integration - MCP server management plugin)
             ) : filteredPlugins.length === 0 ? (
                 <Card sx={{ borderRadius: 2, textAlign: 'center', py: 4 }}>
                     <CardContent>
