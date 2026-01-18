@@ -657,7 +657,7 @@ export const executeFlow = async ({
                     chatflowid: agentflow.id,
                     appDataSource,
                     databaseEntities
-                })
+                }) as any
                 if (generatedFollowUpPrompts?.questions) {
                     apiMessage.followUpPrompts = JSON.stringify(generatedFollowUpPrompts.questions)
                 }
@@ -862,7 +862,7 @@ export const executeFlow = async ({
                 chatflowid,
                 appDataSource,
                 databaseEntities
-            })
+            }) as any
             if (followUpPrompts?.questions) {
                 apiMessage.followUpPrompts = JSON.stringify(followUpPrompts.questions)
             }
