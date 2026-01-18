@@ -14,9 +14,11 @@ export default (apiFunc) => {
             setData(result.data)
             setError(null)
             setApiError(null)
+            return result  // Return the result so callers can use it
         } catch (err) {
             handleError(err || 'Unexpected Error!')
             setApiError(err || 'Unexpected Error!')
+            throw err  // Re-throw so callers can handle errors
         } finally {
             setLoading(false)
         }

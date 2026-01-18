@@ -42,10 +42,14 @@ export default defineConfig(async ({ mode }) => {
             outDir: './build'
         },
         server: {
-            open: true,
+            open: false,
             proxy,
             port: process.env.VITE_PORT ?? 8080,
-            host: process.env.VITE_HOST
+            host: process.env.VITE_HOST,
+            hmr: {
+                clientPort: process.env.VITE_HMR_CLIENT_PORT ? parseInt(process.env.VITE_HMR_CLIENT_PORT) : undefined,
+                protocol: process.env.VITE_HMR_PROTOCOL ?? 'ws'
+            }
         }
     }
 })

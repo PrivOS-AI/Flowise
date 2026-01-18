@@ -2276,7 +2276,7 @@ export const executeAgentFlow = async ({
             chatflowid,
             appDataSource,
             databaseEntities
-        })
+        }) as any
         if (followUpPrompts?.questions) {
             apiMessage.followUpPrompts = JSON.stringify(followUpPrompts.questions)
         }
