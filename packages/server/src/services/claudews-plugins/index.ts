@@ -8,7 +8,13 @@ import claudewsServerService from '../claudews-servers'
 /**
  * List all plugins from ClaudeWS server with optional type filter
  */
-const listPlugins = async (serverId: string, type?: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any[]> => {
+const listPlugins = async (
+    serverId: string,
+    type?: string,
+    userId?: string,
+    isRootAdmin?: boolean,
+    roomId?: string
+): Promise<any[]> => {
     try {
         console.log('[ClaudeWS] listPlugins called with serverId:', serverId, 'type:', type)
 
@@ -56,17 +62,15 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
             return plugins as any
         } catch (requestError: any) {
             // Add detailed error info
-            throw new Error(
-                JSON.stringify({
-                    message: requestError.message,
-                    request: requestConfig,
-                    response: {
-                        status: requestError.response?.status,
-                        statusText: requestError.response?.statusText,
-                        data: requestError.response?.data
-                    }
-                })
-            )
+            throw new Error(JSON.stringify({
+                message: requestError.message,
+                request: requestConfig,
+                response: {
+                    status: requestError.response?.status,
+                    statusText: requestError.response?.statusText,
+                    data: requestError.response?.data
+                }
+            }))
         }
     } catch (error: any) {
         // Build detailed error info
@@ -96,7 +100,13 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
 /**
  * Get specific plugin details from ClaudeWS server
  */
-const getPlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const getPlugin = async (
+    serverId: string,
+    pluginId: string,
+    userId?: string,
+    isRootAdmin?: boolean,
+    roomId?: string
+): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
@@ -160,7 +170,13 @@ const discoverPlugins = async (
 /**
  * Upload plugin files to ClaudeWS server
  */
-const uploadPlugin = async (serverId: string, files: any[], userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const uploadPlugin = async (
+    serverId: string,
+    files: any[],
+    userId?: string,
+    isRootAdmin?: boolean,
+    roomId?: string
+): Promise<any> => {
     try {
         console.log('[ClaudeWS] uploadPlugin service called with', files.length, 'files')
 
@@ -185,53 +201,22 @@ const uploadPlugin = async (serverId: string, files: any[], userId?: string, isR
         formData.append('dryRun', 'true')
 
         for (const file of files) {
-            console.log(
-                '[ClaudeWS] Processing file:',
-                file.originalname,
-                'has path:',
-                !!file.path,
-                'has buffer:',
-                !!file.buffer,
-                'has location:',
-                !!file.location
-            )
-
-            // Use file.path for disk storage
+            console.log('[ClaudeWS] Processing file:', file.originalname, 'path:', file.path)
+            // Use file.path for disk storage, file.buffer for memory storage
             if (file.path) {
                 console.log('[ClaudeWS] Creating read stream from:', file.path)
                 formData.append('file', fs.createReadStream(file.path), file.originalname)
-            }
-            // Use file.buffer for memory storage
-            else if (file.buffer) {
+            } else if (file.buffer) {
                 console.log('[ClaudeWS] Using file buffer')
                 formData.append('file', file.buffer, file.originalname)
-            }
-            // Download from S3/MinIO location URL
-            else if (file.location) {
-                console.log('[ClaudeWS] Downloading file from S3/MinIO:', file.location)
-                try {
-                    const axios = require('axios')
-                    const fileResponse = await axios.get(file.location, { responseType: 'arraybuffer' })
-                    console.log('[ClaudeWS] Downloaded file size:', fileResponse.data.byteLength, 'bytes')
-                    formData.append('file', Buffer.from(fileResponse.data), file.originalname)
-                } catch (downloadError: any) {
-                    console.error('[ClaudeWS] Failed to download file from S3/MinIO:', downloadError.message)
-                    throw new Error(`Failed to download file from storage: ${downloadError.message}`)
-                }
-            } else {
-                console.error('[ClaudeWS] No valid file source found for:', file.originalname)
-                throw new Error(`File ${file.originalname} has no path, buffer, or location`)
             }
         }
 
         console.log('[ClaudeWS] Posting to /api/agent-factory/upload with dryRun=true...')
-        console.log('[ClaudeWS] FormData boundaries:', formData.getHeaders())
-
         const response = await client.post('/api/agent-factory/upload', formData, {
             headers: {
                 ...formData.getHeaders()
-            },
-            maxRedirects: 0
+            }
         })
         console.log('[ClaudeWS] Upload response status:', response.status)
         console.log('[ClaudeWS] Upload response data:', response.data)
@@ -273,15 +258,11 @@ const confirmUpload = async (
         const client = await claudewsServerService.createClient(server)
 
         // Send confirmation to the upload endpoint
-        const requestBody = {
+        console.log('[ClaudeWS] Posting confirmation to /api/agent-factory/upload')
+        const response = await client.post('/api/agent-factory/upload', {
             sessionId,
             confirm: true
-        }
-        console.log('[ClaudeWS] Posting confirmation to /api/agent-factory/upload')
-        console.log('[ClaudeWS] Request body:', JSON.stringify(requestBody, null, 2))
-        console.log('[ClaudeWS] Request headers:', JSON.stringify(client.defaults.headers, null, 2))
-
-        const response = await client.post('/api/agent-factory/upload', requestBody)
+        })
 
         console.log('[ClaudeWS] Confirmation response:', response.status, response.data)
 
@@ -336,7 +317,13 @@ const importPlugin = async (
 /**
  * Delete plugin from ClaudeWS server
  */
-const deletePlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const deletePlugin = async (
+    serverId: string,
+    pluginId: string,
+    userId?: string,
+    isRootAdmin?: boolean,
+    roomId?: string
+): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)

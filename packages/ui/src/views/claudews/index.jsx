@@ -32,10 +32,8 @@ const ClaudeWS = () => {
     const [dialogProps, setDialogProps] = useState({})
     const [selectedServer, setSelectedServer] = useState(null)
     const [servers, setServers] = useState([])
-    const [criticalError, setCriticalError] = useState(null)
 
     const refresh = () => {
-        setCriticalError(null)
         getAllServersApi.request()
     }
 
@@ -93,8 +91,8 @@ const ClaudeWS = () => {
     return (
         <>
             <MainCard>
-                {criticalError ? (
-                    <ErrorBoundary error={criticalError} />
+                {error ? (
+                    <ErrorBoundary error={error} />
                 ) : (
                     <Stack flexDirection='column' sx={{ gap: 3 }}>
                         <ViewHeader title='ClaudeWS Servers' description='AI Agentic Workspace Powered by Claude Agent'>
@@ -117,7 +115,7 @@ const ClaudeWS = () => {
                                         onAdd={addNew}
                                         onEdit={edit}
                                         onRefresh={refresh}
-                                        setError={setCriticalError}
+                                        setError={setError}
                                     />
                                 )}
                             </Grid>
@@ -127,7 +125,7 @@ const ClaudeWS = () => {
                                 {isLoading ? (
                                     <Skeleton variant='rounded' height={600} />
                                 ) : (
-                                    <PluginManager server={selectedServer} setError={() => {}} />
+                                    <PluginManager server={selectedServer} setError={setError} />
                                 )}
                             </Grid>
                         </Grid>
@@ -140,7 +138,7 @@ const ClaudeWS = () => {
                 dialogProps={dialogProps}
                 onCancel={() => setShowServerDialog(false)}
                 onConfirm={onServerDialogConfirm}
-                setError={setCriticalError}
+                setError={setError}
             />
         </>
     )

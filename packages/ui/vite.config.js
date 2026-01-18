@@ -45,23 +45,11 @@ export default defineConfig(async ({ mode }) => {
             open: false,
             proxy,
             port: process.env.VITE_PORT ?? 8080,
-            host: process.env.VITE_HOST ?? 'localhost',
-            watch: {
-                ignored: [
-                    '**/node_modules/**',
-                    '**/dist/**',
-                    '**/.git/**',
-                    '**/build/**',
-                    '**/.turbo/**'
-                ],
-                usePolling: false,
-                depth: 15
-            },
-            hmr: false
-        },
-        optimizeDeps: {
-            include: ['react', 'react-dom', 'react-redux'],
-            exclude: ['flowise-components']
+            host: process.env.VITE_HOST,
+            hmr: {
+                clientPort: process.env.VITE_HMR_CLIENT_PORT ? parseInt(process.env.VITE_HMR_CLIENT_PORT) : undefined,
+                protocol: process.env.VITE_HMR_PROTOCOL ?? 'ws'
+            }
         }
     }
 })
