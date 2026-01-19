@@ -1,6 +1,10 @@
 {
-    "ignore": ["**/*.spec.ts", ".git", "node_modules"],
-    "watch": ["commands", "index.ts", "src"],
-    "exec": "pnpm start",
-    "ext": "ts"
+    "watch": ["dist"],
+    "ignore": ["**/*.spec.ts", ".git", "node_modules", "src", "test", "cypress"],
+    "ext": "js,json",
+    "exec": "cd bin && node start-patched.js",
+    "env": {
+        "NODE_ENV": "development"
+    },
+    "delay": "500"
 }
