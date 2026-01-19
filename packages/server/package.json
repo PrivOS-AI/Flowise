@@ -31,7 +31,7 @@
         "user": "run-script-os",
         "user:windows": "cd bin && run user",
         "user:default": "cd bin && ./run user",
-        "dev": "nodemon",
+        "dev": "concurrently \"tsc --watch\" \"nodemon\"",
         "oclif-dev": "run-script-os",
         "oclif-dev:windows": "cd bin && dev start",
         "oclif-dev:default": "cd bin && ./dev start",
