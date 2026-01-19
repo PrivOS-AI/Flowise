@@ -410,11 +410,18 @@ export async function start(): Promise<void> {
     const port = parseInt(process.env.PORT || '', 10) || 3000
     const server = http.createServer(serverApp.app)
 
+    // Set server timeout (default 2 minutes, increase for long-running API calls)
+    const serverTimeout = 600000 // 10 minutes default
+    server.timeout = serverTimeout
+    server.headersTimeout = serverTimeout + 5000 // Headers timeout slightly longer than request timeout
+    server.keepAliveTimeout = 65000 // Keep-alive timeout (default 5 seconds)
+
     await serverApp.initDatabase()
     await serverApp.config()
 
     server.listen(port, host, () => {
         logger.info(`⚡️ [server]: Flowise Server is listening at ${host ? 'http://' + host : ''}:${port}`)
+        logger.info(`⏱️ [server]: Request timeout set to ${serverTimeout}ms (${serverTimeout / 60000} minutes)`)
     })
 }
 
