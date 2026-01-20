@@ -183,6 +183,10 @@ export class RedisEventSubscriber {
             case 'thinking':
                 this.sseStreamer.streamThinkingEvent(chatId, data)
                 break
+            case 'heartbeat':
+                // Heartbeat events are handled by the controller's timer, not via Redis
+                // This case exists for completeness but shouldn't be used
+                break
         }
     }
 
