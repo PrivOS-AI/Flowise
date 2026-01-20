@@ -340,7 +340,12 @@ export class SSEStreamer implements IServerSideEventStreamer {
                 return
             }
             // Send SSE comment as heartbeat (comments start with ':')
-            client.response.write(': heartbeat\n\n')
+            const clientResponse = {
+                event: 'heartbeat',
+                data: 'ping'
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+            console.log('[SSEStreamer] Sent heartbeat to chatId:', chatId)
         }, intervalMs)
 
         this.heartbeatTimers[chatId] = timer
