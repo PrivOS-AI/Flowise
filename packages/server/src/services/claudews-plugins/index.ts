@@ -213,10 +213,13 @@ const uploadPlugin = async (
         }
 
         console.log('[ClaudeWS] Posting to /api/agent-factory/upload with dryRun=true...')
+        console.log('[ClaudeWS] FormData boundaries:', formData.getHeaders())
+
         const response = await client.post('/api/agent-factory/upload', formData, {
             headers: {
                 ...formData.getHeaders()
-            }
+            },
+            maxRedirects: 0
         })
         console.log('[ClaudeWS] Upload response status:', response.status)
         console.log('[ClaudeWS] Upload response data:', response.data)
@@ -258,11 +261,15 @@ const confirmUpload = async (
         const client = await claudewsServerService.createClient(server)
 
         // Send confirmation to the upload endpoint
-        console.log('[ClaudeWS] Posting confirmation to /api/agent-factory/upload')
-        const response = await client.post('/api/agent-factory/upload', {
+        const requestBody = {
             sessionId,
             confirm: true
-        })
+        }
+        console.log('[ClaudeWS] Posting confirmation to /api/agent-factory/upload')
+        console.log('[ClaudeWS] Request body:', JSON.stringify(requestBody, null, 2))
+        console.log('[ClaudeWS] Request headers:', JSON.stringify(client.defaults.headers, null, 2))
+
+        const response = await client.post('/api/agent-factory/upload', requestBody)
 
         console.log('[ClaudeWS] Confirmation response:', response.status, response.data)
 
