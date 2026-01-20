@@ -455,7 +455,6 @@ const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
                         </Box>
                     )}
                 </Box>
-                )}
                 {data?.hint && (
                     <Stack
                         direction='row'
