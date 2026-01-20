@@ -119,5 +119,3 @@ docker/.env.production
 packages/server/check-schedules.js
 packages/server/clear-redis-schedules.js
 nul
-
-docs
