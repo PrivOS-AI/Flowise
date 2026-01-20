@@ -56,7 +56,6 @@ import ChatFeedbackContentDialog from '@/ui-component/dialog/ChatFeedbackContent
 import StarterPromptsCard from '@/ui-component/cards/StarterPromptsCard'
 import AgentReasoningCard from './AgentReasoningCard'
 import AgentExecutedDataCard from './AgentExecutedDataCard'
-import LLMThinkingText from './LLMThinkingText'
 import { ImageButton, ImageSrc, ImageBackdrop, ImageMarked } from '@/ui-component/button/ImageButton'
 import CopyToClipboardButton from '@/ui-component/button/CopyToClipboardButton'
 import ThumbsUpButton from '@/ui-component/button/ThumbsUpButton'
@@ -91,7 +90,6 @@ import FollowUpPromptsCard from '@/ui-component/cards/FollowUpPromptsCard'
 
 // History
 import { ChatInputHistory } from './ChatInputHistory'
-import AgentProgressText from './AgentProgressText'
 
 const messageImageStyle = {
     width: '128px',
@@ -2442,13 +2440,13 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                                         agentflowId={chatflowid}
                                                         sessionId={chatId}
                                                     />
-                                                    <AgentProgressText execution={message.agentFlowExecutedData} />
+                                                    {/* <AgentProgressText execution={message.agentFlowExecutedData} /> */}
                                                 </>
                                             )}
                                         {/* LLM Thinking Process */}
-                                        {message.thinking && (
+                                        {/* {message.thinking && (
                                             <LLMThinkingText thinking={message.thinking} status={message.agentFlowEventStatus} />
-                                        )}
+                                        )} */}
                                         {message.usedTools && (
                                             <div
                                                 style={{
