@@ -118,22 +118,39 @@ class ClaudeWS_Agentflow implements INode {
                 acceptVariable: true
             },
             {
-                label: 'Task Name',
+                label: 'PrivOS Endpoint URL',
+                name: 'privosEndpointUrl',
+                type: 'string',
+                description: 'PrivOS Endpoint URL so that ClaudeWS can use skills to interact with PrivOS',
+                placeholder: 'https://privos.example.com',
+                optional: true,
+                acceptVariable: true
+            },
+            {
+                label: 'Ai Chat Session Name',
                 name: 'claudewsTaskName',
                 type: 'string',
-                description: 'Name of an existing task to continue',
+                description: 'Name of a PrivOS Ai chat session to continue',
                 placeholder: 'task-name',
                 optional: true,
                 acceptVariable: true
             },
             {
-                label: 'Task ID',
+                label: 'Ai Chat Session ID',
                 name: 'claudewsTaskId',
                 type: 'string',
-                description: 'ID of an existing task to continue',
+                description: 'ID of a PrivOS Ai chat session to continue',
                 placeholder: 'task-uuid',
                 optional: true,
                 acceptVariable: true
+            },
+            {
+                label: 'Force to Create Session/Room if not exist',
+                name: 'claudewsForceCreate',
+                type: 'boolean',
+                description: 'Force create room or task if they do not exist',
+                optional: true,
+                default: true
             },
             {
                 label: 'Messages',
@@ -194,8 +211,10 @@ class ClaudeWS_Agentflow implements INode {
         const roomName = nodeData.inputs?.claudewsRoomName as string | undefined
         const roomId = nodeData.inputs?.claudewsRoomId as string | undefined
         const roomSessionKey = nodeData.inputs?.claudewsRoomSessionKey as string | undefined
+        const privosEndpointUrl = nodeData.inputs?.privosEndpointUrl as string | undefined
         const taskName = nodeData.inputs?.claudewsTaskName as string | undefined
         let taskId = nodeData.inputs?.claudewsTaskId as string | undefined
+        const forceCreate = nodeData.inputs?.claudewsForceCreate as boolean | undefined
         const messages = nodeData.inputs?.claudewsMessages as Array<{ role: string; content: string }> | undefined
         const updateStateConfig = nodeData.inputs?.claudewsUpdateFlowState as Array<{ key: string; value: string }> | undefined
 
@@ -246,6 +265,14 @@ class ClaudeWS_Agentflow implements INode {
         }
 
         // Resolve room ID if only room name is provided
+        console.log('[ClaudeWS Agentflow] Initial room values:', {
+            roomIdInput: roomId,
+            roomNameInput: roomName,
+            roomSessionKeyInput: roomSessionKey,
+            privosEndpointUrlInput: privosEndpointUrl,
+            taskNameInput: taskName
+        })
+
         let resolvedRoomId = roomId
         if (!resolvedRoomId && roomName) {
             // Fetch rooms and find by name
@@ -261,7 +288,20 @@ class ClaudeWS_Agentflow implements INode {
                 throw new Error(`Room with name "${roomName}" not found`)
             }
             resolvedRoomId = room.id
+            console.log('[ClaudeWS Agentflow] Resolved room ID from name:', {
+                roomName,
+                resolvedRoomId
+            })
         }
+
+        console.log('[ClaudeWS Agentflow] Final room values before execution:', {
+            resolvedRoomId,
+            roomName,
+            roomSessionKey,
+            privosEndpointUrl,
+            taskName,
+            taskId
+        })
 
         // If no task ID provided, create a new task or find by name
         if (!taskId) {
@@ -319,7 +359,13 @@ class ClaudeWS_Agentflow implements INode {
                 prompt,
                 chatId,
                 shouldStream,
-                streamer
+                streamer,
+                forceCreate,
+                resolvedRoomId,
+                roomName,
+                roomSessionKey,
+                privosEndpointUrl,
+                taskName
             )
             fullResponse = result.text
             const usedTools = result.usedTools || []
@@ -384,7 +430,13 @@ class ClaudeWS_Agentflow implements INode {
         prompt: string,
         chatId: string,
         shouldStream: boolean,
-        streamer: any
+        streamer: any,
+        forceCreate?: boolean,
+        roomId?: string,
+        roomNameParam?: string,
+        roomSessionKeyParam?: string,
+        privosEndpointUrlParam?: string,
+        taskNameParam?: string
     ): Promise<{ text: string; usedTools: any[] }> {
         return new Promise((resolve, reject) => {
             let fullResponse = ''
@@ -406,12 +458,51 @@ class ClaudeWS_Agentflow implements INode {
 
             socket.on('connect', () => {
                 // Start the attempt - the server will create it and emit attempt:started
-                socket.emit('attempt:start', {
+                const attemptPayload: ICommonObject = {
                     taskId,
                     prompt,
                     displayPrompt: prompt,
                     fileIds: []
+                }
+
+                // Add force_create and related fields if enabled
+                if (forceCreate) {
+                    attemptPayload.force_create = true
+                    // Include room/project information for auto-creation
+                    // Use the values provided, or use empty string to trigger creation
+                    attemptPayload.projectId = roomId || ''
+                    attemptPayload.projectName = roomNameParam || ''
+                    attemptPayload.taskTitle = taskNameParam || prompt.substring(0, 50)
+                }
+
+                // Add additional fields if they have values
+                if (roomSessionKeyParam) {
+                    attemptPayload.roomSessionKey = roomSessionKeyParam
+                }
+                if (privosEndpointUrlParam) {
+                    attemptPayload.privosEndpointUrl = privosEndpointUrlParam
+                }
+
+                console.log('[ClaudeWS Agentflow] Sending attempt:start to ClaudeWS server:', {
+                    baseUrl,
+                    roomId,
+                    roomName: roomNameParam,
+                    roomSessionKey: roomSessionKeyParam,
+                    privosEndpointUrl: privosEndpointUrlParam,
+                    taskName: taskNameParam,
+                    taskId,
+                    prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+                    displayPrompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+                    force_create: attemptPayload.force_create,
+                    projectId: attemptPayload.projectId,
+                    projectName: attemptPayload.projectName,
+                    taskTitle: attemptPayload.taskTitle,
+                    payloadRoomSessionKey: attemptPayload.roomSessionKey,
+                    payloadPrivosEndpointUrl: attemptPayload.privosEndpointUrl,
+                    fileIds: attemptPayload.fileIds
                 })
+                console.log('[ClaudeWS Agentflow] Exact payload being sent:', JSON.stringify(attemptPayload, null, 2))
+                socket.emit('attempt:start', attemptPayload)
             })
 
             socket.on('attempt:started', (data: { attemptId: string }) => {

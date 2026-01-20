@@ -298,6 +298,11 @@ const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
         // Remove trailing slash from endpoint URL to prevent double slashes
         const baseURL = server.endpointUrl.replace(/\/$/, '')
 
+        console.log('[ClaudeWS Client] Creating axios client with:')
+        console.log('[ClaudeWS Client]   baseURL:', baseURL)
+        console.log('[ClaudeWS Client]   x-api-key:', apiKey.substring(0, 10) + '...')
+        console.log('[ClaudeWS Client]   timeout: 30000ms')
+
         const client = axios.create({
             baseURL,
             headers: {
@@ -305,6 +310,34 @@ const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
                 'x-api-key': apiKey
             },
             timeout: 30000 // 30 second timeout
+        })
+
+        // Add request interceptor for debugging
+        client.interceptors.request.use((config) => {
+            console.log('[ClaudeWS HTTP Request]')
+            console.log('  Method:', config.method?.toUpperCase() || 'GET')
+            console.log('  URL:', (config.baseURL || '') + (config.url || ''))
+            console.log('  Headers:', JSON.stringify({
+                'content-type': config.headers['Content-Type'],
+                'x-api-key': config.headers['x-api-key'] ? String(config.headers['x-api-key']).substring(0, 10) + '...' : 'undefined'
+            }, null, 2))
+            if (config.data) {
+                if (config.data instanceof FormData) {
+                    console.log('  Body: <FormData with boundaries>')
+                } else {
+                    console.log('  Body:', JSON.stringify(config.data, null, 2))
+                }
+            }
+            return config
+        })
+
+        // Add response interceptor for debugging
+        client.interceptors.response.use((response) => {
+            console.log('[ClaudeWS HTTP Response]')
+            console.log('  Status:', response.status)
+            console.log('  Headers:', JSON.stringify(response.headers, null, 2))
+            console.log('  Data:', JSON.stringify(response.data, null, 2))
+            return response
         })
 
         return client
