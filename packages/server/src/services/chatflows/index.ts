@@ -501,6 +501,28 @@ const checkIfChatflowHasChanged = async (chatflowId: string, lastUpdatedDateTime
     }
 }
 
+// Update chatflow folder (move to folder)
+const updateChatflowFolder = async (chatflowId: string, folderId: string | null): Promise<any> => {
+    try {
+        const appServer = getRunningExpressApp()
+        const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
+            id: chatflowId
+        })
+        if (!chatflow) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found`)
+        }
+
+        chatflow.folderId = folderId as any
+        const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).save(chatflow)
+        return dbResponse
+    } catch (error) {
+        throw new InternalFlowiseError(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            `Error: chatflowsService.updateChatflowFolder - ${getErrorMessage(error)}`
+        )
+    }
+}
+
 export default {
     checkIfChatflowIsValidForStreaming,
     checkIfChatflowIsValidForUploads,
@@ -515,5 +537,6 @@ export default {
     checkIfChatflowHasChanged,
     getAllChatflowsCountByOrganization,
     getAllBotEnabledChatflows,
-    getAllSubAgentEnabledChatflows
+    getAllSubAgentEnabledChatflows,
+    updateChatflowFolder
 }

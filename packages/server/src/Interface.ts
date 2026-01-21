@@ -74,6 +74,22 @@ export interface IChatFlow {
     roomId?: string
     scheduleConfig?: string
     scheduleEnabled?: boolean
+    folderId?: string
+}
+
+export interface IAgentflowFolder {
+    id: string
+    name: string
+    workspaceId: string | null
+    parentId: string | null
+    createdDate: Date
+    updatedDate: Date
+}
+
+export interface IAgentflowFolderInput {
+    name: string
+    workspaceId?: string | null
+    parentId?: string | null
 }
 
 export interface IChatMessage {
@@ -274,6 +290,7 @@ export interface IDepthQueue {
 
 export interface IAgentflowExecutedData {
     nodeLabel: string
+    executionLabel?: string
     nodeId: string
     data: INodeExecutionData
     previousNodeIds: string[]

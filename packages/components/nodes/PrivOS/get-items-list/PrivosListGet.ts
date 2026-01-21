@@ -620,7 +620,6 @@ ${description}`
                     description: description
                 }
             } else {
-                // Full format - Text dễ đọc
                 const name = item.name || 'Untitled'
                 const key = item.key || 'N/A'
                 const description = item.description || 'No description'

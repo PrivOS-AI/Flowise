@@ -67,6 +67,7 @@ const Canvas = () => {
 
     const { state } = useLocation()
     const templateFlowData = state ? state.templateFlowData : ''
+    const folderId = state ? state.folderId : null
 
     const URLpath = document.location.pathname.toString().split('/')
     const chatflowId =
@@ -81,7 +82,7 @@ const Canvas = () => {
     const canvas = useSelector((state) => state.canvas)
     const [canvasDataStore, setCanvasDataStore] = useState(canvas)
     const [chatflow, setChatflow] = useState(null)
-    const { reactFlowInstance, setReactFlowInstance} = useContext(flowContext)
+    const { reactFlowInstance, setReactFlowInstance } = useContext(flowContext)
 
     // ==============================|| Snackbar ||============================== //
 
@@ -233,7 +234,8 @@ const Canvas = () => {
                     deployed: false,
                     isPublic: false,
                     flowData,
-                    type: isAgentCanvas ? 'MULTIAGENT' : 'CHATFLOW'
+                    type: isAgentCanvas ? 'MULTIAGENT' : 'CHATFLOW',
+                    ...(folderId && { folderId })
                 }
                 createNewChatflowApi.request(newChatflowBody)
             } else {
@@ -432,6 +434,7 @@ const Canvas = () => {
             const chatflow = createNewChatflowApi.data
             dispatch({ type: SET_CHATFLOW, chatflow })
             saveChatflowSuccess()
+            // Update URL to include the new chatflow ID
             window.history.replaceState(state, null, `/${isAgentCanvas ? 'agentcanvas' : 'canvas'}/${chatflow.id}`)
         } else if (createNewChatflowApi.error) {
             errorFailed(`Failed to retrieve ${canvasTitle}: ${createNewChatflowApi.error.response.data.message}`)
@@ -577,6 +580,7 @@ const Canvas = () => {
                             handleDeleteFlow={handleDeleteFlow}
                             handleLoadFlow={handleLoadFlow}
                             isAgentCanvas={isAgentCanvas}
+                            folderId={chatflow?.folderId || folderId}
                         />
                     </Toolbar>
                 </AppBar>

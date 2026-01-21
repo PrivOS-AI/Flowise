@@ -71,6 +71,7 @@ const AgentflowCanvas = () => {
 
     const { state } = useLocation()
     const templateFlowData = state ? state.templateFlowData : ''
+    const folderId = state ? state.folderId : null
 
     const URLpath = document.location.pathname.toString().split('/')
     const chatflowId =
@@ -228,7 +229,8 @@ const AgentflowCanvas = () => {
                     deployed: false,
                     isPublic: false,
                     flowData,
-                    type: 'AGENTFLOW'
+                    type: 'AGENTFLOW',
+                    ...(folderId && { folderId })
                 }
                 createNewChatflowApi.request(newChatflowBody)
             } else {
@@ -544,6 +546,7 @@ const AgentflowCanvas = () => {
             const chatflow = createNewChatflowApi.data
             dispatch({ type: SET_CHATFLOW, chatflow })
             saveChatflowSuccess()
+            // Update URL to include the new chatflow ID
             window.history.replaceState(state, null, `/v2/agentcanvas/${chatflow.id}`)
         } else if (createNewChatflowApi.error) {
             errorFailed(`Failed to save ${canvasTitle}: ${createNewChatflowApi.error.response.data.message}`)
@@ -697,6 +700,7 @@ const AgentflowCanvas = () => {
                             handleLoadFlow={handleLoadFlow}
                             isAgentCanvas={true}
                             isAgentflowV2={true}
+                            folderId={chatflow?.folderId || folderId}
                         />
                     </Toolbar>
                 </AppBar>

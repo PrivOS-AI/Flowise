@@ -347,11 +347,9 @@ class PrivosDocumentGet_Agentflow implements INode {
             let outputData: any
 
             if (returnFormat === 'content') {
-                // Chỉ trả về content
                 outputContent = content
                 outputData = { content }
             } else {
-                // Full format - Text dễ đọc
                 const title = document?.title || 'Untitled'
                 const description = document?.description || ''
                 const creator = formatUser(document?.createdBy)

@@ -31,6 +31,12 @@ class PrivosApiCredential implements INodeCredential {
                 name: 'authToken',
                 type: 'password',
                 description: 'Your Privos authentication token'
+            },
+            {
+                label: 'ApiKey (X-API-KEY)',
+                name: 'apiKey',
+                type: 'password',
+                description: 'Your Privos api key'
             }
         ]
     }

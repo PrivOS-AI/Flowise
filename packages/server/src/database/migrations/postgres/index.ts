@@ -43,6 +43,8 @@ import { AddChatFlowNameIndex1759424903973 } from './1759424903973-AddChatFlowNa
 import { AddScheduleConfigToChatFlow1760000000000 } from './1760000000000-AddScheduleConfigToChatFlow'
 import { AddBotEnabledToChatFlow1760100000000 } from './1760100000000-AddBotEnabledToChatFlow'
 import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSubAgentEnabledToChatFlow'
+import { AddAgentflowFolder1770300000000 } from './1770300000000-AddAgentflowFolder'
+import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToFolder'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 import { FinalSafetyMigration9999999999999 } from './9999999999999-FinalSafetyMigration'
 
@@ -116,5 +118,7 @@ export const postgresMigrations = [
     AddScheduleConfigToChatFlow1760000000000,
     AddBotEnabledToChatFlow1760100000000,
     AddSubAgentEnabledToChatFlow1760200000000,
+    AddAgentflowFolder1770300000000,
+    AddParentIdToFolder1770400000000,
     FinalSafetyMigration9999999999999
 ]
