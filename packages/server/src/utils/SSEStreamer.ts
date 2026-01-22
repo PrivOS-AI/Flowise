@@ -12,6 +12,7 @@ type Client = {
 
 export class SSEStreamer implements IServerSideEventStreamer {
     clients: { [id: string]: Client } = {}
+    heartbeatTimers: { [id: string]: NodeJS.Timeout } = {}
 
     addExternalClient(chatId: string, res: Response) {
         this.clients[chatId] = { clientType: 'EXTERNAL', response: res, started: false }
@@ -24,6 +25,9 @@ export class SSEStreamer implements IServerSideEventStreamer {
     removeClient(chatId: string) {
         const client = this.clients[chatId]
         if (client) {
+            // Clear heartbeat timer if exists
+            this.stopHeartbeat(chatId)
+
             const clientResponse = {
                 event: 'end',
                 data: '[DONE]'
@@ -312,6 +316,52 @@ export class SSEStreamer implements IServerSideEventStreamer {
                 data: data
             }
             client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
+
+    /**
+     * Start heartbeat to keep SSE connection alive
+     * Sends a heartbeat comment every intervalMs (default 20 seconds)
+     * This prevents Cloudflare and other proxies from timing out the connection
+     */
+    startHeartbeat(chatId: string, intervalMs: number = 20000): () => void {
+        const client = this.clients[chatId]
+        if (!client) {
+            return () => {}
+        }
+
+        // Clear existing timer if any
+        this.stopHeartbeat(chatId)
+
+        const timer = setInterval(() => {
+            if (client.response.writableEnded) {
+                clearInterval(timer)
+                delete this.heartbeatTimers[chatId]
+                return
+            }
+            // Send SSE comment as heartbeat (comments start with ':')
+            const clientResponse = {
+                event: 'heartbeat',
+                data: 'ping'
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+            console.log('[SSEStreamer] Sent heartbeat to chatId:', chatId)
+        }, intervalMs)
+
+        this.heartbeatTimers[chatId] = timer
+
+        // Return cleanup function
+        return () => this.stopHeartbeat(chatId)
+    }
+
+    /**
+     * Stop heartbeat for a specific chatId
+     */
+    stopHeartbeat(chatId: string): void {
+        const timer = this.heartbeatTimers[chatId]
+        if (timer) {
+            clearInterval(timer)
+            delete this.heartbeatTimers[chatId]
         }
     }
 }

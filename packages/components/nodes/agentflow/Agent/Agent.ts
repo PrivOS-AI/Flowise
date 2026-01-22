@@ -547,6 +547,7 @@ class Agent_Agentflow implements INode {
     async run(nodeData: INodeData, input: string | Record<string, any>, options: ICommonObject): Promise<any> {
         let llmIds: ICommonObject | undefined
         let analyticHandlers = options.analyticHandlers as AnalyticHandler
+        let stopHeartbeat: (() => void) | undefined
 
         try {
             const abortController = options.abortController as AbortController
@@ -967,6 +968,12 @@ class Agent_Agentflow implements INode {
             // Get initial response from LLM
             const sseStreamer: IServerSideEventStreamer | undefined = options.sseStreamer
 
+            // Start heartbeat to keep SSE connection alive during long model thinking
+            if (sseStreamer && (sseStreamer as any).startHeartbeat) {
+                // current skip: isLastNode === true
+                stopHeartbeat = (sseStreamer as any).startHeartbeat(chatId, 20000)
+            }
+
             // Handle tool calls with support for recursion
             let usedTools: IUsedTool[] = []
             let sourceDocuments: Array<any> = []
@@ -1270,6 +1277,11 @@ class Agent_Agentflow implements INode {
                 throw error
             }
             throw new Error(`Error in Agent node: ${error instanceof Error ? error.message : String(error)}`)
+        } finally {
+            // Stop heartbeat when done (success or error)
+            if (stopHeartbeat) {
+                stopHeartbeat()
+            }
         }
     }
 
