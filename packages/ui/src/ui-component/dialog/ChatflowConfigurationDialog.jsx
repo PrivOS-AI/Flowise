@@ -16,6 +16,7 @@ import PostProcessing from '@/ui-component/extended/PostProcessing'
 import Schedule from '@/ui-component/extended/Schedule'
 import BotToggle from '@/ui-component/extended/BotToggle'
 import SubAgentToggle from '@/ui-component/extended/SubAgentToggle'
+import Slug from '@/ui-component/extended/Slug'
 
 const CHATFLOW_CONFIGURATION_TABS = [
     {
@@ -70,6 +71,10 @@ const CHATFLOW_CONFIGURATION_TABS = [
     {
         label: 'SubAgent',
         id: 'subagent'
+    },
+    {
+        label: 'Slug',
+        id: 'slug'
     }
 ]
 
@@ -166,6 +171,7 @@ const ChatflowConfigurationDialog = ({ show, isAgentCanvas, dialogProps, onCance
                         {item.id === 'schedule' ? <Schedule dialogProps={dialogProps} /> : null}
                         {item.id === 'bot' ? <BotToggle dialogProps={dialogProps} /> : null}
                         {item.id === 'subagent' ? <SubAgentToggle dialogProps={dialogProps} /> : null}
+                        {item.id === 'slug' ? <Slug dialogProps={dialogProps} /> : null}
                     </TabPanel>
                 ))}
             </DialogContent>

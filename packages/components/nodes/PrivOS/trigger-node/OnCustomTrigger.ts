@@ -13,7 +13,7 @@ import { updateFlowState } from '../../agentflow/utils'
 import { PrivosEvent } from '../constants'
 import { PrivosErrorHandler } from '../utils'
 
-class OnRoomJoined_Privos implements INode {
+class OnCustomTrigger_Privos implements INode {
     label: string
     name: string
     version: number
@@ -29,13 +29,13 @@ class OnRoomJoined_Privos implements INode {
     eventType?: string
 
     constructor() {
-        this.label = 'On Room Joined'
-        this.name = 'onRoomJoinedPrivos'
-        this.eventType = PrivosEvent.ROOM_JOINED
+        this.label = 'On Custom Trigger'
+        this.name = 'onCustomTriggerPrivos'
+        this.eventType = PrivosEvent.CUSTOM
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'
-        this.description = 'Triggers when a user joins a room in Privos'
+        this.description = 'Triggers when a new action is received'
         this.icon = 'privos.svg'
         this.color = '#4318FF'
         this.baseClasses = [this.type]
@@ -94,12 +94,11 @@ class OnRoomJoined_Privos implements INode {
             const { baseUrl, apiKey } = (await getCredentialData(nodeData.credential, options)) as IPrivosCredential
             const payload = options.triggerData
             const inputState = {
-                roomId: payload.roomId,
-                userId: payload.userId
+                roomId: payload.roomId
             }
 
             const result: any = {
-                event: PrivosEvent.ROOM_JOINED,
+                event: PrivosEvent.MESSAGE_NEW,
                 ...inputState
             }
 
@@ -127,4 +126,4 @@ class OnRoomJoined_Privos implements INode {
     }
 }
 
-module.exports = { nodeClass: OnRoomJoined_Privos }
+module.exports = { nodeClass: OnCustomTrigger_Privos }
