@@ -81,4 +81,7 @@ export class ChatFlow implements IChatFlow {
 
     @Column({ nullable: true, type: 'text' })
     folderId?: string
+
+    @Column({ nullable: true, type: 'varchar', length: 100, unique: true })
+    slug?: string
 }

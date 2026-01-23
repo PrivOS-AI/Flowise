@@ -523,6 +523,20 @@ const updateChatflowFolder = async (chatflowId: string, folderId: string | null)
     }
 }
 
+const checkDuplicateSlug = async (slug: string): Promise<any> => {
+    const appServer = getRunningExpressApp()
+    const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow)
+        .createQueryBuilder('chatflow')
+        .select('chatflow.id')
+        .where('LOWER(chatflow.slug) = :slug', { slug: slug.toLowerCase().trim() })
+        .getOne()
+    if (dbResponse) {
+        throw new InternalFlowiseError(StatusCodes.CONFLICT, `Slug already exists. Please choose another.`)
+    }
+
+    return dbResponse
+}
+
 export default {
     checkIfChatflowIsValidForStreaming,
     checkIfChatflowIsValidForUploads,
@@ -538,5 +552,6 @@ export default {
     getAllChatflowsCountByOrganization,
     getAllBotEnabledChatflows,
     getAllSubAgentEnabledChatflows,
-    updateChatflowFolder
+    updateChatflowFolder,
+    checkDuplicateSlug
 }

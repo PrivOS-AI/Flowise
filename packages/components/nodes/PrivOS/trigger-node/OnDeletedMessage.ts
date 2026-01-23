@@ -26,12 +26,12 @@ class OnDeletedMessage_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On Deleted Message'
         this.name = 'onDeletedMessagePrivos'
-        this.triggerType = PrivosEvent.MESSAGE_DELETED
+        this.eventType = PrivosEvent.MESSAGE_DELETED
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'

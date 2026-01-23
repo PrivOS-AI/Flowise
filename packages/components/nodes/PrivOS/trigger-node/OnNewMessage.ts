@@ -26,12 +26,12 @@ class OnNewMessage_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On New Message'
         this.name = 'onNewMessagePrivos'
-        this.triggerType = PrivosEvent.MESSAGE_NEW
+        this.eventType = PrivosEvent.MESSAGE_NEW
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'

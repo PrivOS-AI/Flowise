@@ -149,7 +149,7 @@ export interface INodeProperties {
     hint?: string
     warning?: string
     executionLabel?: string
-    triggerType?: string
+    eventType?: string
 }
 
 export interface INode extends INodeProperties {
