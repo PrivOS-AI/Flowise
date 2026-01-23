@@ -229,6 +229,20 @@ export interface IClaudeWSServer {
     workspaceId?: string
 }
 
+export interface ITrigger {
+    id: string
+    flowId: string
+    slug?: string
+    type: string
+    isEnabled: boolean
+    events: string[]
+    config?: any
+    description?: string
+    updatedDate: Date
+    createdDate: Date
+    workspaceId?: string
+}
+
 export interface IComponentNodes {
     [key: string]: INode
 }
