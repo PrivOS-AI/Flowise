@@ -47,6 +47,7 @@ import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTrigger
 import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
 import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
+import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 import { FinalSafetyMigration9999999999999 } from './9999999999999-FinalSafetyMigration'
 
@@ -124,5 +125,6 @@ export const sqliteMigrations = [
     AddClaudeWSEntities1770500000000,
     AddTriggerEntityAndSlug1737625150000,
     AddClaudeWSEntities1770500000000,
+    AddTriggerEntityAndSlug1737625150000,
     FinalSafetyMigration9999999999999
 ]

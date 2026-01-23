@@ -212,3 +212,69 @@ export const REQUEST_CONFIG = {
     MAX_RETRIES: 3,
     TIMEOUT: 30000 // 30 seconds
 } as const
+
+// ============================================================================
+// EVENT TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Event types for NATS trigger system
+ * Used to route events to appropriate agent flows
+ */
+export const EVENT_TYPES = {
+    USER_MESSAGE: 'user.message',
+    ORDER_CREATED: 'order.created',
+    ORDER_UPDATED: 'order.updated',
+    PAYMENT_SUCCESS: 'payment.success',
+    PAYMENT_FAILED: 'payment.failed',
+    USER_REGISTERED: 'user.registered',
+    USER_LOGIN: 'user.login',
+    TICKET_CREATED: 'ticket.created',
+    TICKET_UPDATED: 'ticket.updated',
+    DOCUMENT_CREATED: 'document.created',
+    DOCUMENT_UPDATED: 'document.updated',
+    ITEM_CREATED: 'item.created',
+    ITEM_UPDATED: 'item.updated',
+    ITEM_MOVED: 'item.moved',
+    STAGE_CHANGED: 'stage.changed',
+    LIST_CREATED: 'list.created',
+    ROOM_MESSAGE: 'room.message',
+    WEBHOOK_RECEIVED: 'webhook.received',
+    CUSTOM: 'custom.event'
+} as const
+
+/**
+ * Event type options for UI dropdown
+ */
+export const EVENT_TYPE_OPTIONS = [
+    { label: 'User Message', name: EVENT_TYPES.USER_MESSAGE, value: EVENT_TYPES.USER_MESSAGE },
+    { label: 'Order Created', name: EVENT_TYPES.ORDER_CREATED, value: EVENT_TYPES.ORDER_CREATED },
+    { label: 'Order Updated', name: EVENT_TYPES.ORDER_UPDATED, value: EVENT_TYPES.ORDER_UPDATED },
+    { label: 'Payment Success', name: EVENT_TYPES.PAYMENT_SUCCESS, value: EVENT_TYPES.PAYMENT_SUCCESS },
+    { label: 'Payment Failed', name: EVENT_TYPES.PAYMENT_FAILED, value: EVENT_TYPES.PAYMENT_FAILED },
+    { label: 'User Registered', name: EVENT_TYPES.USER_REGISTERED, value: EVENT_TYPES.USER_REGISTERED },
+    { label: 'User Login', name: EVENT_TYPES.USER_LOGIN, value: EVENT_TYPES.USER_LOGIN },
+    { label: 'Ticket Created', name: EVENT_TYPES.TICKET_CREATED, value: EVENT_TYPES.TICKET_CREATED },
+    { label: 'Ticket Updated', name: EVENT_TYPES.TICKET_UPDATED, value: EVENT_TYPES.TICKET_UPDATED },
+    { label: 'Document Created', name: EVENT_TYPES.DOCUMENT_CREATED, value: EVENT_TYPES.DOCUMENT_CREATED },
+    { label: 'Document Updated', name: EVENT_TYPES.DOCUMENT_UPDATED, value: EVENT_TYPES.DOCUMENT_UPDATED },
+    { label: 'Item Created', name: EVENT_TYPES.ITEM_CREATED, value: EVENT_TYPES.ITEM_CREATED },
+    { label: 'Item Updated', name: EVENT_TYPES.ITEM_UPDATED, value: EVENT_TYPES.ITEM_UPDATED },
+    { label: 'Item Moved', name: EVENT_TYPES.ITEM_MOVED, value: EVENT_TYPES.ITEM_MOVED },
+    { label: 'Stage Changed', name: EVENT_TYPES.STAGE_CHANGED, value: EVENT_TYPES.STAGE_CHANGED },
+    { label: 'List Created', name: EVENT_TYPES.LIST_CREATED, value: EVENT_TYPES.LIST_CREATED },
+    { label: 'Room Message', name: EVENT_TYPES.ROOM_MESSAGE, value: EVENT_TYPES.ROOM_MESSAGE },
+    { label: 'Webhook Received', name: EVENT_TYPES.WEBHOOK_RECEIVED, value: EVENT_TYPES.WEBHOOK_RECEIVED },
+    { label: 'Custom Event', name: EVENT_TYPES.CUSTOM, value: EVENT_TYPES.CUSTOM }
+] as const
+
+export enum PrivosEvent {
+    MESSAGE_NEW = 'message.new',
+    MESSAGE_EDITED = 'message.edited',
+    MESSAGE_DELETED = 'message.deleted',
+    ROOM_JOINED = 'room.joined',
+    ROOM_LEFT = 'room.left',
+    USER_JOINED = 'user.joined',
+    USER_LEFT = 'user.left',
+    CUSTOM = 'custom'
+}

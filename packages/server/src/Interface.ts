@@ -245,29 +245,16 @@ export interface ITrigger {
 }
 export interface IClaudeWSServer {
     id: string
-    name: string
-    description: string
-    endpointUrl: string
-    apiKey: string
-    isActive: boolean
-    createdDate: Date
-    updatedDate: Date
-    workspaceId?: string
-    roomId?: string
-}
-
-export interface IClaudeWSPlugin {
-    id: string
-    serverId: string
-    pluginId: string
+    flowId: string
+    slug?: string
     type: string
-    name: string
-    description: string
-    sourcePath?: string
-    storageType: string
-    metadata?: string
-    createdDate: Date
+    isEnabled: boolean
+    events: string[]
+    config?: any
+    description?: string
     updatedDate: Date
+    createdDate: Date
+    workspaceId?: string
 }
 
 export interface IComponentNodes {

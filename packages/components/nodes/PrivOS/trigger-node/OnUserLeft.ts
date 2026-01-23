@@ -26,12 +26,12 @@ class OnUserLeft_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On User Left'
         this.name = 'onUserLeftPrivos'
-        this.triggerType = PrivosEvent.USER_LEFT
+        this.eventType = PrivosEvent.USER_LEFT
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'
