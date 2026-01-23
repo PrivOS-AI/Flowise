@@ -3,6 +3,7 @@ import webhookTriggersController from '../../controllers/webhook-triggers'
 
 const router = express.Router()
 
-router.post('/events', webhookTriggersController.handleWebhookEvent)
+router.post('/', webhookTriggersController.handleWebhookEvent)
+router.post('/:slug', webhookTriggersController.handleWebhookEventBySlug)
 
 export default router

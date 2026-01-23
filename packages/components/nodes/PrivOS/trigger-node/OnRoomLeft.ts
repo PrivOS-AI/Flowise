@@ -26,12 +26,12 @@ class OnRoomLeft_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On Room Left'
         this.name = 'onRoomLeftPrivos'
-        this.triggerType = PrivosEvent.ROOM_LEFT
+        this.eventType = PrivosEvent.ROOM_LEFT
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'

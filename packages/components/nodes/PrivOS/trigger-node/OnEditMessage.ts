@@ -26,12 +26,12 @@ class OnEditMessage_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On Edit Message'
         this.name = 'onEditMessagePrivos'
-        this.triggerType = PrivosEvent.MESSAGE_EDITED
+        this.eventType = PrivosEvent.MESSAGE_EDITED
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'

@@ -273,5 +273,6 @@ export enum PrivosEvent {
     ROOM_JOINED = 'room.joined',
     ROOM_LEFT = 'room.left',
     USER_JOINED = 'user.joined',
-    USER_LEFT = 'user.left'
+    USER_LEFT = 'user.left',
+    CUSTOM = 'custom'
 }

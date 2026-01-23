@@ -26,12 +26,12 @@ class OnUserJoined_Privos implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
-    triggerType?: string
+    eventType?: string
 
     constructor() {
         this.label = 'On User Joined'
         this.name = 'onUserJoinedPrivos'
-        this.triggerType = PrivosEvent.USER_JOINED
+        this.eventType = PrivosEvent.USER_JOINED
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'

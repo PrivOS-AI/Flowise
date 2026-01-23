@@ -16,7 +16,9 @@ import {
     AccordionDetails,
     Typography,
     Stack,
-    Card
+    Card,
+    FormControlLabel,
+    Switch
 } from '@mui/material'
 import { CopyBlock, atomOneDark } from 'react-code-blocks'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -31,7 +33,7 @@ import { Available } from '@/ui-component/rbac/available'
 
 // Const
 import { baseURL } from '@/store/constant'
-import { SET_CHATFLOW } from '@/store/actions'
+import { SET_CHATFLOW, enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
 
 // Images
 import pythonSVG from '@/assets/images/python.svg'
@@ -99,6 +101,7 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
     const [chatflowApiKeyId, setChatflowApiKeyId] = useState('')
     const [selectedApiKey, setSelectedApiKey] = useState({})
     const [checkboxVal, setCheckbox] = useState(false)
+    const [useSlug, setUseSlug] = useState(false)
     const [nodeConfig, setNodeConfig] = useState({})
     const [nodeConfigExpanded, setNodeConfigExpanded] = useState({})
     const [nodeOverrides, setNodeOverrides] = useState(apiConfig?.overrideConfig?.nodes ?? null)
@@ -146,6 +149,24 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
             getConfigApi.request(dialogProps.chatflowid)
             getAllVariablesApi.request()
         }
+    }
+
+    const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
+
+    const onUseSlugChange = (newValue) => {
+        if (newValue && !chatflow?.slug) {
+            enqueueSnackbar({
+                message: 'Please configure a slug in Chatflow Configuration > Slug tab before using this feature.',
+                options: {
+                    key: new Date().getTime() + Math.random(),
+                    variant: 'warning',
+                    persist: false,
+                    autoHideDuration: 5000
+                }
+            })
+            return
+        }
+        setUseSlug(newValue)
     }
 
     const onApiKeySelected = (keyValue) => {
@@ -282,11 +303,19 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
         setValue(newValue)
     }
 
+    // Get chatflow identifier (chatflowid or slug)
+    const getChatflowIdentifier = () => {
+        if (useSlug && chatflow?.slug) {
+            return chatflow.slug
+        }
+        return dialogProps.chatflowid
+    }
+
     const getCode = (codeLang) => {
         if (codeLang === 'Python') {
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 
 def query(payload):
     response = requests.post(API_URL, json=payload)
@@ -299,7 +328,7 @@ output = query({
         } else if (codeLang === 'JavaScript') {
             return `async function query(data) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             method: "POST",
             headers: {
@@ -317,7 +346,7 @@ query({"question": "Hey, how are you?"}).then((response) => {
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\
      -d '{"question": "Hey, how are you?"}' \\
      -H "Content-Type: application/json"`
@@ -329,7 +358,7 @@ query({"question": "Hey, how are you?"}).then((response) => {
         if (codeLang === 'Python') {
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 headers = {"Authorization": "Bearer ${selectedApiKey?.apiKey}"}
 
 def query(payload):
@@ -343,7 +372,7 @@ output = query({
         } else if (codeLang === 'JavaScript') {
             return `async function query(data) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             headers: {
                 Authorization: "Bearer ${selectedApiKey?.apiKey}",
@@ -362,7 +391,7 @@ query({"question": "Hey, how are you?"}).then((response) => {
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\
      -d '{"question": "Hey, how are you?"}' \\
      -H "Content-Type: application/json" \\
@@ -408,7 +437,7 @@ query({"question": "Hey, how are you?"}).then((response) => {
             if (fileType.includes(',')) fileType = fileType.split(',')[0]
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 
 # use form data to upload files
 form_data = {
@@ -428,7 +457,7 @@ let formData = new FormData();
 ${getConfigExamplesForJS(configData, 'formData')}
 async function query(formData) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             method: "POST",
             body: formData
@@ -443,7 +472,7 @@ query(formData).then((response) => {
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\${getConfigExamplesForCurl(configData, 'formData')} \\
      -H "Content-Type: multipart/form-data"`
         }
@@ -459,7 +488,7 @@ query(formData).then((response) => {
             if (fileType.includes(',')) fileType = fileType.split(',')[0]
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 headers = {"Authorization": "Bearer ${selectedApiKey?.apiKey}"}
 
 # use form data to upload files
@@ -480,7 +509,7 @@ let formData = new FormData();
 ${getConfigExamplesForJS(configData, 'formData')}
 async function query(formData) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             headers: { Authorization: "Bearer ${selectedApiKey?.apiKey}" },
             method: "POST",
@@ -496,7 +525,7 @@ query(formData).then((response) => {
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\${getConfigExamplesForCurl(configData, 'formData')} \\
      -H "Content-Type: multipart/form-data" \\
      -H "Authorization: Bearer ${selectedApiKey?.apiKey}"`
@@ -510,7 +539,7 @@ query(formData).then((response) => {
         if (codeLang === 'Python') {
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 
 def query(payload):
     response = requests.post(API_URL, json=payload)
@@ -525,7 +554,7 @@ output = query({
         } else if (codeLang === 'JavaScript') {
             return `async function query(data) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             method: "POST",
             headers: {
@@ -547,7 +576,7 @@ query({
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\
      -d '{"question": "Hey, how are you?", "overrideConfig": {${getConfigExamplesForCurl(configData, 'json')}}' \\
      -H "Content-Type: application/json"`
@@ -561,7 +590,7 @@ query({
         if (codeLang === 'Python') {
             return `import requests
 
-API_URL = "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}"
+API_URL = "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}"
 headers = {"Authorization": "Bearer ${selectedApiKey?.apiKey}"}
 
 def query(payload):
@@ -577,7 +606,7 @@ output = query({
         } else if (codeLang === 'JavaScript') {
             return `async function query(data) {
     const response = await fetch(
-        "${baseURL}/api/v1/prediction/${dialogProps.chatflowid}",
+        "${baseURL}/api/v1/prediction/${getChatflowIdentifier()}",
         {
             headers: {
                 Authorization: "Bearer ${selectedApiKey?.apiKey}",
@@ -600,7 +629,7 @@ query({
 });
 `
         } else if (codeLang === 'cURL') {
-            return `curl ${baseURL}/api/v1/prediction/${dialogProps.chatflowid} \\
+            return `curl ${baseURL}/api/v1/prediction/${getChatflowIdentifier()} \\
      -X POST \\
      -d '{"question": "Hey, how are you?", "overrideConfig": {${getConfigExamplesForCurl(configData, 'json')}}' \\
      -H "Content-Type: application/json" \\
@@ -706,8 +735,17 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
             aria-labelledby='alert-dialog-title'
             aria-describedby='alert-dialog-description'
         >
-            <DialogTitle sx={{ fontSize: '1rem' }} id='alert-dialog-title'>
+            <DialogTitle
+                sx={{ fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                id='alert-dialog-title'
+            >
                 {dialogProps.title}
+                <FormControlLabel
+                    sx={{ ml: 2 }}
+                    size='small'
+                    control={<Switch checked={useSlug} onChange={(e) => onUseSlugChange(e.target.checked)} size='small' />}
+                    label='Use Slug'
+                />
             </DialogTitle>
             <DialogContent>
                 <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
@@ -749,7 +787,9 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
                                 </p>
                             </>
                         )}
-                        {codeLang === 'Embed' && !chatflowApiKeyId && <EmbedChat chatflowid={dialogProps.chatflowid} />}
+                        {codeLang === 'Embed' && !chatflowApiKeyId && (
+                            <EmbedChat chatflowid={dialogProps.chatflowid} useSlug={useSlug} chatflow={chatflow} />
+                        )}
                         {codeLang !== 'Embed' && codeLang !== 'Share Chatbot' && codeLang !== 'Configuration' && (
                             <>
                                 <CopyBlock

@@ -29,7 +29,8 @@ import {
     IComponentNodes,
     INodeOverrides,
     IVariableOverride,
-    INodeDirectedGraph
+    INodeDirectedGraph,
+    ITriggerData
 } from '../Interface'
 import {
     RUNTIME_MESSAGES_LENGTH_VAR_PREFIX,
@@ -88,8 +89,7 @@ interface IProcessNodeOutputsParams {
     abortController?: AbortController
     sseStreamer?: IServerSideEventStreamer
     chatId: string
-    isTrigger?: boolean
-    eventTrigger?: string
+    triggerData?: ITriggerData
     reachableNodes?: Set<string>
 }
 
@@ -596,8 +596,7 @@ function setupNodeDependencies(
     nodeId: string,
     edges: IReactFlowEdge[],
     nodes: IReactFlowNode[],
-    isTrigger?: boolean,
-    eventTrigger?: string,
+    triggerData?: ITriggerData,
     reachableNodes?: Set<string>
 ): IWaitingNode {
     logger.debug(`\n🔍 Analyzing dependencies for node: ${nodeId}`)
@@ -609,6 +608,7 @@ function setupNodeDependencies(
         isConditional: false,
         conditionalGroups: new Map()
     }
+    const isTrigger = !!triggerData?.eventType
 
     // Group inputs by their parent condition nodes
     const inputsByCondition = new Map<string | null, string[]>()
@@ -617,12 +617,6 @@ function setupNodeDependencies(
         const sourceNode = nodes.find((n) => n.id === connection.source)
         if (!sourceNode) continue
 
-        // if (isStartNode) {
-        //     if (isTrigger === true && eventTrigger && sourceNode.data.triggerType !== eventTrigger) {
-        //         console.log(`  ⏭️  Skipping inactive other trigger node: ${connection.source}`)
-        //         continue
-        //     }
-        // }
         // If trigger node is not in reachableNodes, skip
         if (isTrigger === true && reachableNodes && !reachableNodes.has(connection.source)) {
             logger.debug(`  ⏭️  Skipping unreachable node: ${connection.source}`)
@@ -638,7 +632,7 @@ function setupNodeDependencies(
             }
 
             if (isTrigger === true && sourceNode.data.type === 'triggerProcessor') {
-                if (sourceNode.data.triggerType && sourceNode.data.triggerType !== eventTrigger) {
+                if (sourceNode.data.eventType && sourceNode.data.eventType !== triggerData?.eventType) {
                     logger.debug(`  ⏭️  Skipping other trigger type: ${connection.source}`)
                     continue
                 }
@@ -815,8 +809,7 @@ async function processNodeOutputs({
     loopCounts,
     sseStreamer,
     chatId,
-    isTrigger,
-    eventTrigger,
+    triggerData,
     reachableNodes
 }: IProcessNodeOutputsParams): Promise<{ humanInput?: IHumanInput }> {
     logger.debug(`\n🔄 Processing outputs from node: ${nodeId}`)
@@ -847,7 +840,7 @@ async function processNodeOutputs({
 
         if (!waitingNode) {
             logger.debug(`    🆕 First time seeing node ${childId} - analyzing dependencies`)
-            waitingNode = setupNodeDependencies(childId, edges, nodes, isTrigger, eventTrigger, reachableNodes)
+            waitingNode = setupNodeDependencies(childId, edges, nodes, triggerData, reachableNodes)
             waitingNodes.set(childId, waitingNode)
         }
 
@@ -1514,8 +1507,6 @@ export const executeAgentFlow = async ({
     workspaceId,
     subscriptionId,
     productId,
-    isTrigger,
-    eventTrigger,
     triggerData
 }: IExecuteAgentFlowParams) => {
     logger.debug('\n🚀 Starting flow execution')
@@ -1549,8 +1540,8 @@ export const executeAgentFlow = async ({
     const { graph, nodeDependencies: rawNodeDeps } = constructGraphs(nodes, edges)
     let nodeDependencies = rawNodeDeps
     let reachableNodesFromTrigger: Set<string> | undefined
-    if (isTrigger === true) {
-        const triggerNode = nodes.find((n) => n.data.triggerType === eventTrigger)
+    if (triggerData?.eventType) {
+        const triggerNode = nodes.find((n) => n.data.eventType === triggerData?.eventType)
         if (triggerNode) {
             // build graph from trigger node to reachable nodes
             const reachableNodesMap = new Map<string, number>([[triggerNode.id, 0]]) // nodeId -> depth
@@ -2089,8 +2080,7 @@ export const executeAgentFlow = async ({
                 loopCounts,
                 sseStreamer,
                 chatId,
-                isTrigger,
-                eventTrigger,
+                triggerData,
                 reachableNodes: reachableNodesFromTrigger
             })
 
