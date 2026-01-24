@@ -1,0 +1,38 @@
+{
+    "id": "20",
+    "parameters": {
+        "id": {
+            "type": "string",
+            "variable": true
+        },
+        "outputStructure": {
+            "type": "options",
+            "variable": false,
+            "default": "object",
+            "options": [
+                "string",
+                "object"
+            ]
+        },
+        "updateFLowState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys"
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "id": "doc-123",
+        "outputStructure": "object"
+    }
+}

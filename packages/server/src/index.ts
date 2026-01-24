@@ -268,6 +268,10 @@ export class App {
                         verifyExternalAuth(req, res, next)
                     } else if (req.headers['x-request-from'] === 'internal') {
                         verifyToken(req, res, next)
+                    } else if (req.user) {
+                        // Session-based authentication (JWT cookie)
+                        // req.user is set by passport JWT cookie middleware
+                        next()
                     } else {
                         // Only check license validity for non-open-source platforms
                         if (this.identityManager.getPlatformType() !== Platform.OPEN_SOURCE) {

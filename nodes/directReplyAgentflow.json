@@ -1,0 +1,10 @@
+{
+    "id": "7",
+    "parameters": {
+        "directReplyMessage": {
+            "type": "string",
+            "variable": true,
+            "example": "Final Answer: $1"
+        }
+    }
+}

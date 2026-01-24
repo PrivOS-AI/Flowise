@@ -120,6 +120,11 @@ const AgentflowCanvas = () => {
             return
         }
 
+        // Check for null handles before split
+        if (!params.sourceHandle || !params.targetHandle) {
+            return
+        }
+
         const nodeName = params.sourceHandle.split('_')[0]
         const targetNodeName = params.targetHandle.split('_')[0]
 

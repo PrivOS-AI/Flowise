@@ -1,0 +1,39 @@
+{
+    "id": "23",
+    "parameters": {
+        "selectedRoom": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listRooms"
+        },
+        "selectedList": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listLists"
+        },
+        "selectedStage": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listStages"
+        },
+        "selectedItem": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listItems"
+        },
+        "returnFormat": {
+            "type": "options",
+            "variable": false,
+            "default": "full",
+            "options": [
+                "simple",
+                "full"
+            ]
+        }
+    },
+    "example": {
+        "selectedRoom": "room-123",
+        "selectedList": "list-123",
+        "returnFormat": "simple"
+    }
+}

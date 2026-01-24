@@ -1,0 +1,95 @@
+{
+  "nodes": [
+    {
+      "id": "startAgentflow_0",
+      "type": "agentFlow",
+      "position": {
+        "x": 0,
+        "y": 100
+      },
+      "data": {
+        "name": "startAgentflow",
+        "label": "Start Node",
+        "category": "Agent Flows",
+        "inputParams": [
+          {
+            "name": "startInputType",
+            "type": "options",
+            "options": [
+              {
+                "name": "chatInput"
+              },
+              {
+                "name": "formInput"
+              }
+            ],
+            "id": "startAgentflow_0-input-startInputType-options"
+          },
+          {
+            "name": "formInputTypes",
+            "type": "array",
+            "id": "startAgentflow_0-input-formInputTypes-array"
+          }
+        ],
+        "inputs": {
+          "startInputType": "formInput",
+          "formInputTypes": [
+            {
+              "name": "myField",
+              "type": "string"
+            }
+          ]
+        },
+        "id": "startAgentflow_0"
+      },
+      "width": 200,
+      "height": 100
+    },
+    {
+      "id": "agentAgentflow_0",
+      "type": "agentFlow",
+      "position": {
+        "x": 350,
+        "y": 100
+      },
+      "data": {
+        "name": "agentAgentflow",
+        "label": "Agent Node",
+        "category": "Agent Flows",
+        "inputParams": [
+          {
+            "name": "agentModel",
+            "type": "asyncOptions",
+            "options": [
+              {
+                "name": "claude-3-sonnet"
+              },
+              {
+                "name": "gpt-4"
+              }
+            ],
+            "id": "agentAgentflow_0-input-agentModel-asyncOptions"
+          },
+          {
+            "name": "agentMessages",
+            "type": "array",
+            "id": "agentAgentflow_0-input-agentMessages-array"
+          }
+        ],
+        "inputs": {
+          "agentMessages": [
+            {
+              "role": "system",
+              "content": "You are a helpful assistant"
+            }
+          ],
+          "agentModel": "claude-3-sonnet"
+        },
+        "id": "agentAgentflow_0"
+      },
+      "width": 200,
+      "height": 100
+    }
+  ],
+  "edges": []
+}

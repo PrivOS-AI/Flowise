@@ -1,0 +1,21 @@
+{
+    "id": "27",
+    "parameters": {
+        "userId": {
+            "type": "string",
+            "variable": true
+        },
+        "userBotId": {
+            "type": "string",
+            "variable": true
+        },
+        "message": {
+            "type": "string",
+            "variable": true
+        }
+    },
+    "example": {
+        "userId": "user-123",
+        "message": "Hello, your report is ready: $2"
+    }
+}

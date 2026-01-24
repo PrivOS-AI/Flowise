@@ -1,0 +1,181 @@
+{
+    "id": "12",
+    "parameters": {
+        "llmModel": {
+            "type": "asyncOptions",
+            "variable": false,
+            "options": [
+                "awsChatBedrock",
+                "azureChatOpenAI",
+                "chatAlibabaTongyi",
+                "chatAnthropic",
+                "chatAnthropicZAI",
+                "chatBaiduWenxin",
+                "chatCerebras",
+                "chatCohere",
+                "chatCometAPI",
+                "chatFireworks",
+                "chatGoogleGenerativeAI",
+                "chatGoogleVertexAI",
+                "chatHuggingFace",
+                "chatIBMWatsonx",
+                "chatLitellm",
+                "chatLocalAI",
+                "chatMistralAI",
+                "chatNemoGuardrails",
+                "chatNvidiaNIM",
+                "chatOllama",
+                "chatOpenAI",
+                "chatOpenAICustom",
+                "chatOpenRouter",
+                "chatPerplexity",
+                "chatSambanova",
+                "chatTogetherAI",
+                "chatXAI",
+                "chatDeepseek",
+                "groqChat"
+            ],
+            "loadMethod": "listModels"
+        },
+        "llmMessages": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "role": {
+                    "type": "options",
+                    "variable": false,
+                    "options": [
+                        "system",
+                        "assistant",
+                        "developer",
+                        "user"
+                    ]
+                },
+                "content": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        },
+        "llmEnableMemory": {
+            "type": "boolean",
+            "variable": false,
+            "default": true
+        },
+        "llmMemoryType": {
+            "type": "options",
+            "variable": false,
+            "default": "allMessages",
+            "options": [
+                "allMessages",
+                "windowSize",
+                "conversationSummary",
+                "conversationSummaryBuffer"
+            ]
+        },
+        "llmMemoryWindowSize": {
+            "type": "number",
+            "variable": false,
+            "default": "20"
+        },
+        "llmMemoryMaxTokenLimit": {
+            "type": "number",
+            "variable": false,
+            "default": "2000"
+        },
+        "llmUserMessage": {
+            "type": "string",
+            "variable": true
+        },
+        "llmReturnResponseAs": {
+            "type": "options",
+            "variable": false,
+            "default": "userMessage",
+            "options": [
+                "userMessage",
+                "assistantMessage"
+            ]
+        },
+        "llmStructuredOutput": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "key": {
+                    "type": "string",
+                    "variable": false
+                },
+                "type": {
+                    "type": "options",
+                    "variable": false,
+                    "options": [
+                        "string",
+                        "stringArray",
+                        "number",
+                        "boolean",
+                        "enum",
+                        "jsonArray"
+                    ]
+                },
+                "enumValues": {
+                    "type": "string",
+                    "variable": false
+                },
+                "jsonSchema": {
+                    "type": "code",
+                    "variable": false
+                },
+                "description": {
+                    "type": "string",
+                    "variable": false
+                }
+            }
+        },
+        "llmUpdateState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys",
+                    "freeSolo": true
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "llmModel": "chatOpenAI",
+        "llmMessages": [
+            {
+                "role": "system",
+                "content": "You are a data extractor."
+            },
+            {
+                "role": "user",
+                "content": "Extract name from: $1"
+            }
+        ],
+        "llmStructuredOutput": [
+            {
+                "key": "name",
+                "type": "string",
+                "description": "Name of the person"
+            }
+        ],
+        "llmUpdateState": [
+            {
+                "key": "extracted_info",
+                "value": "$output"
+            }
+        ],
+        "llmModelConfig": {
+            "modelName": "gpt-4o",
+            "temperature": 0.5
+        }
+    }
+}

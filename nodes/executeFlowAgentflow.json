@@ -1,0 +1,59 @@
+{
+    "id": "8",
+    "parameters": {
+        "executeFlowSelectedFlow": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listFlows"
+        },
+        "executeFlowInput": {
+            "type": "string",
+            "variable": true
+        },
+        "executeFlowOverrideConfig": {
+            "type": "json",
+            "variable": true
+        },
+        "executeFlowBaseURL": {
+            "type": "string",
+            "variable": false
+        },
+        "executeFlowReturnResponseAs": {
+            "type": "options",
+            "variable": false,
+            "default": "userMessage",
+            "options": [
+                "userMessage",
+                "assistantMessage"
+            ]
+        },
+        "executeFlowUpdateState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys",
+                    "freeSolo": true
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "executeFlowSelectedFlow": "flow-abc",
+        "executeFlowInput": "$1",
+        "executeFlowOverrideConfig": "{\"temperature\": 0.5}",
+        "executeFlowUpdateState": [
+            {
+                "key": "subflow_result",
+                "value": "$output"
+            }
+        ]
+    }
+}

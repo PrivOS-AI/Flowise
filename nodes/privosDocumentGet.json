@@ -1,0 +1,29 @@
+{
+    "id": "21",
+    "parameters": {
+        "selectedRoom": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listRooms"
+        },
+        "selectedDocument": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listDocuments"
+        },
+        "returnFormat": {
+            "type": "options",
+            "variable": false,
+            "default": "full",
+            "options": [
+                "content",
+                "full"
+            ]
+        }
+    },
+    "example": {
+        "selectedRoom": "room-123",
+        "selectedDocument": "doc-123",
+        "returnFormat": "content"
+    }
+}

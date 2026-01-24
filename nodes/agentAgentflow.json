@@ -1,0 +1,328 @@
+{
+    "id": "2",
+    "parameters": {
+        "agentModel": {
+            "type": "asyncOptions",
+            "variable": false,
+            "options": [
+                "awsChatBedrock",
+                "azureChatOpenAI",
+                "chatAlibabaTongyi",
+                "chatAnthropic",
+                "chatAnthropicZAI",
+                "chatBaiduWenxin",
+                "chatCerebras",
+                "chatCohere",
+                "chatCometAPI",
+                "chatFireworks",
+                "chatGoogleGenerativeAI",
+                "chatGoogleVertexAI",
+                "chatHuggingFace",
+                "chatIBMWatsonx",
+                "chatLitellm",
+                "chatLocalAI",
+                "chatMistralAI",
+                "chatNemoGuardrails",
+                "chatNvidiaNIM",
+                "chatOllama",
+                "chatOpenAI",
+                "chatOpenAICustom",
+                "chatOpenRouter",
+                "chatPerplexity",
+                "chatSambanova",
+                "chatTogetherAI",
+                "chatXAI",
+                "chatDeepseek",
+                "groqChat"
+            ],
+            "loadMethod": "listModels"
+        },
+        "agentMessages": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "role": {
+                    "type": "options",
+                    "variable": false,
+                    "options": [
+                        "system",
+                        "assistant",
+                        "developer",
+                        "user"
+                    ]
+                },
+                "content": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        },
+        "agentToolsBuiltInOpenAI": {
+            "type": "multiOptions",
+            "variable": false,
+            "options": [
+                "web_search_preview",
+                "code_interpreter",
+                "image_generation"
+            ]
+        },
+        "agentToolsBuiltInGemini": {
+            "type": "multiOptions",
+            "variable": false,
+            "options": [
+                "urlContext",
+                "googleSearch"
+            ]
+        },
+        "agentToolsBuiltInAnthropic": {
+            "type": "multiOptions",
+            "variable": false,
+            "options": [
+                "web_search_20250305",
+                "web_fetch_20250910"
+            ]
+        },
+        "agentTools": {
+            "type": "array",
+            "variable": false,
+            "loadMethod": "listTools",
+            "parameters": {
+                "agentSelectedTool": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "options": [
+                        "awsDynamoDBKVStorage",
+                        "awsSNS",
+                        "agentAsTool",
+                        "arxiv",
+                        "braveSearchAPI",
+                        "calculator",
+                        "ChatflowTool",
+                        "codeInterpreterE2B",
+                        "composio",
+                        "currentDateTime",
+                        "customTool",
+                        "exaSearch",
+                        "gmail",
+                        "googleCalendarTool",
+                        "googleDocsTool",
+                        "googleDriveTool",
+                        "googleCustomSearch",
+                        "googleSheetsTool",
+                        "jsonPathExtractor",
+                        "jiraTool",
+                        "braveSearchMCP",
+                        "customMCP",
+                        "githubMCP",
+                        "imageGenMCP",
+                        "postgreSQLMCP",
+                        "sequentialThinkingMCP",
+                        "slackMCP",
+                        "supergatewayMCP",
+                        "teradataMCP",
+                        "videoGenMCP",
+                        "microsoftOutlook",
+                        "microsoftTeams",
+                        "openAPIToolkit",
+                        "readFile",
+                        "requestsDelete",
+                        "requestsGet",
+                        "requestsPost",
+                        "requestsPut",
+                        "s3Storage",
+                        "searchAPI",
+                        "searXNG",
+                        "serpAPI",
+                        "serper",
+                        "stripeAgentTool",
+                        "tavilyAPI",
+                        "webScraperTool",
+                        "wolframAlpha",
+                        "writeFile"
+                    ],
+                    "loadMethod": "listTools"
+                },
+                "agentSelectedToolRequiresHumanInput": {
+                    "type": "boolean",
+                    "variable": false
+                }
+            }
+        },
+        "agentKnowledgeDocumentStores": {
+            "type": "array",
+            "variable": false,
+            "loadMethod": "listStores",
+            "parameters": {
+                "documentStore": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listStores"
+                },
+                "docStoreDescription": {
+                    "type": "string",
+                    "variable": false
+                },
+                "returnSourceDocuments": {
+                    "type": "boolean",
+                    "variable": false
+                }
+            }
+        },
+        "agentKnowledgeVSEmbeddings": {
+            "type": "array",
+            "variable": false,
+            "loadMethod": "listVectorStores",
+            "parameters": {
+                "vectorStore": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "options": [
+                        "Astra",
+                        "chroma",
+                        "couchbase",
+                        "documentStoreVS",
+                        "elasticsearch",
+                        "faiss",
+                        "memoryVectorStore",
+                        "kendra",
+                        "meilisearch",
+                        "milvus",
+                        "mongoDBAtlas",
+                        "openSearch",
+                        "pinecone",
+                        "postgres",
+                        "qdrant",
+                        "redis",
+                        "singlestore",
+                        "supabase",
+                        "upstash",
+                        "vectara",
+                        "vectaraUpload",
+                        "weaviate",
+                        "zep",
+                        "zepCloud"
+                    ],
+                    "loadMethod": "listVectorStores"
+                },
+                "embeddingModel": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "options": [
+                        "AWSBedrockEmbeddings",
+                        "azureOpenAIEmbeddings",
+                        "cohereEmbeddings",
+                        "googleGenerativeAiEmbeddings",
+                        "googlevertexaiEmbeddings",
+                        "huggingFaceInferenceEmbeddings",
+                        "ibmEmbedding",
+                        "jinaEmbeddings",
+                        "localAIEmbeddings",
+                        "mistralAIEmbeddings",
+                        "ollamaEmbedding",
+                        "openAIEmbeddings",
+                        "openAIEmbeddingsCustom",
+                        "togetherAIEmbedding",
+                        "voyageAIEmbeddings"
+                    ],
+                    "loadMethod": "listEmbeddings"
+                },
+                "knowledgeName": {
+                    "type": "string",
+                    "variable": false
+                },
+                "knowledgeDescription": {
+                    "type": "string",
+                    "variable": false
+                },
+                "returnSourceDocuments": {
+                    "type": "boolean",
+                    "variable": false
+                }
+            }
+        },
+        "agentEnableMemory": {
+            "type": "boolean",
+            "variable": false,
+            "default": true
+        },
+        "agentMemoryType": {
+            "type": "options",
+            "variable": false,
+            "default": "allMessages",
+            "options": [
+                "allMessages",
+                "windowSize",
+                "conversationSummary",
+                "conversationSummaryBuffer"
+            ]
+        },
+        "agentMemoryWindowSize": {
+            "type": "number",
+            "variable": false,
+            "default": "20"
+        },
+        "agentMemoryMaxTokenLimit": {
+            "type": "number",
+            "variable": false,
+            "default": "2000"
+        },
+        "agentUserMessage": {
+            "type": "string",
+            "variable": true
+        },
+        "agentReturnResponseAs": {
+            "type": "options",
+            "variable": false,
+            "default": "userMessage",
+            "options": [
+                "userMessage",
+                "assistantMessage"
+            ]
+        },
+        "agentUpdateState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys",
+                    "freeSolo": true
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "agentModel": "chatOpenAI",
+        "agentMessages": [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant."
+            },
+            {
+                "role": "user",
+                "content": "Answer this question: $1"
+            }
+        ],
+        "agentTools": [
+            {
+                "agentSelectedTool": "calculator"
+            }
+        ],
+        "agentUpdateState": [
+            {
+                "key": "conversation_summary",
+                "value": "Summary: $output"
+            }
+        ],
+        "agentModelConfig": {
+            "modelName": "gpt-4o",
+            "temperature": 0.7
+        }
+    }
+}

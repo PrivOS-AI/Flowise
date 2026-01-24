@@ -1,0 +1,81 @@
+{
+    "id": "3",
+    "parameters": {
+        "claudewsServer": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listServers"
+        },
+        "claudewsRoomName": {
+            "type": "string",
+            "variable": true
+        },
+        "claudewsRoomId": {
+            "type": "string",
+            "variable": true
+        },
+        "claudewsRoomSessionKey": {
+            "type": "string",
+            "variable": true
+        },
+        "privosEndpointUrl": {
+            "type": "string",
+            "variable": true
+        },
+        "claudewsTaskName": {
+            "type": "string",
+            "variable": true
+        },
+        "claudewsTaskId": {
+            "type": "string",
+            "variable": true
+        },
+        "claudewsForceCreate": {
+            "type": "boolean",
+            "variable": false,
+            "default": true
+        },
+        "claudewsMessages": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "role": {
+                    "type": "options",
+                    "variable": false,
+                    "options": [
+                        "system",
+                        "user"
+                    ]
+                },
+                "content": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        },
+        "claudewsUpdateFlowState": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "key": {
+                    "type": "string",
+                    "variable": false
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "claudewsRoomName": "Project X",
+        "claudewsMessages": [
+            {
+                "role": "system",
+                "content": "You are a helper."
+            }
+        ],
+        "claudewsTaskName": "Analyze Data"
+    }
+}

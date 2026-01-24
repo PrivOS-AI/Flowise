@@ -1,0 +1,45 @@
+{
+    "id": "24",
+    "parameters": {
+        "roomId": {
+            "type": "string",
+            "variable": true
+        },
+        "templateLK": {
+            "type": "string",
+            "variable": true,
+            "default": "marketing_tasks_list"
+        },
+        "templateStageKey": {
+            "type": "string",
+            "variable": true,
+            "default": "stage_planning"
+        },
+        "outputStructure": {
+            "type": "options",
+            "variable": false,
+            "default": "object"
+        },
+        "updateFLowState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys"
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "roomId": "room-123",
+        "templateLK": "tasks_list",
+        "outputStructure": "object"
+    }
+}

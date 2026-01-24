@@ -1,0 +1,44 @@
+{
+    "id": "19",
+    "parameters": {
+        "roomId": {
+            "type": "string",
+            "variable": true
+        },
+        "templateDK": {
+            "type": "string",
+            "variable": true,
+            "default": "marketing_planning_document"
+        },
+        "outputStructure": {
+            "type": "options",
+            "variable": false,
+            "default": "object",
+            "options": [
+                "string",
+                "object"
+            ]
+        },
+        "updateFLowState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys"
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "roomId": "room-123",
+        "templateDK": "marketing_doc",
+        "outputStructure": "object"
+    }
+}

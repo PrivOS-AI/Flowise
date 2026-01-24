@@ -1,0 +1,51 @@
+{
+    "id": "5",
+    "parameters": {
+        "conditions": {
+            "type": "array",
+            "variable": true,
+            "default": "string",
+            "parameters": {
+                "type": {
+                    "type": "options",
+                    "variable": false,
+                    "default": "string",
+                    "options": [
+                        "string",
+                        "number",
+                        "boolean"
+                    ]
+                },
+                "value1": {
+                    "type": "boolean",
+                    "variable": false,
+                    "default": false
+                },
+                "operation": {
+                    "type": "options",
+                    "variable": false,
+                    "default": "equal",
+                    "options": [
+                        "equal",
+                        "notEqual"
+                    ]
+                },
+                "value2": {
+                    "type": "boolean",
+                    "variable": false,
+                    "default": false
+                }
+            }
+        }
+    },
+    "example": {
+        "conditions": [
+            {
+                "type": "number",
+                "value1": "$1",
+                "operation": "greaterThan",
+                "value2": "100"
+            }
+        ]
+    }
+}

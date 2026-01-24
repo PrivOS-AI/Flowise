@@ -1,0 +1,47 @@
+{
+    "id": "13",
+    "parameters": {
+        "loopBackToNode": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listPreviousNodes"
+        },
+        "maxLoopCount": {
+            "type": "number",
+            "variable": false,
+            "default": 5
+        },
+        "fallbackMessage": {
+            "type": "string",
+            "variable": true
+        },
+        "loopUpdateState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys",
+                    "freeSolo": true
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "loopBackToNode": "llmAgentflow_0",
+        "maxLoopCount": 3,
+        "fallbackMessage": "Loop limit reached.",
+        "loopUpdateState": [
+            {
+                "key": "loop_output",
+                "value": "$output"
+            }
+        ]
+    }
+}

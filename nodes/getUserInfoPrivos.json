@@ -1,0 +1,28 @@
+{
+    "id": "26",
+    "parameters": {
+        "userId": {
+            "type": "string",
+            "variable": true
+        },
+        "updateFLowState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys"
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "userId": "user-123"
+    }
+}

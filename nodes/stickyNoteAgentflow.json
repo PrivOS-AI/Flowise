@@ -1,0 +1,12 @@
+{
+    "id": "15",
+    "parameters": {
+        "note": {
+            "type": "string",
+            "variable": false
+        }
+    },
+    "example": {
+        "note": "This node handles validation."
+    }
+}

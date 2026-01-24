@@ -1,0 +1,133 @@
+{
+    "id": "29",
+    "parameters": {
+        "selectedRoom": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listRooms"
+        },
+        "selectedList": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listLists"
+        },
+        "selectedStage": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listStages"
+        },
+        "selectedItem": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listItems"
+        },
+        "itemName": {
+            "type": "string",
+            "variable": true
+        },
+        "itemDescription": {
+            "type": "string",
+            "variable": true
+        },
+        "field_marketing_assignees": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listUsers"
+        },
+        "field_marketing_due_date": {
+            "type": "date",
+            "variable": false
+        },
+        "field_marketing_start_date": {
+            "type": "date",
+            "variable": false
+        },
+        "field_marketing_end_date": {
+            "type": "date",
+            "variable": false
+        },
+        "current_marketing_file_url": {
+            "type": "string",
+            "variable": false
+        },
+        "field_marketing_file": {
+            "type": "file",
+            "variable": false
+        },
+        "field_marketing_documents": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "title": {
+                    "type": "string",
+                    "variable": true
+                },
+                "content": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        },
+        "field_marketing_note": {
+            "type": "string",
+            "variable": false
+        },
+        "current_recruitment_cv_url": {
+            "type": "string",
+            "variable": false
+        },
+        "field_recruitment_cv": {
+            "type": "file",
+            "variable": false
+        },
+        "field_recruitment_ai_summary": {
+            "type": "string",
+            "variable": false
+        },
+        "field_recruitment_ai_score": {
+            "type": "number",
+            "variable": false
+        },
+        "field_recruitment_interview_time": {
+            "type": "date",
+            "variable": false
+        },
+        "field_recruitment_interviewer": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listUsers"
+        },
+        "field_recruitment_interview_questions": {
+            "type": "string",
+            "variable": false
+        },
+        "field_recruitment_interview_notes": {
+            "type": "string",
+            "variable": false
+        },
+        "field_recruitment_interview_score": {
+            "type": "number",
+            "variable": false
+        },
+        "field_recruitment_trial_time": {
+            "type": "date",
+            "variable": false
+        },
+        "field_recruitment_cv_content": {
+            "type": "string",
+            "variable": false
+        },
+        "moveToStage": {
+            "type": "asyncOptions",
+            "variable": false,
+            "loadMethod": "listStages"
+        }
+    },
+    "example": {
+        "selectedRoom": "room-123",
+        "selectedList": "list-123",
+        "selectedItem": "item-123",
+        "itemName": "Updated Task Name",
+        "field_marketing_note": "Status updated by AI due to $1"
+    }
+}

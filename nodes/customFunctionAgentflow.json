@@ -1,0 +1,62 @@
+{
+    "id": "6",
+    "parameters": {
+        "customFunctionInputVariables": {
+            "type": "array",
+            "variable": true,
+            "parameters": {
+                "variableName": {
+                    "type": "string",
+                    "variable": false
+                },
+                "variableValue": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        },
+        "customFunctionJavascriptFunction": {
+            "type": "code",
+            "variable": false,
+            "example": "const val = $input.myVar;\nreturn val.toUpperCase();"
+        },
+        "customFunctionUpdateState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys",
+                    "freeSolo": true
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            },
+            "example": [
+                {
+                    "key": "summary",
+                    "value": "The user is asking about..."
+                }
+            ]
+        }
+    },
+    "example": {
+        "customFunctionInputVariables": [
+            {
+                "variableName": "agent1",
+                "variableValue": "$1"
+            }
+        ],
+        "customFunctionJavascriptFunction": "const agentOutput = $agent1; \n\nconst result = {\n    message: agentOutput, \n    document : \"\",\n    isModify: false         \n};\n\nreturn JSON.stringify(result);",
+        "customFunctionUpdateState": [
+            {
+                "key": "summary",
+                "value": "Processed: $output"
+            }
+        ]
+    }
+}

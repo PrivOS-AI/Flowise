@@ -1,0 +1,43 @@
+{
+    "id": "25",
+    "parameters": {
+        "listId": {
+            "type": "string",
+            "variable": true
+        },
+        "selectedDataFields": {
+            "type": "asyncMultiOptions",
+            "variable": false,
+            "loadMethod": "listCustomDataFields"
+        },
+        "outputStructure": {
+            "type": "options",
+            "variable": false,
+            "default": "object",
+            "options": [
+                "array",
+                "object"
+            ]
+        },
+        "updateFLowState": {
+            "type": "array",
+            "variable": true,
+            "loadMethod": "listRuntimeStateKeys",
+            "parameters": {
+                "key": {
+                    "type": "asyncOptions",
+                    "variable": false,
+                    "loadMethod": "listRuntimeStateKeys"
+                },
+                "value": {
+                    "type": "string",
+                    "variable": true
+                }
+            }
+        }
+    },
+    "example": {
+        "listId": "list-123",
+        "outputStructure": "object"
+    }
+}
