@@ -226,7 +226,7 @@ class HTTP_Agentflow implements INode {
             }
 
             // Add credentials if provided
-            if(nodeData.credential){
+            if (nodeData.credential) {
                 const credentialData = await getCredentialData(nodeData.credential ?? '', options)
                 if (credentialData && Object.keys(credentialData).length !== 0) {
                     const basicAuthUsername = getCredentialParam('basicAuthUsername', credentialData, nodeData)
