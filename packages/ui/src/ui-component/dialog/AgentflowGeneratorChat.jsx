@@ -42,6 +42,88 @@ import {
 
 // ==============================|| SUB-COMPONENTS ||============================== //
 
+const useTypewriter = (text, isStreaming) => {
+    const [display, setDisplay] = useState(text)
+
+    useEffect(() => {
+        if (!isStreaming) {
+            setDisplay(text)
+            return
+        }
+        setDisplay(text)
+    }, [text, isStreaming])
+
+    return display
+}
+
+const MessageBlock = ({ content, isThinking, isStreaming }) => {
+    const theme = useTheme()
+
+    // Custom Markdown Components matching claudews style
+    const MarkdownComponents = {
+        h1: ({ children }) => <Typography variant="h6" sx={{ mt: 2, mb: 1, fontWeight: 700 }}>{children}</Typography>,
+        h2: ({ children }) => <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 700 }}>{children}</Typography>,
+        h3: ({ children }) => <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 1, fontWeight: 600 }}>{children}</Typography>,
+        p: ({ children }) => <Typography variant="body2" sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>{children}</Typography>,
+        ul: ({ children }) => <Box component="ul" sx={{ pl: 2.5, mb: 1.5 }}>{children}</Box>,
+        ol: ({ children }) => <Box component="ol" sx={{ pl: 2.5, mb: 1.5 }}>{children}</Box>,
+        li: ({ children }) => <Typography component="li" variant="body2">{children}</Typography>,
+        a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'underline' }}>
+                {children}
+            </a>
+        ),
+        blockquote: ({ children }) => (
+            <Box sx={{ borderLeft: `3px solid ${theme.palette.divider}`, pl: 2, my: 1.5, fontStyle: 'italic', color: theme.palette.text.secondary }}>
+                {children}
+            </Box>
+        ),
+        code({ node, inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            return !inline && match ? (
+                <Box sx={{ my: 1.5, borderRadius: 1, overflow: 'hidden' }}>
+                    <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                        customStyle={{ margin: 0 }}
+                        {...props}
+                    >
+                        {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                </Box>
+            ) : (
+                <code className={className} style={{
+                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                    padding: '2px 4px',
+                    borderRadius: 4,
+                    fontFamily: 'monospace',
+                    fontSize: '0.85em'
+                }} {...props}>
+                    {children}
+                </code>
+            )
+        },
+        table: ({ children }) => <Box sx={{ overflowX: 'auto', my: 2 }}><table style={{ width: '100%', borderCollapse: 'collapse' }}>{children}</table></Box>,
+        th: ({ children }) => <th style={{ border: `1px solid ${theme.palette.divider}`, padding: 8, background: alpha(theme.palette.action.hover, 0.1) }}>{children}</th>,
+        td: ({ children }) => <td style={{ border: `1px solid ${theme.palette.divider}`, padding: 8 }}>{children}</td>,
+    }
+
+    return (
+        <Box sx={{ typography: 'body2' }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                {content}
+            </ReactMarkdown>
+        </Box>
+    )
+}
+
+MessageBlock.propTypes = {
+    content: PropTypes.string,
+    isThinking: PropTypes.bool,
+    isStreaming: PropTypes.bool
+}
+
 const ThinkingBlock = ({ content }) => {
     const [expanded, setExpanded] = useState(true)
     const theme = useTheme()
@@ -227,22 +309,103 @@ const AgentflowGeneratorChat = () => {
     const [isConnected, setIsConnected] = useState(false)
     const socketRef = useRef(null)
     const messagesEndRef = useRef(null)
+    const scrollContainerRef = useRef(null)
 
     const [activeServer, setActiveServer] = useState(null)
     const [isLoadingServer, setIsLoadingServer] = useState(false)
+    const userScrollingRef = useRef(false)
+    const userScrollTimeoutRef = useRef(null)
 
     const getAllServersApi = useApi(claudewsApi.getAllServers)
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
 
-    // Helper to scroll to bottom
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Helper functions for Tool Logic (Ported from claudews)
+    const buildToolResultsMap = (msgs) => {
+        const map = new Map()
+        for (const msg of msgs) {
+            if (msg.role === 'user' || msg.role === 'assistant') {
+                if (Array.isArray(msg.content)) {
+                    for (const block of msg.content) {
+                        if (block.type === 'tool_result' && (block.tool_use_id || block.id)) {
+                            const toolUseId = block.tool_use_id || block.id
+                            let resultStr = ''
+                            if (typeof block.content === 'string') {
+                                resultStr = block.content
+                            } else if (block.content && typeof block.content === 'object') {
+                                resultStr = JSON.stringify(block.content)
+                            }
+                            map.set(toolUseId, {
+                                result: resultStr,
+                                isError: block.is_error || false
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        return map
     }
 
+    const findLastToolUseId = (msgs) => {
+        let lastToolUseId = null
+        for (const msg of msgs) {
+            if (Array.isArray(msg.content)) {
+                for (const block of msg.content) {
+                    if (block.type === 'tool_use' && block.id) {
+                        lastToolUseId = block.id
+                    }
+                }
+            }
+        }
+        return lastToolUseId
+    }
+
+    const isToolExecuting = (toolId, lastToolUseId, toolResultsMap, isGlobalStreaming) => {
+        if (!isGlobalStreaming) return false
+        if (toolResultsMap.has(toolId)) return false
+        return toolId === lastToolUseId
+    }
+
+    // Smart Auto-scroll Logic
+    const isNearBottom = () => {
+        const container = scrollContainerRef.current
+        if (!container) return true
+        const threshold = 150
+        return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+    }
+
+    const scrollToBottom = (behavior = 'smooth') => {
+        messagesEndRef.current?.scrollIntoView({ behavior })
+    }
+
+    // Detect user scroll
     useEffect(() => {
-        scrollToBottom()
-    }, [messages])
+        const container = scrollContainerRef.current
+        if (!container) return
+
+        const handleScroll = () => {
+            userScrollingRef.current = true
+            if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current)
+
+            userScrollTimeoutRef.current = setTimeout(() => {
+                if (isNearBottom()) {
+                    userScrollingRef.current = false
+                }
+            }, 150)
+        }
+
+        container.addEventListener('scroll', handleScroll, { passive: true })
+        return () => container.removeEventListener('scroll', handleScroll)
+    }, [open])
+
+    // Auto-scroll on messages change if not manually scrolling
+    useEffect(() => {
+        if (!userScrollingRef.current) {
+            scrollToBottom()
+        }
+    }, [messages, isStreaming])
+
 
     // Fetch Servers on Open
     useEffect(() => {
@@ -274,26 +437,30 @@ const AgentflowGeneratorChat = () => {
     // Initialize Socket
     useEffect(() => {
         if (open && activeServer && !socketRef.current) {
-            // activeServer should have endpointUrl or host/port
-            let url = 'http://localhost:3000'
-
+            // Calculate target URL based on activeServer config
+            let targetUrl = 'http://localhost:8556'
             if (activeServer.endpointUrl) {
-                // If endpointUrl is present (standard for claudews server config)
-                url = activeServer.endpointUrl
+                targetUrl = activeServer.endpointUrl
             } else if (activeServer.host) {
-                // Fallback for legacy or other formats
                 const protocol = activeServer.protocol || 'http'
                 const host = activeServer.host || 'localhost'
                 const port = activeServer.port || 3000
-                url = `${protocol}://${host}:${port}`
+                targetUrl = `${protocol}://${host}:${port}`
             }
 
+            // Use Flowise Backend Proxy to talk to ClaudeWS
+            // Pass the target URL so the backend knows where to forward
+            const proxyUrl = window.location.origin
+            console.log('Connecting to Claude WS via Proxy at', proxyUrl, 'Target:', targetUrl)
 
-            console.log('Connecting to Claude WS at', url)
-
-            const socket = io(url, {
+            const socket = io(proxyUrl, {
+                path: '/claudews-socket/socket.io',
+                query: {
+                    claudews_target: targetUrl
+                },
                 reconnection: true,
-                reconnectionDelay: 1000
+                reconnectionDelay: 1000,
+                transports: ['websocket', 'polling']
             })
 
             socketRef.current = socket
@@ -326,8 +493,8 @@ const AgentflowGeneratorChat = () => {
                     const lastMsgIndex = newMessages.length - 1
                     const lastMsg = newMessages[lastMsgIndex]
 
-                    // Handle Complete/Snapshot Messages (Assistant/User)
-                    if (data.type === 'assistant' || data.type === 'user') {
+                    // Handle Complete/Snapshot Messages (Assistant Only - Ignore User to avoid duplication)
+                    if (data.type === 'assistant') {
                         const { message } = data
                         // Check if we should update the last message or append a new one
                         // If last message is streaming and role matches, likely an update/snapshot
@@ -371,10 +538,6 @@ const AgentflowGeneratorChat = () => {
                             }]
                         }
 
-                        // Re-fetch lastMsg after potential append (optimization: just use logic below for next render, but here we need to handle it now)
-                        // Actually, if we just returned, the NEXT event will catch it. But we don't want to drop THIS delta.
-                        // So let's handle the case where we need to create AND append.
-
                         let targetMsgIndex = lastMsgIndex
                         let targetMsg = lastMsg
 
@@ -394,7 +557,6 @@ const AgentflowGeneratorChat = () => {
                                 // Initialize block based on delta type
                                 if (data.delta.type === 'text_delta') newContent[blockIndex] = { type: 'text', text: '' }
                                 else if (data.delta.type === 'thinking_delta') newContent[blockIndex] = { type: 'thinking', thinking: '' }
-                                // tool_use/result usually come as full blocks in other events or need separate handling if streamed
                             }
 
                             const block = newContent[blockIndex]
@@ -420,7 +582,6 @@ const AgentflowGeneratorChat = () => {
             socket.on('attempt:started', (data) => {
                 console.log('Attempt started:', data)
                 setIsStreaming(true)
-                // No need to explicit subscribe if we just started it, but if it was an existing attempt we might
             })
 
             // Listen for any output/response
@@ -431,11 +592,8 @@ const AgentflowGeneratorChat = () => {
         }
 
         return () => {
-            if (socketRef.current) {
-                // socketRef.current.disconnect() // Optional: keep active or disconnect
-            }
         }
-    }, [open, activeServer]) // Depend on activeServer
+    }, [open, activeServer])
 
     const handleSendMessage = () => {
         if (!input.trim() || !socketRef.current) return
@@ -461,29 +619,143 @@ const AgentflowGeneratorChat = () => {
         socketRef.current.emit('attempt:start', payload)
     }
 
-    // Custom renderer for Markdown
-    const MarkdownComponents = {
-        code({ node, inline, className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || '')
-            return !inline && match ? (
-                <SyntaxHighlighter
-                    style={oneDark}
-                    language={match[1]}
-                    PreTag="div"
-                    {...props}
-                >
-                    {String(children).replace(/\n$/, '')}
-                </SyntaxHighlighter>
-            ) : (
-                <code className={className} {...props}>
-                    {children}
-                </code>
-            )
-        }
-    }
-
     const addMessage = (role, content) => {
         setMessages((prev) => [...prev, { role, content, id: nanoid(), timestamp: new Date() }])
+    }
+
+    // Check if messages have visible content (text, thinking, or tool_use)
+    const hasVisibleContent = (msgs) => {
+        return msgs.some(msg => {
+            if (msg.role === 'assistant' && Array.isArray(msg.content) && msg.content.length > 0) {
+                return msg.content.some(block =>
+                    (block.type === 'text' && block.text) ||
+                    (block.type === 'thinking' && block.thinking) ||
+                    block.type === 'tool_use'
+                )
+            }
+            return false
+        })
+    }
+
+    // Prepare maps for rendering
+    const toolResultsMap = buildToolResultsMap(messages)
+    const lastToolUseId = findLastToolUseId(messages)
+    const showLoadingDots = isStreaming && !hasVisibleContent(messages)
+
+    const renderContentBlock = (block, index, msgIsStreaming) => {
+        if (block.type === 'text' && block.text) {
+            return <MessageBlock key={index} content={block.text} isStreaming={msgIsStreaming} />
+        }
+
+        if (block.type === 'thinking' && block.thinking) {
+            return <MessageBlock key={index} content={block.thinking} isThinking isStreaming={msgIsStreaming} />
+        }
+
+        if (block.type === 'tool_use') {
+            const toolId = block.id || ''
+            const toolResult = toolResultsMap.get(toolId)
+            // Check if this tool is the one currently executing
+            const executing = isToolExecuting(toolId, lastToolUseId, toolResultsMap, isStreaming)
+
+            return (
+                <ToolUseBlock
+                    key={index}
+                    name={block.name || 'Unknown'}
+                    input={block.input}
+                    result={toolResult?.result}
+                    isError={toolResult?.isError}
+                    isStreaming={executing}
+                />
+            )
+        }
+
+        if (block.type === 'tool_result') {
+            // Tool results are typically shown inline with tool_use via map
+            return null
+        }
+
+        return null
+    }
+
+    const renderMessage = (msg, index) => {
+        if (msg.role === 'user') {
+            const rawText = Array.isArray(msg.content)
+                ? msg.content.map(b => b.text).join('')
+                : (typeof msg.content === 'string' ? msg.content : '')
+            const displayText = rawText.split('=== REQUIRED OUTPUT ===')[0].trim()
+
+            if (!displayText) return null
+
+            return (
+                <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    style={{
+                        alignSelf: 'flex-end',
+                        maxWidth: '90%',
+                        width: 'auto'
+                    }}
+                >
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 1.5,
+                            px: 2,
+                            bgcolor: theme.palette.primary.light,
+                            color: theme.palette.primary.contrastText,
+                            borderRadius: 2,
+                            borderTopRightRadius: 0,
+                            boxShadow: 1
+                        }}
+                    >
+                        <Typography variant="body2">
+                            {displayText}
+                        </Typography>
+                    </Paper>
+                </motion.div>
+            )
+        }
+
+        if (msg.role === 'assistant') {
+            return (
+                <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    style={{
+                        alignSelf: 'flex-start',
+                        maxWidth: '90%',
+                        width: '100%'
+                    }}
+                >
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 1.5,
+                            px: 2,
+                            bgcolor: 'transparent',
+                            color: theme.palette.text.primary,
+                            borderRadius: 2,
+                            borderTopLeftRadius: 0,
+                            boxShadow: 'none'
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {Array.isArray(msg.content) ? (
+                                msg.content.map((block, i) => renderContentBlock(block, i, msg.isStreaming && i === msg.content.length - 1))
+                            ) : (
+                                <MessageBlock content={msg.content} isStreaming={msg.isStreaming} />
+                            )}
+                        </Box>
+                    </Paper>
+                </motion.div>
+            )
+        }
+
+        return null
     }
 
     return (
@@ -544,6 +816,7 @@ const AgentflowGeneratorChat = () => {
 
                             {/* Messages Area */}
                             <Box
+                                ref={scrollContainerRef}
                                 sx={{
                                     flex: 1,
                                     p: 2,
@@ -571,7 +844,7 @@ const AgentflowGeneratorChat = () => {
                                     </Box>
                                 )}
 
-                                {!isLoadingServer && activeServer && messages.length === 0 && (
+                                {!isLoadingServer && activeServer && messages.length === 0 && !showLoadingDots && (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.7 }}>
                                         <IconSparkles size={48} stroke={1} />
                                         <Typography variant="body1" sx={{ mt: 2 }}>
@@ -580,111 +853,17 @@ const AgentflowGeneratorChat = () => {
                                     </Box>
                                 )}
 
-                                {messages.map((msg, index) => (
-                                    <motion.div
-                                        key={index}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.3 }}
-                                        style={{
-                                            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                            maxWidth: '90%',
-                                            width: msg.role === 'assistant' ? '100%' : 'auto'
-                                        }}
-                                    >
-                                        <Paper
-                                            elevation={0}
-                                            sx={{
-                                                p: 1.5,
-                                                px: 2,
-                                                bgcolor: msg.role === 'user'
-                                                    ? theme.palette.primary.light
-                                                    : 'transparent', // Transparent for assistant to show blocks naturally
-                                                color: msg.role === 'user' ? theme.palette.primary.contrastText : theme.palette.text.primary,
-                                                borderRadius: 2,
-                                                borderTopRightRadius: msg.role === 'user' ? 0 : 2,
-                                                borderTopLeftRadius: msg.role === 'assistant' ? 0 : 2,
-                                                boxShadow: msg.role === 'user' ? 1 : 'none'
-                                            }}
-                                        >
-                                            {msg.role === 'user' ? (
-                                                <Typography variant="body2">
-                                                    {(() => {
-                                                        const rawText = Array.isArray(msg.content)
-                                                            ? msg.content.map(b => b.text).join('')
-                                                            : msg.content
-                                                        return rawText.split('=== REQUIRED OUTPUT ===')[0].trim()
-                                                    })()}
-                                                </Typography>
-                                            ) : (
-                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                    {Array.isArray(msg.content) ? (
-                                                        msg.content.map((block, i) => {
-                                                            if (block.type === 'thinking') {
-                                                                return <ThinkingBlock key={i} content={block.thinking} />
-                                                            }
-                                                            if (block.type === 'tool_use') {
-                                                                // Find result in subsequent messages
-                                                                let result = null
-                                                                let isError = false
-                                                                // Simple lookahead for tool_result in same or next messages
-                                                                // This is O(N*M) but N is small
-                                                                for (let j = index; j < messages.length; j++) {
-                                                                    const m = messages[j]
-                                                                    if (Array.isArray(m.content)) {
-                                                                        const resultBlock = m.content.find(b => b.type === 'tool_result' && b.tool_use_id === block.id)
-                                                                        if (resultBlock) {
-                                                                            // Assuming result content is in 'content' field or we parse it
-                                                                            result = typeof resultBlock.content === 'string' ? resultBlock.content : JSON.stringify(resultBlock.content)
-                                                                            isError = resultBlock.is_error
-                                                                            break
-                                                                        }
-                                                                    }
-                                                                }
+                                {messages.map((msg, index) => renderMessage(msg, index))}
 
-                                                                return (
-                                                                    <ToolUseBlock
-                                                                        key={i}
-                                                                        name={block.name}
-                                                                        input={block.input}
-                                                                        result={result}
-                                                                        isError={isError}
-                                                                        isStreaming={msg.isStreaming && i === msg.content.length - 1 && !result}
-                                                                    />
-                                                                )
-                                                            }
-                                                            if (block.type === 'text') {
-                                                                return (
-                                                                    <ReactMarkdown
-                                                                        key={i}
-                                                                        remarkPlugins={[remarkGfm]}
-                                                                        components={MarkdownComponents}
-                                                                    >
-                                                                        {block.text}
-                                                                    </ReactMarkdown>
-                                                                )
-                                                            }
-                                                            return null
-                                                        })
-                                                    ) : (
-                                                        <ReactMarkdown
-                                                            remarkPlugins={[remarkGfm]}
-                                                            components={MarkdownComponents}
-                                                        >
-                                                            {msg.content}
-                                                        </ReactMarkdown>
-                                                    )}
-                                                    {/* Show running dots if streaming */}
-                                                    {msg.isStreaming && (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary }}>
-                                                            <RunningDots />
-                                                        </Box>
-                                                    )}
-                                                </Box>
-                                            )}
-                                        </Paper>
-                                    </motion.div>
-                                ))}
+                                {showLoadingDots && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary, pl: 2, py: 1 }}>
+                                        <RunningDots />
+                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
+                                            Thinking...
+                                        </Typography>
+                                    </Box>
+                                )}
+
                                 <div ref={messagesEndRef} />
                             </Box>
 

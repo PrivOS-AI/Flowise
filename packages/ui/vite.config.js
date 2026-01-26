@@ -14,6 +14,11 @@ export default defineConfig(async ({ mode }) => {
                 '^/api(/|$).*': {
                     target: `http://${serverHost}:${serverPort}`,
                     changeOrigin: true
+                },
+                '^/claudews-socket': {
+                    target: `http://${serverHost}:${serverPort}`,
+                    changeOrigin: true,
+                    ws: true
                 }
             }
         }
