@@ -56,6 +56,7 @@ import nvidiaNimRouter from './nvidia-nim'
 import executionsRouter from './executions'
 import validationRouter from './validation'
 import agentflowv2GeneratorRouter from './agentflowv2-generator'
+import agentflowv3GeneratorRouter from './agentflowv3-generator'
 import textToSpeechRouter from './text-to-speech'
 import externalSsoRouter from './external-sso'
 import claudewsServersRouter from './claudews-servers'
@@ -131,6 +132,7 @@ router.use('/nvidia-nim', nvidiaNimRouter)
 router.use('/executions', executionsRouter)
 router.use('/validation', validationRouter)
 router.use('/agentflowv2-generator', agentflowv2GeneratorRouter)
+router.use('/agentflowv3-generator', agentflowv3GeneratorRouter)
 router.use('/text-to-speech', textToSpeechRouter)
 router.use('/external-sso', externalSsoRouter)
 router.use('/claudews-servers', claudewsServersRouter)

@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useContext } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Box, Button, TextField, Paper, Typography, IconButton, Fab, useTheme, Card, Avatar, Tooltip, CircularProgress, alpha } from '@mui/material'
 
@@ -12,6 +12,7 @@ import { flowContext } from '@/store/context/ReactFlowContext'
 import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
 import { nanoid } from 'nanoid'
 import claudewsApi from '@/api/claudews'
+import agentflowv3Api from '@/api/agentflowv3'
 import useApi from '@/hooks/useApi'
 import { AnimatePresence, motion } from 'framer-motion'
 import { RunningDots } from './RunningDots'
@@ -317,6 +318,8 @@ const AgentflowGeneratorChat = () => {
     const userScrollTimeoutRef = useRef(null)
 
     const getAllServersApi = useApi(claudewsApi.getAllServers)
+    const getV3PromptApi = useApi(agentflowv3Api.getV3Prompt)
+    const { reactFlowInstance } = useContext(flowContext)
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
 
@@ -407,11 +410,12 @@ const AgentflowGeneratorChat = () => {
     }, [messages, isStreaming])
 
 
-    // Fetch Servers on Open
+    // Fetch Servers and V3 Prompt on Open
     useEffect(() => {
         if (open) {
             setIsLoadingServer(true)
             getAllServersApi.request()
+            getV3PromptApi.request()
         }
     }, [open])
 
@@ -522,6 +526,37 @@ const AgentflowGeneratorChat = () => {
                             newMessages[lastMsgIndex] = { ...lastMsg, isStreaming: false }
                         }
                         setIsStreaming(false)
+
+                        // Check for Generated Flow in Result (JSON)
+                        try {
+                            const possibleJson = data.content || (lastMsg?.content && typeof lastMsg.content === 'string' ? lastMsg.content : '')
+                            // If content is string, try to parse it. If it's already object/array, use it.
+                            // But usually result content is just the final text. 
+                            // However, we asked for JSON output.
+
+                            // Actually, in the V3 logic, the model returns JSON as text.
+                            // We need to find the JSON block.
+                            const jsonMatch = possibleJson.match(/\{[\s\S]*\}/)
+                            if (jsonMatch) {
+                                const flowData = JSON.parse(jsonMatch[0])
+                                if (flowData.nodes && flowData.edges) {
+                                    console.log('Flow Generated:', flowData)
+                                    if (reactFlowInstance) {
+                                        reactFlowInstance.setNodes(flowData.nodes)
+                                        reactFlowInstance.setEdges(flowData.edges)
+                                        enqueueSnackbar({
+                                            message: 'Agent Flow Generated Successfully!',
+                                            options: {
+                                                variant: 'success'
+                                            }
+                                        })
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Could not parse generated flow:', e)
+                        }
+
                         return newMessages
                     }
 
@@ -595,6 +630,10 @@ const AgentflowGeneratorChat = () => {
         }
     }, [open, activeServer])
 
+    const addMessage = (role, content) => {
+        setMessages((prev) => [...prev, { role, content, id: nanoid(), timestamp: new Date() }])
+    }
+
     const handleSendMessage = () => {
         if (!input.trim() || !socketRef.current) return
 
@@ -603,24 +642,30 @@ const AgentflowGeneratorChat = () => {
         setInput('')
         setIsStreaming(true)
 
+        // Prepare V3 Prompt from API
+        let systemPrompt = ''
+        if (getV3PromptApi.data?.prompt) {
+            systemPrompt = getV3PromptApi.data.prompt
+        }
+
         // Emit attempt:start to trigger the agent
         const taskId = nanoid()
         const payload = {
             taskId: taskId,
             prompt: userMessage,
+            system: systemPrompt, // Send the V3 System Prompt
             force_create: true,
             projectId: 'flowise-generator-project', // Fixed project for generation tasks
             projectName: 'Flowise Generator',
             taskTitle: `Generate Flow: ${userMessage.substring(0, 20)}...`,
-            outputFormat: 'json' // Request JSON output for the flow
+            outputFormat: 'json', // Request JSON output for the flow
+            context: {
+                isAgentFlowGenerator: true
+            }
         }
 
         console.log('Sending prompt:', payload)
         socketRef.current.emit('attempt:start', payload)
-    }
-
-    const addMessage = (role, content) => {
-        setMessages((prev) => [...prev, { role, content, id: nanoid(), timestamp: new Date() }])
     }
 
     // Check if messages have visible content (text, thinking, or tool_use)

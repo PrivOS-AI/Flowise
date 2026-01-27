@@ -287,6 +287,31 @@ NODE USAGE GUIDE:
 RETURN ONLY VALID JSON. No markdown, no code blocks, no explanation text.`
 }
 
+// ============================================================================
+// BUILD PROMPT FOR EXTERNAL USE (API ENDPOINT)
+// ============================================================================
+
+const buildAgentflowV3Prompt = async () => {
+    try {
+        logger.info('[buildAgentflowV3Prompt] Building V3 system prompt')
+
+        // Get available nodes and examples
+        const agentFlowNodes = await getAllAgentFlowNodes()
+        const toolNodes = await getAllToolNodes()
+        const marketplaceExamples = await getAllAgentflowMarketplaces()
+
+        // Build and return the system prompt
+        const prompt = buildSystemPrompt(agentFlowNodes, toolNodes, marketplaceExamples)
+
+        logger.info('[buildAgentflowV3Prompt] Successfully built V3 prompt')
+        return prompt
+    } catch (error) {
+        logger.error('[buildAgentflowV3Prompt] Error:', error)
+        throw new InternalFlowiseError(StatusCodes.INTERNAL_SERVER_ERROR, `Error: buildAgentflowV3Prompt - ${getErrorMessage(error)}`)
+    }
+}
+
 export default {
-    generateAgentflowv3
+    generateAgentflowv3,
+    buildAgentflowV3Prompt
 }
