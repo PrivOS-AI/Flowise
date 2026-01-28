@@ -1,7 +1,7 @@
 import { Request } from 'express'
 import * as path from 'path'
 import { DataSource } from 'typeorm'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4, validate as isUUID } from 'uuid'
 import { omit } from 'lodash'
 import {
     IFileUpload,
@@ -977,9 +977,9 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
     const chatflowid = req.params.id
 
     // Check if chatflow exists
-    const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-        id: chatflowid
-    })
+    const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+        isUUID(chatflowid) ? { id: chatflowid } : { slug: chatflowid?.toLowerCase()?.trim() }
+    )
     if (!chatflow) {
         throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowid} not found`)
     }

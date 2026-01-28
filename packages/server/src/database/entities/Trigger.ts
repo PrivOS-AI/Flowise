@@ -7,14 +7,17 @@ export class Trigger implements ITrigger {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
-    @Column({ type: 'uuid' })
+    @Column({ type: 'uuid'})
     flowId: string
 
-    @Column({ type: 'jsonb' })
+    @Column({ type: 'varchar', length: 50, nullable: true })
+    botId: string
+
+    @Column({ type: 'jsonb', nullable: true })
     config?: any
 
-    @Column({ type: 'array', default: [] })
-    events: string[]
+    @Column({ type: 'jsonb', default: [] })
+    events: any
 
     @Column({ type: 'boolean', default: true })
     isEnabled: boolean
@@ -25,7 +28,7 @@ export class Trigger implements ITrigger {
     @Column({ type: 'varchar', length: 100, default: 'privos' }) // privos, cron...
     type: string
 
-    @Column({ type: 'text' })
+    @Column({ type: 'text', nullable: true, })
     description: string
 
     @Column({ type: 'timestamp' })

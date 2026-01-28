@@ -8,13 +8,14 @@ export class AddTriggerEntityAndSlug1737625150000 implements MigrationInterface 
         await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS trigger (
                 id TEXT PRIMARY KEY,
-                flowId TEXT NOT NULL,
+                flowId TEXT,
+                botId TEXT,
                 config TEXT,
                 events TEXT,
                 isEnabled BOOLEAN DEFAULT 1 NOT NULL,
                 slug TEXT UNIQUE,
                 type TEXT DEFAULT 'privos' NOT NULL,
-                description TEXT NOT NULL,
+                description TEXT,
                 createdDate DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updatedDate DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 workspaceId TEXT

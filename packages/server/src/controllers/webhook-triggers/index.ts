@@ -11,7 +11,6 @@ import type { WebhookEventRequest } from '../../services/webhook-triggers'
 const handleWebhookEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { event } = req.body
-
         if (!event) throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Missing eventType')
 
         const result = await webhookTriggersService.processWebhookEvent(req, req.body as WebhookEventRequest)

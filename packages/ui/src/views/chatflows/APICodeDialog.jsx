@@ -18,7 +18,10 @@ import {
     Stack,
     Card,
     FormControlLabel,
-    Switch
+    Switch,
+    OutlinedInput,
+    InputAdornment,
+    Button
 } from '@mui/material'
 import { CopyBlock, atomOneDark } from 'react-code-blocks'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -33,7 +36,7 @@ import { Available } from '@/ui-component/rbac/available'
 
 // Const
 import { baseURL } from '@/store/constant'
-import { SET_CHATFLOW, enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
+import { SET_CHATFLOW, enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
 
 // Images
 import pythonSVG from '@/assets/images/python.svg'
@@ -42,7 +45,7 @@ import cURLSVG from '@/assets/images/cURL.svg'
 import EmbedSVG from '@/assets/images/embed.svg'
 import ShareChatbotSVG from '@/assets/images/sharing.png'
 import settingsSVG from '@/assets/images/settings.svg'
-import { IconBulb, IconBox, IconVariable, IconExclamationCircle } from '@tabler/icons-react'
+import { IconBulb, IconBox, IconVariable, IconExclamationCircle, IconLink, IconX } from '@tabler/icons-react'
 
 // API
 import apiKeyApi from '@/api/apikey'
@@ -102,6 +105,8 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
     const [selectedApiKey, setSelectedApiKey] = useState({})
     const [checkboxVal, setCheckbox] = useState(false)
     const [useSlug, setUseSlug] = useState(false)
+    const [slugValue, setSlugValue] = useState('')
+    const [slugError, setSlugError] = useState('')
     const [nodeConfig, setNodeConfig] = useState({})
     const [nodeConfigExpanded, setNodeConfigExpanded] = useState({})
     const [nodeOverrides, setNodeOverrides] = useState(apiConfig?.overrideConfig?.nodes ?? null)
@@ -155,18 +160,61 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
 
     const onUseSlugChange = (newValue) => {
         if (newValue && !chatflow?.slug) {
-            enqueueSnackbar({
-                message: 'Please configure a slug in Chatflow Configuration > Slug tab before using this feature.',
-                options: {
-                    key: new Date().getTime() + Math.random(),
-                    variant: 'warning',
-                    persist: false,
-                    autoHideDuration: 5000
-                }
-            })
-            return
+            setSlugValue(chatflow?.slug || '')
         }
         setUseSlug(newValue)
+    }
+
+    const onSlugChange = (event) => {
+        const value = event.target.value
+        const sanitizedValue = value.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()
+        setSlugValue(sanitizedValue)
+        setSlugError('')
+    }
+
+    const onSaveSlug = async () => {
+        try {
+            const saveResp = await updateChatflowApi.request(dialogProps.chatflowid, {
+                slug: slugValue
+            })
+            if (saveResp.data) {
+                const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
+                enqueueSnackbar({
+                    message: 'Slug Saved',
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'success',
+                        persist: false,
+                        autoHideDuration: 3000,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+                dispatch({ type: SET_CHATFLOW, chatflow: saveResp.data })
+            }
+        } catch (error) {
+            setSlugError(error?.response?.data?.message || '')
+            if (error?.status === 500) {
+                const closeSnackbar = (...args) => dispatch(closeSnackbarAction(...args))
+                enqueueSnackbar({
+                    message: `Failed to save slug. Please try again later.`,
+                    options: {
+                        key: new Date().getTime() + Math.random(),
+                        variant: 'error',
+                        persist: false,
+                        autoHideDuration: 3000,
+                        action: (key) => (
+                            <Button style={{ color: 'white' }} onClick={() => closeSnackbar(key)}>
+                                <IconX />
+                            </Button>
+                        )
+                    }
+                })
+            }
+        }
     }
 
     const onApiKeySelected = (keyValue) => {
@@ -298,6 +346,12 @@ const APICodeDialog = ({ show, dialogProps, onCancel }) => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [getAllVariablesApi.data])
+
+    useEffect(() => {
+        if (chatflow?.slug) {
+            setSlugValue(chatflow.slug)
+        }
+    }, [chatflow])
 
     const handleChange = (event, newValue) => {
         setValue(newValue)
@@ -736,16 +790,71 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
             aria-describedby='alert-dialog-description'
         >
             <DialogTitle
-                sx={{ fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                sx={{ fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: 'column', alignItems: 'flex-start' }}
                 id='alert-dialog-title'
             >
-                {dialogProps.title}
-                <FormControlLabel
-                    sx={{ ml: 2 }}
-                    size='small'
-                    control={<Switch checked={useSlug} onChange={(e) => onUseSlugChange(e.target.checked)} size='small' />}
-                    label='Use Slug'
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    {dialogProps.title}
+                    <FormControlLabel
+                        sx={{ ml: 2 }}
+                        size='small'
+                        control={<Switch checked={useSlug} onChange={(e) => onUseSlugChange(e.target.checked)} size='small' />}
+                        label='Use Slug'
+                    />
+                </Box>
+                {useSlug && (
+                    <Box sx={{ width: '100%', mt: 2 }}>
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                borderRadius: 10,
+                                background: '#e3f2fd',
+                                padding: 10,
+                                marginBottom: 10
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <IconLink size={24} color='#1565c0' />
+                                <div style={{ marginLeft: 10 }}>
+                                    <div style={{ color: '#1565c0', fontWeight: 500, fontSize: '0.9rem' }}>
+                                        Slug is a unique identifier for your chatflow URL (e.g., /prediction/your-slug)
+                                    </div>
+                                    <div style={{ color: '#1976d2', fontSize: '0.8rem', marginTop: 4 }}>
+                                        Use this as a webhook URL to trigger your flow
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <OutlinedInput
+                                sx={{ flex: 1 }}
+                                type='text'
+                                onChange={onSlugChange}
+                                size='small'
+                                value={slugValue}
+                                placeholder='Enter slug (alphanumeric and hyphens only)'
+                                error={!!slugError}
+                                endAdornment={
+                                    slugError && (
+                                        <InputAdornment position='end'>
+                                            <span style={{ color: '#f44336', fontSize: '0.75rem' }}>{slugError}</span>
+                                        </InputAdornment>
+                                    )
+                                }
+                            />
+                            <Button variant='contained' onClick={onSaveSlug} disabled={!slugValue || !!slugError} size='small'>
+                                Save
+                            </Button>
+                        </Box>
+                    </Box>
+                )}
             </DialogTitle>
             <DialogContent>
                 <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
@@ -981,7 +1090,7 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
                             </>
                         )}
                         {codeLang === 'Share Chatbot' && !chatflowApiKeyId && (
-                            <ShareChatbot isSessionMemory={dialogProps.isSessionMemory} isAgentCanvas={dialogProps.isAgentCanvas} />
+                            <ShareChatbot isSessionMemory={dialogProps.isSessionMemory} isAgentCanvas={dialogProps.isAgentCanvas} getChatflowIdentifier={getChatflowIdentifier}/>
                         )}
                     </TabPanel>
                 ))}

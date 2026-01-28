@@ -3,13 +3,30 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useState, useEffect, useRef, useContext, memo } from 'react'
 import { useUpdateNodeInternals } from 'reactflow'
 import PropTypes from 'prop-types'
-import { Stack, Box, Typography, TextField, Dialog, DialogContent, ButtonBase, Avatar, IconButton } from '@mui/material'
+import {
+    Stack,
+    Box,
+    Typography,
+    TextField,
+    Dialog,
+    DialogContent,
+    ButtonBase,
+    Avatar,
+    IconButton,
+    Switch,
+    FormControlLabel,
+    InputAdornment,
+    Tooltip,
+    Button
+} from '@mui/material'
 import NodeInputHandler from '@/views/canvas/NodeInputHandler'
 import { HIDE_CANVAS_DIALOG, SHOW_CANVAS_DIALOG } from '@/store/actions'
-import { IconPencil, IconX, IconCheck, IconInfoCircle, IconChevronUp, IconChevronDown } from '@tabler/icons-react'
+import { IconPencil, IconX, IconCheck, IconInfoCircle, IconChevronUp, IconChevronDown, IconCopy } from '@tabler/icons-react'
 import { useTheme } from '@mui/material/styles'
 import { flowContext } from '@/store/context/ReactFlowContext'
 import { showHideInputParams } from '@/utils/genericHelper'
+import { closeSnackbar as closeSnackbarAction, enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
+import { v4 as uuid } from 'uuid'
 
 const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
     const portalElement = document.getElementById('portal')
@@ -29,6 +46,12 @@ const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
     const [isEditingExecutionLabel, setEditingExecutionLabel] = useState(false)
     const [executionLabel, setExecutionLabel] = useState('')
     const [isExecutionLabelExpanded, setIsExecutionLabelExpanded] = useState(true)
+
+    // Webhook URL state
+    const [useCustomSlug, setUseCustomSlug] = useState(false)
+    const [customSlug, setCustomSlug] = useState('')
+    const [isWebhookUrlExpanded, setIsWebhookUrlExpanded] = useState(false)
+    const [displayWebhookId, setDisplayWebhookId] = useState('')
 
     const onNodeLabelChange = () => {
         reactFlowInstance.setNodes((nds) =>
@@ -111,6 +134,51 @@ const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
                 setExecutionLabel(dialogProps.data.executionLabel)
                 initialExecutionLabel = dialogProps.data.executionLabel
             }
+            // Sync webhook URL state with data.trigger
+            const newWebhookId = uuid()
+            if (dialogProps.data.trigger) {
+                setUseCustomSlug(dialogProps.data.trigger.useCustomSlug ?? false)
+                setCustomSlug(dialogProps.data.trigger.slug ?? '')
+                setDisplayWebhookId(dialogProps.data?.trigger?.webhookId)
+                // Initialize webhookId if not exists
+                if (!dialogProps.data.trigger.webhookId && reactFlowInstance) {
+                    reactFlowInstance.setNodes((nds) =>
+                        nds.map((node) => {
+                            if (node.id === dialogProps.data.id) {
+                                node.data = {
+                                    ...node.data,
+                                    trigger: {
+                                        ...node.data.trigger,
+                                        webhookId: newWebhookId
+                                    }
+                                }
+                                setData(node.data)
+                                setDisplayWebhookId(newWebhookId)
+                            }
+                            return node
+                        })
+                    )
+                }
+            } else if (reactFlowInstance) {
+                // Initialize trigger with webhookId if trigger doesn't exist
+                reactFlowInstance.setNodes((nds) =>
+                    nds.map((node) => {
+                        if (node.id === dialogProps.data.id) {
+                            node.data = {
+                                ...node.data,
+                                trigger: {
+                                    webhookId: newWebhookId,
+                                    slug: '',
+                                    useCustomSlug: false
+                                }
+                            }
+                            setData(node.data)
+                            setDisplayWebhookId(newWebhookId)
+                        }
+                        return node
+                    })
+                )
+            }
         }
 
         return () => {
@@ -119,6 +187,10 @@ const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
             setEditingExecutionLabel(false)
             setIsExecutionLabelExpanded(true)
             setExecutionLabel(initialExecutionLabel)
+            setUseCustomSlug(false)
+            setCustomSlug('')
+            setIsWebhookUrlExpanded(false)
+            setDisplayWebhookId('')
         }
     }, [dialogProps])
 
@@ -411,6 +483,220 @@ const EditNodeDialog = ({ show, dialogProps, onCancel }) => {
                             {data.hint}
                         </Typography>
                     </Stack>
+                )}
+                {/* Webhook URL Section - always show for relevant nodes */}
+                {data?.name === 'privosTrigger' && (
+                    <Box sx={{ width: '100%', mb: 2 }}>
+                        {/* Header with title and collapse arrow */}
+                        <Stack
+                            flexDirection='row'
+                            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
+                        >
+                            <Typography sx={{ ml: 2, fontSize: '0.9rem' }}>Webhook URLs</Typography>
+                            <Stack flexDirection='row' sx={{ display: 'flex', alignItems: 'center' }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={useCustomSlug}
+                                            onChange={(e) => {
+                                                const newValue = e.target.checked
+                                                setUseCustomSlug(newValue)
+                                                // Update data.trigger
+                                                reactFlowInstance.setNodes((nds) =>
+                                                    nds.map((node) => {
+                                                        if (node.id === data.id) {
+                                                            const updatedTrigger = node.data.trigger || { webhookId: node.id, slug: '' }
+                                                            node.data = {
+                                                                ...node.data,
+                                                                trigger: {
+                                                                    ...updatedTrigger,
+                                                                    useCustomSlug: newValue
+                                                                }
+                                                            }
+                                                            setData(node.data)
+                                                        }
+                                                        return node
+                                                    })
+                                                )
+                                            }}
+                                            size='small'
+                                        />
+                                    }
+                                    label='Use Slug'
+                                    sx={{ ml: 0, '& .MuiFormControlLabel-label': { fontSize: '0.85rem' } }}
+                                />
+                                <IconButton
+                                    size='small'
+                                    onClick={() => setIsWebhookUrlExpanded(!isWebhookUrlExpanded)}
+                                    sx={{
+                                        padding: 0,
+                                        mr: 1,
+                                        '&:hover': {
+                                            backgroundColor: 'transparent'
+                                        }
+                                    }}
+                                >
+                                    {isWebhookUrlExpanded ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
+                                </IconButton>
+                            </Stack>
+                        </Stack>
+
+                        {/* Collapsible content */}
+                        {!isWebhookUrlExpanded && (
+                            <Box sx={{ ml: 2, mr: 2 }}>
+                                {/* Webhook URL display (when useCustomSlug is false) */}
+                                {!useCustomSlug && (
+                                    <Stack direction='row' sx={{ alignItems: 'center', gap: 0.5 }}>
+                                        <Typography
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                backgroundColor: customization.isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)',
+                                                color: customization.isDarkMode ? '#fff' : '#000',
+                                                px: 1,
+                                                py: 0.5,
+                                                borderRadius: '4px',
+                                                minWidth: '45px',
+                                                textAlign: 'center'
+                                            }}
+                                        >
+                                            POST
+                                        </Typography>
+                                        <TextField
+                                            fullWidth
+                                            multiline
+                                            rows={2}
+                                            size='small'
+                                            value={`${window.location.origin}/api/v1/webhook/${displayWebhookId}`}
+                                            disabled
+                                            sx={{
+                                                '& .MuiInputBase-input': {
+                                                    fontSize: '0.85rem',
+                                                    fontFamily: 'monospace',
+                                                    color: customization.isDarkMode ? '#fff' : '#000',
+                                                    wordBreak: 'break-all'
+                                                },
+                                                '& .MuiOutlinedInput-root': {
+                                                    backgroundColor: customization.isDarkMode ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                                                }
+                                            }}
+                                            InputProps={{
+                                                endAdornment: (
+                                                    <InputAdornment position='end'>
+                                                        <Tooltip title='Click to copy webhook URL'>
+                                                            <IconButton
+                                                                size='small'
+                                                                onClick={() => {
+                                                                    const url = `${window.location.origin}/api/v1/webhook/${displayWebhookId}`
+                                                                    navigator.clipboard.writeText(url)
+                                                                    dispatch(
+                                                                        enqueueSnackbarAction({
+                                                                            message: 'URL copied!',
+                                                                            options: {
+                                                                                key: new Date().getTime() + Math.random(),
+                                                                                variant: 'success',
+                                                                                autoHideDuration: 2000,
+                                                                                action: (key) => (
+                                                                                    <Button
+                                                                                        style={{ color: 'white' }}
+                                                                                        onClick={() => dispatch(closeSnackbarAction(key))}
+                                                                                    >
+                                                                                        <IconX size={16} />
+                                                                                    </Button>
+                                                                                )
+                                                                            }
+                                                                        })
+                                                                    )
+                                                                }}
+                                                            >
+                                                                <IconCopy size={18} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </InputAdornment>
+                                                )
+                                            }}
+                                        />
+                                    </Stack>
+                                )}
+
+                                {/* Custom Slug Input (when useCustomSlug is true) */}
+                                {useCustomSlug && (
+                                    <Stack direction='row' sx={{ alignItems: 'center', gap: 0.5 }}>
+                                        <Typography
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                backgroundColor: customization.isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)',
+                                                color: customization.isDarkMode ? '#fff' : '#000',
+                                                px: 1,
+                                                py: 0.5,
+                                                borderRadius: '4px',
+                                                minWidth: '45px',
+                                                textAlign: 'center'
+                                            }}
+                                        >
+                                            POST
+                                        </Typography>
+                                        <TextField
+                                            fullWidth
+                                            size='small'
+                                            placeholder='my-custom-trigger'
+                                            value={customSlug}
+                                            onChange={(e) => {
+                                                let newValue = e.target.value
+                                                // Auto lowercase and filter: only alphanumeric and hyphens
+                                                newValue = newValue.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase()
+                                                setCustomSlug(newValue)
+                                                // Update data.trigger
+                                                reactFlowInstance.setNodes((nds) =>
+                                                    nds.map((node) => {
+                                                        if (node.id === data.id) {
+                                                            const updatedTrigger = node.data.trigger || { webhookId: node.id }
+                                                            node.data = {
+                                                                ...node.data,
+                                                                trigger: {
+                                                                    ...updatedTrigger,
+                                                                    slug: newValue
+                                                                }
+                                                            }
+                                                            setData(node.data)
+                                                        }
+                                                        return node
+                                                    })
+                                                )
+                                            }}
+                                            sx={{
+                                                '& .MuiInputBase-input': {
+                                                    fontSize: '0.85rem'
+                                                },
+                                                '& .MuiOutlinedInput-root': {
+                                                    backgroundColor: customization.isDarkMode ? 'rgba(0, 0, 0, 0.2)' : 'white'
+                                                }
+                                            }}
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position='start'>
+                                                        <Typography
+                                                            variant='caption'
+                                                            sx={{
+                                                                fontFamily: 'monospace',
+                                                                fontSize: '0.75rem',
+                                                                color: 'text.secondary'
+                                                            }}
+                                                        >
+                                                            {`${window.location.origin}/api/v1/webhook/`}
+                                                        </Typography>
+                                                    </InputAdornment>
+                                                )
+                                            }}
+                                        />
+                                    </Stack>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
                 )}
                 {inputParams
                     .filter((inputParam) => inputParam.display !== false)
