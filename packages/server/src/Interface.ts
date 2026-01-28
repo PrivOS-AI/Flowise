@@ -203,6 +203,7 @@ export interface IExecution {
 export interface ITrigger {
     id: string
     flowId: string
+    botId: string
     slug?: string
     type: string
     isEnabled: boolean

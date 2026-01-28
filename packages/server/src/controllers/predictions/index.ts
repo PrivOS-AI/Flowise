@@ -6,10 +6,9 @@ import predictionsServices from '../../services/predictions'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { StatusCodes } from 'http-status-codes'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
-import { v4 as uuidv4, validate as isUUID } from 'uuid'
+import { v4 as uuidv4 } from 'uuid'
 import { getErrorMessage } from '../../errors/utils'
 import { MODE } from '../../Interface'
-import { ChatFlow } from '../../database/entities/ChatFlow'
 
 // Send input message and get prediction result (External)
 const createPrediction = async (req: Request, res: Response, next: NextFunction) => {
@@ -26,17 +25,6 @@ const createPrediction = async (req: Request, res: Response, next: NextFunction)
                 `Error: predictionsController.createPrediction - body not provided!`
             )
         }
-        // pre get final chatId, duplicate find but prevent to modify multiples files.
-        const chatflowId = req.params.id
-        const appServer = getRunningExpressApp()
-        const chatFlowData = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
-            isUUID(chatflowId) ? { id: chatflowId } : { slug: chatflowId?.toLowerCase()?.trim() }
-        )
-        if (!chatFlowData) {
-            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found in the database!`)
-        }
-        req.params.id = chatFlowData.id
-        console.log('Final chatflow id to use:', req.params.id)
 
         const chatflow = await chatflowsService.getChatflowById(req.params.id)
         if (!chatflow) {

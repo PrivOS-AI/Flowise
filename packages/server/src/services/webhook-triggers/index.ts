@@ -5,6 +5,7 @@ import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { utilBuildChatflow } from '../../utils/buildChatflow'
 import logger from '../../utils/logger'
 import { ChatflowType } from '../../Interface'
+import { Trigger } from '../../database/entities/Trigger'
 
 // ============================================================================
 // Types & Interfaces
@@ -53,6 +54,8 @@ export interface WebhookEventRequest {
     room?: IRoom
     message?: IMessage
     user?: IUser
+    form?: Record<string, any>,
+    question?: string
 }
 
 export interface ITriggerNode {
@@ -94,9 +97,9 @@ export const isBotTriggeredEvent = (botId: string | undefined, messageUserId: st
 /**
  * Find all trigger nodes in a flow that match the given event type
  */
-const findMatchingTriggerNodes = (nodes: any[], eventType: string): ITriggerNode[] => {
+const findMatchingTriggerNodes = (nodes: any[], triggerData: Trigger, eventType: string): ITriggerNode[] => {
     return nodes
-        .filter((node: any) => node.data?.type === 'triggerProcessor' && node.data?.eventType === eventType)
+        .filter((node: any) => node.data?.type === 'triggerProcessor' && triggerData.events.includes(eventType))
         .map((node: any) => ({
             nodeId: node.id,
             nodeName: node.data?.label || node.data?.name || '',
@@ -109,11 +112,11 @@ const findMatchingTriggerNodes = (nodes: any[], eventType: string): ITriggerNode
 /**
  * Parse flow data and extract matching trigger nodes
  */
-const parseFlowForTriggers = (flowDataString: string, eventType: string): ITriggerNode[] => {
+const parseFlowForTriggers = (flowDataString: string, triggerData: Trigger, eventType: string): ITriggerNode[] => {
     try {
         const flowData = JSON.parse(flowDataString)
         const nodes = flowData?.nodes || []
-        return findMatchingTriggerNodes(nodes, eventType)
+        return findMatchingTriggerNodes(nodes, triggerData, eventType)
     } catch (error) {
         logger.error(`[webhook-triggers]: Error parsing flow data: ${error}`)
         return []
@@ -142,17 +145,21 @@ const convertToMatchingAgentFlow = (chatFlow: ChatFlow, triggerNodes: ITriggerNo
 /**
  * Find all agent flows that have trigger nodes matching the given event type
  */
-export const findMatchingAgentFlows = async (eventType: string): Promise<IMatchingAgentFlow[]> => {
+export const findMatchingAgentFlows = async (eventType: string, bot?: IBot): Promise<IMatchingAgentFlow[]> => {
     const appServer = getRunningExpressApp()
     const matchingAgentFlows: IMatchingAgentFlow[] = []
 
     try {
+        // get trigger from botId
+        const triggerData = await appServer.AppDataSource.getRepository(Trigger).findOneBy({botId: bot?.id, isEnabled: true})
+        if(!triggerData) throw new Error('Trigger not found')
+
         const allChatFlows = await appServer.AppDataSource.getRepository(ChatFlow).find({
-            where: { type: 'AGENTFLOW' }
+            where: { type: 'AGENTFLOW', id: triggerData.flowId }
         })
 
         for (const chatFlow of allChatFlows) {
-            const triggerNodes = parseFlowForTriggers(chatFlow.flowData, eventType)
+            const triggerNodes = parseFlowForTriggers(chatFlow.flowData, triggerData, eventType)
             const agentFlow = convertToMatchingAgentFlow(chatFlow, triggerNodes)
             if (agentFlow) {
                 matchingAgentFlows.push(agentFlow)
@@ -170,11 +177,15 @@ export const findMatchingAgentFlows = async (eventType: string): Promise<IMatchi
 /**
  * Find a specific agent flow by slug or ID that has trigger nodes matching the event type
  */
-export const findMatchingAgentFlowBySlug = async (slug: string, eventType: string): Promise<IMatchingAgentFlow | null> => {
+export const findMatchingAgentFlowBySlug = async (slug: string, eventType: string, bot?: IBot): Promise<IMatchingAgentFlow | null> => {
     const appServer = getRunningExpressApp()
     const isSlugUUID = isUUID(slug)
 
     try {
+        // get trigger from botId
+        const triggerData = await appServer.AppDataSource.getRepository(Trigger).findOneBy({botId: bot?.id, isEnabled: true})
+        if(!triggerData) throw new Error('Trigger not found')
+
         const chatFlow = await appServer.AppDataSource.getRepository(ChatFlow).findOne({
             where: isSlugUUID ? { id: slug, type: 'AGENTFLOW' } : { slug: slug, type: 'AGENTFLOW' }
         })
@@ -183,7 +194,7 @@ export const findMatchingAgentFlowBySlug = async (slug: string, eventType: strin
             return null
         }
 
-        const triggerNodes = parseFlowForTriggers(chatFlow.flowData, eventType)
+        const triggerNodes = parseFlowForTriggers(chatFlow.flowData, triggerData, eventType)
         return convertToMatchingAgentFlow(chatFlow, triggerNodes)
     } catch (error) {
         logger.error(`[webhook-triggers]: Error finding agent flow by slug: ${error}`)
@@ -194,34 +205,36 @@ export const findMatchingAgentFlowBySlug = async (slug: string, eventType: strin
 /**
  * Prepare the request body with chatflow data for execution
  */
-export const prepareChatflowExecutionRequest = (req: Request, agentFlow: IMatchingAgentFlow, webhookData: WebhookEventRequest): void => {
-    const { room, message, event: eventType } = webhookData
-
-    // Set the chatflow ID in params
+export const prepareChatflowExecutionRequest = (req: Request, agentFlow: IMatchingAgentFlow): void => {
+    const {
+        form = {},
+        question = '',
+        room,
+        roomId,
+        message,
+        messageId,
+        event = '',
+    } = req.body ?? {}
+    
     req.params.id = agentFlow.id
-
-    // Nodes can access it via {{question}} variable
-    req.body.question = JSON.stringify({
-        eventType,
-        timestamp: new Date().toISOString(),
-        payload: webhookData || {}
-    })
-
-    // Set trigger data for internal processing
+    
     req.body.triggerData = {
+        ...req.body,
+        form,
+        question,
         botCredentialId: agentFlow.credentialId,
-        roomId: room?.id,
-        messageId: message?.id,
-        eventType
+        roomId: room?.id ?? roomId,
+        messageId: message?.id ?? messageId,
+        eventType: event,
     }
 }
 
 /**
  * Execute a single agent flow
  */
-export const executeAgentFlow = async (req: Request, agentFlow: IMatchingAgentFlow, webhookData: WebhookEventRequest): Promise<void> => {
+export const executeAgentFlow = async (req: Request, agentFlow: IMatchingAgentFlow): Promise<void> => {
     try {
-        prepareChatflowExecutionRequest(req, agentFlow, webhookData)
+        prepareChatflowExecutionRequest(req, agentFlow)
         await utilBuildChatflow(req, true)
         logger.info(`[webhook-triggers]: Successfully executed agentflow: ${agentFlow.name} (${agentFlow.id})`)
     } catch (error) {
@@ -247,7 +260,7 @@ export const processWebhookEvent = async (req: Request, webhookData: WebhookEven
     }
 
     // Find all matching agent flows
-    const matchingAgentFlows = await findMatchingAgentFlows(eventType)
+    const matchingAgentFlows = await findMatchingAgentFlows(eventType, bot)
 
     if (matchingAgentFlows.length === 0) {
         logger.info(`[webhook-triggers]: No agentflows found for eventType: ${eventType}`)
@@ -262,7 +275,7 @@ export const processWebhookEvent = async (req: Request, webhookData: WebhookEven
     let processedCount = 0
     for (const agentFlow of matchingAgentFlows) {
         try {
-            await executeAgentFlow(req, agentFlow, webhookData)
+            await executeAgentFlow(req, agentFlow)
             processedCount++
         } catch (error) {
             logger.error(`[webhook-triggers]: Failed to execute agentflow ${agentFlow.id}: ${error}`)
@@ -298,7 +311,7 @@ export const processWebhookEventBySlug = async (
     }
 
     // Find the specific agent flow by slug
-    const agentFlow = await findMatchingAgentFlowBySlug(slug, eventType)
+    const agentFlow = await findMatchingAgentFlowBySlug(slug, eventType, bot)
 
     if (!agentFlow) {
         return {
@@ -309,7 +322,7 @@ export const processWebhookEventBySlug = async (
     }
 
     // Execute the agent flow
-    await executeAgentFlow(req, agentFlow, webhookData)
+    await executeAgentFlow(req, agentFlow)
 
     return {
         success: true,

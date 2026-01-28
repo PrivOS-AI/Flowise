@@ -30,7 +30,6 @@ class SendMessageToBot_Privos implements INode {
         this.baseClasses = [this.type]
 
         this.inputs = [
-            // ===== ACTION =====
             {
                 label: 'Action',
                 name: 'action',
@@ -42,8 +41,6 @@ class SendMessageToBot_Privos implements INode {
                 ],
                 default: 'send'
             },
-
-            // ===== MESSAGE TYPE =====
             {
                 label: 'Message Type',
                 name: 'messageType',
@@ -60,26 +57,23 @@ class SendMessageToBot_Privos implements INode {
                 default: 'text',
                 show: { action: ['send'] }
             },
-
-            // ===== TEXT / CAPTION =====
             {
-                label: 'Text / Caption',
+                label: 'Text',
                 name: 'text',
                 type: 'string',
                 rows: 4,
-                description: 'Message text or media caption',
+                description: 'Message text',
                 placeholder: 'Enter message text...',
                 acceptVariable: true,
                 show: { action: ['send', 'edit'] }
             },
-
-            // ===== FILE PATH / URL =====
             {
-                label: 'File Path or URL',
-                name: 'filePath',
+                label: 'Files',
+                name: 'files',
                 type: 'string',
-                description: 'Local file path or public URL',
-                placeholder: '/path/to/file or https://...',
+                rows: 6,
+                description: 'JSON array of files. Format: [{"url":"https://...", "caption":"text1"}, {"url":"https://...", "caption":"text2"}]',
+                placeholder: '[{"url":"https://example.com/image.jpg","caption":"My Image"}]',
                 acceptVariable: true,
                 optional: true,
                 show: {
@@ -97,15 +91,13 @@ class SendMessageToBot_Privos implements INode {
         const action = nodeData.inputs?.action as ActionType
         const messageType = nodeData.inputs?.messageType as MessageType
         const text = nodeData.inputs?.text as string
-        const filePath = nodeData.inputs?.filePath as string
+        const filesJson = nodeData.inputs?.files as string
 
         const finalRoomId = (nodeData.inputs?.roomId as string) || roomId
 
         try {
             // ===== VALIDATION =====
-            if (!finalRoomId) {
-                throw new Error('Room ID is required')
-            }
+            if (!finalRoomId) throw new Error('Room ID is required')
 
             if (action === 'send') {
                 if (messageType === 'text' && (!text || !text.trim())) {
@@ -136,17 +128,30 @@ class SendMessageToBot_Privos implements INode {
                 messageId
             }
 
-            if (action === 'edit') {
-                flowResult.text = text
+            if (action === 'edit') flowResult.text = text
+
+            // ===== PARSE FILES =====
+            let files: Array<{ url: string; caption?: string }> = []
+            if (filesJson && filesJson.trim()) {
+                try {
+                    const unescapedJson = filesJson.replace(/\\/g, '')
+                    const parsed = JSON.parse(unescapedJson)
+                    if (!Array.isArray(parsed)) throw new Error('Files must be a JSON array')
+                    files = parsed.filter((f: any) => f.url).map((f: any) => ({
+                        url: f.url,
+                        caption: f.caption || undefined
+                    }))
+                } catch (e: any) {
+                    throw new Error(`Invalid files JSON format: ${e.message}`)
+                }
             }
 
             if (action === 'send') {
                 flowResult.messageType = messageType
                 flowResult.text = text
-                // flowResult.caption = text
+                if (files.length > 0) flowResult.files = files
             }
 
-            // ===== SEND =====
             const response = await sender.sendFlowResult(finalRoomId, flowResult)
 
             return {

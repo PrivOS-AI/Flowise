@@ -5,14 +5,18 @@ import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { ChatflowType } from '../../Interface'
 import apiKeyService from '../../services/apikey'
 import chatflowsService from '../../services/chatflows'
+import triggerService from '../../services/triggers'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { checkUsageLimit } from '../../utils/quotaUsage'
 import { RateLimiterManager } from '../../utils/rateLimit'
 import { getPageAndLimitParams } from '../../utils/pagination'
 import { WorkspaceUserErrorMessage, WorkspaceUserService } from '../../enterprise/services/workspace-user.service'
-import { QueryRunner } from 'typeorm'
+import { QueryRunner, In, Not } from 'typeorm'
 import { GeneralErrorMessage } from '../../utils/constants'
 import { ScheduleManager } from '../../services/schedule-manager'
+import { Trigger } from '../../database/entities/Trigger'
+import { Credential } from '../../database/entities/Credential'
+import { decryptCredentialData } from '../../utils'
 
 const checkIfChatflowIsValidForStreaming = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -79,6 +83,8 @@ const deleteChatflow = async (req: Request, res: Response, next: NextFunction) =
             )
         }
         const apiResponse = await chatflowsService.deleteChatflow(req.params.id, orgId, workspaceId)
+
+        await triggerService.deleteManyTrigger({flowId: req.params.id})
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -157,6 +163,9 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
         const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
         const body = req.body
 
+        // validate bot credential for trigger
+        const collectTriggerData = await validateCredentialBot(body.flowData, '', workspaceId)
+
         const existingChatflowCount = await chatflowsService.getAllChatflowsCountByOrganization(body.type, orgId)
         const newChatflowCount = 1
         await checkUsageLimit('flows', subscriptionId, getRunningExpressApp().usageCacheManager, existingChatflowCount + newChatflowCount)
@@ -177,6 +186,11 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
             subscriptionId,
             getRunningExpressApp().usageCacheManager
         )
+
+        // Update triggers, minimal -> don't batch
+        if (collectTriggerData.length > 0) {
+            await handleTriggerData(collectTriggerData, apiResponse?.id, workspaceId)
+        }
 
         return res.json(apiResponse)
     } catch (error) {
@@ -215,61 +229,11 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         }
         const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
         const body = req.body
-
         // validate bot credential for trigger
-        if (body.flowData) {
-            const flowData = JSON.parse(body.flowData)
-            const nodes = flowData.nodes ?? []
-            const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor' && node.data.eventType)
-            const triggerTypeCredentialMap = new Map<string, Set<string>>()
-            // Check duplicate credential in the same flow
-            for (const node of triggerNodes) {
-                const { eventType, credential, label } = node.data
-
-                if (!triggerTypeCredentialMap.has(eventType)) {
-                    triggerTypeCredentialMap.set(eventType, new Set())
-                }
-
-                const credentialSet = triggerTypeCredentialMap.get(eventType)!
-
-                if (credentialSet.has(credential)) {
-                    throw new InternalFlowiseError(
-                        StatusCodes.BAD_REQUEST,
-                        `Duplicate credential found for trigger '${label}'. Each trigger must have a unique credential.`
-                    )
-                }
-
-                credentialSet.add(credential)
-            }
-
-            // Check credential used in other flows, optimize using table (later)
-            const allFlows = (await chatflowsService.getAllChatflows('AGENTFLOW', workspaceId)) as ChatFlow[]
-            for (const [eventType, credentialSet] of triggerTypeCredentialMap) {
-                for (const flow of allFlows) {
-                    if (flow.id === chatflow.id) continue
-                    const flowData = JSON.parse(flow.flowData)
-                    const nodes = flowData.nodes ?? []
-
-                    const triggerNodes = nodes.filter(
-                        (node: any) => node.data.type === 'triggerProcessor' && node.data.eventType === eventType
-                    )
-                    for (const node of triggerNodes) {
-                        if (credentialSet.has(node.data.credential)) {
-                            throw new InternalFlowiseError(
-                                StatusCodes.BAD_REQUEST,
-                                `Credential for '${node.data.label}' is already in use in another flow '${flow.name}'.`
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        const collectTriggerData = await validateCredentialBot(body.flowData, chatflow.id, workspaceId)
 
         // check duplicate slug
-        if (body.slug) {
-            const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== body.slug.toLowerCase().trim()
-            isNeedCheck && (await chatflowsService.checkDuplicateSlug(body.slug))
-        }
+        await validateSlug(chatflow, workspaceId, body.slug)
 
         const updateChatFlow = new ChatFlow()
         Object.assign(updateChatFlow, body)
@@ -279,10 +243,148 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         await rateLimiterManager.updateRateLimiter(updateChatFlow)
 
         const apiResponse = await chatflowsService.updateChatflow(chatflow, updateChatFlow, orgId, workspaceId, subscriptionId)
+
+        // Update triggers, minimal -> don't batch
+        if (collectTriggerData.length > 0) {
+            await handleTriggerData(collectTriggerData, chatflow.id, workspaceId)
+        }
+
         return res.json(apiResponse)
     } catch (error) {
         next(error)
     }
+}
+
+const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId: string) => {
+    const appServer = getRunningExpressApp();
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger);
+    const credentialRepo = appServer.AppDataSource.getRepository(Credential);
+
+    // Get botId from credential
+    const credentialIds = [
+        ...new Set(triggerData.map(t => t.credential).filter(Boolean))
+    ];
+    const existingCredentials = await credentialRepo.findBy({ id: In(credentialIds) });
+    const decryptedCredentials = await Promise.all(
+        existingCredentials.map(async (credential: any) => {
+            const decrypted = await decryptCredentialData(credential?.encryptedData);
+            return {
+                credentialId: credential.id,
+                botId: decrypted?.botId,
+            };
+        })
+    );
+              
+    const credentialBotMap = new Map(decryptedCredentials.filter((c: any) => c.botId).map((c: any) => [c.credentialId, c.botId]));
+
+    // Get triggers data
+    const ids = triggerData.map(t => t.id).filter(Boolean);
+    const existingTriggers = await triggerRepo.findBy({ id: In(ids) });
+
+    const triggerMap = new Map(existingTriggers.map((t: any) => [t.id, t]));
+
+    const toUpdate: Trigger[] = [];
+    const toInsert: Trigger[] = [];
+
+    for (const { id, credential, ...rest } of triggerData) {
+        const existing = id ? triggerMap.get(id) : null;
+        const finalData = { ...rest, credential, flowId, workspaceId, botId: credentialBotMap.get(credential) || null };
+        if (existing) {
+            triggerRepo.merge(existing, finalData);
+            toUpdate.push(existing as any);
+        } else {
+            toInsert.push({ id, ...finalData } as any);
+        }
+    }
+
+    toUpdate.length > 0 && await triggerRepo.save(toUpdate);
+    toInsert.length > 0 && await triggerRepo.insert(toInsert)
+}
+
+const validateCredentialBot = async (data: any, flowId: string, workspaceId: string) => {
+    if(!data) return []
+
+    const appServer = getRunningExpressApp();
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger);
+    const collectTriggerData = []
+    const flowData = JSON.parse(data)
+    const nodes = flowData.nodes ?? []
+    const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor')
+    const credentialEventMap = new Map<string, {events: Set<string>, labels: Map<string, string>}>()
+    // Check duplicate credential in the same flow
+    for (const node of triggerNodes) {
+        const { credential, label, inputs } = node.data
+        const events: string[] = JSON.parse(inputs?.events || '[]')
+        if(events.length === 0) continue;
+
+        if (!credential || typeof credential !== 'string') {
+            throw new InternalFlowiseError(
+                StatusCodes.BAD_REQUEST,
+                `Trigger '${label}' must have a valid credential.`
+            )
+        }
+
+        if (!credentialEventMap.has(credential)) {
+            credentialEventMap.set(credential, {events: new Set(), labels: new Map()})
+        }
+
+        const meta = credentialEventMap.get(credential)!
+
+        for (const event of events) {
+            if (meta.events.has(event)) {
+                throw new InternalFlowiseError(
+                    StatusCodes.CONFLICT,
+                    `Duplicate event for credential in trigger '${label}'. Each event must be unique per credential.`
+                )
+            }
+            meta.events.add(event)
+            meta.labels.set(event, label)
+        }
+    }
+
+    // Check credential used in other flows, optimize using table (later)
+    const credentials = Array.from(credentialEventMap.keys())
+    const existingTriggers = await triggerRepo.find({
+        where: {
+            credential: In(credentials),
+            ...(flowId && { flowId: Not(flowId) }),
+            workspaceId,
+        }
+    })
+    for (const trigger of existingTriggers) {
+        const meta = credentialEventMap.get(trigger.credential)
+        if (!meta) continue
+    
+        for (const event of trigger.events ?? []) {
+            if (meta.events.has(event)) {
+                throw new InternalFlowiseError(
+                    StatusCodes.CONFLICT,
+                    `Credential for '${meta.labels.get(event)}' is already in use in another flow`
+                )
+            }
+        }
+    }
+
+    // Collect trigger data
+    for (const node of triggerNodes) {
+        const { trigger, inputs, credential } = node.data
+        collectTriggerData.push({
+            id: trigger?.webhookId,
+            slug: trigger?.slug || null,
+            isEnabled: inputs?.isEnabled || false,
+            events: JSON.parse(inputs?.events || '[]'),
+            description: inputs?.description || '',
+            credential,
+        })
+    }
+
+    return collectTriggerData
+}
+
+const validateSlug = async (chatflow: any, workspaceId: string, slug?: string) => {
+    if(!slug) return;
+    const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== slug.toLowerCase().trim()
+    isNeedCheck && (await chatflowsService.checkDuplicateSlug(slug, workspaceId))
 }
 
 const getSinglePublicChatflow = async (req: Request, res: Response, next: NextFunction) => {

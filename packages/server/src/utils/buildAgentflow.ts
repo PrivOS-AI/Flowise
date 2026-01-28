@@ -614,7 +614,7 @@ function setupNodeDependencies(
     const inputsByCondition = new Map<string | null, string[]>()
 
     for (const connection of inputConnections) {
-        const sourceNode = nodes.find((n) => n.id === connection.source)
+        const sourceNode = nodes.find((n) => n.id === connection.source) as any
         if (!sourceNode) continue
 
         // If trigger node is not in reachableNodes, skip
@@ -632,7 +632,7 @@ function setupNodeDependencies(
             }
 
             if (isTrigger === true && sourceNode.data.type === 'triggerProcessor') {
-                if (sourceNode.data.eventType && sourceNode.data.eventType !== triggerData?.eventType) {
+                if (!JSON.parse(sourceNode.data?.inputs?.events || '[]').includes(triggerData?.eventType)) {
                     logger.debug(`  ⏭️  Skipping other trigger type: ${connection.source}`)
                     continue
                 }
@@ -1541,7 +1541,7 @@ export const executeAgentFlow = async ({
     let nodeDependencies = rawNodeDeps
     let reachableNodesFromTrigger: Set<string> | undefined
     if (triggerData?.eventType) {
-        const triggerNode = nodes.find((n) => n.data.eventType === triggerData?.eventType)
+        const triggerNode = nodes.find((n: any) => JSON.parse(n.data?.inputs?.events || '[]').includes(triggerData?.eventType))
         if (triggerNode) {
             // build graph from trigger node to reachable nodes
             const reachableNodesMap = new Map<string, number>([[triggerNode.id, 0]]) // nodeId -> depth
