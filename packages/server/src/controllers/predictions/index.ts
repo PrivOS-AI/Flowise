@@ -6,10 +6,9 @@ import predictionsServices from '../../services/predictions'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { StatusCodes } from 'http-status-codes'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
-import { v4 as uuidv4, validate as isUUID } from 'uuid'
+import { v4 as uuidv4 } from 'uuid'
 import { getErrorMessage } from '../../errors/utils'
 import { MODE } from '../../Interface'
-import { ChatFlow } from '../../database/entities/ChatFlow'
 
 // Send input message and get prediction result (External)
 const createPrediction = async (req: Request, res: Response, next: NextFunction) => {

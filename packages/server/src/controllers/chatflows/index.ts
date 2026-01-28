@@ -246,10 +246,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         await validateSlug(chatflow, workspaceId, body.slug)
 
         // check duplicate slug
-        if (body.slug) {
-            const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== body.slug.toLowerCase().trim()
-            isNeedCheck && (await chatflowsService.checkDuplicateSlug(body.slug))
-        }
+        await validateSlug(chatflow, workspaceId, body.slug)
 
         const updateChatFlow = new ChatFlow()
         Object.assign(updateChatFlow, body)

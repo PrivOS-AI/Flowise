@@ -7,7 +7,7 @@ export class Trigger implements ITrigger {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
-    @Column({ type: 'uuid' })
+    @Column({ type: 'uuid'})
     flowId: string
 
     @Column({ type: 'varchar', length: 50, nullable: true })
