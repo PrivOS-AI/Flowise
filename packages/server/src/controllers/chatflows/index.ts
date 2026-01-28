@@ -84,7 +84,7 @@ const deleteChatflow = async (req: Request, res: Response, next: NextFunction) =
         }
         const apiResponse = await chatflowsService.deleteChatflow(req.params.id, orgId, workspaceId)
 
-        await triggerService.deleteManyTrigger({flowId: req.params.id})
+        await triggerService.deleteManyTrigger({ flowId: req.params.id })
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -256,76 +256,56 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
 }
 
 const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId: string) => {
-    const appServer = getRunningExpressApp();
-    const triggerRepo = appServer.AppDataSource.getRepository(Trigger);
-    const credentialRepo = appServer.AppDataSource.getRepository(Credential);
-
-    // Get botId from credential
-    const credentialIds = [
-        ...new Set(triggerData.map(t => t.credential).filter(Boolean))
-    ];
-    const existingCredentials = await credentialRepo.findBy({ id: In(credentialIds) });
-    const decryptedCredentials = await Promise.all(
-        existingCredentials.map(async (credential: any) => {
-            const decrypted = await decryptCredentialData(credential?.encryptedData);
-            return {
-                credentialId: credential.id,
-                botId: decrypted?.botId,
-            };
-        })
-    );
-              
-    const credentialBotMap = new Map(decryptedCredentials.filter((c: any) => c.botId).map((c: any) => [c.credentialId, c.botId]));
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
 
     // Get triggers data
-    const ids = triggerData.map(t => t.id).filter(Boolean);
-    const existingTriggers = await triggerRepo.findBy({ id: In(ids) });
+    const ids = triggerData.map((t) => t.id).filter(Boolean)
+    const existingTriggers = await triggerRepo.findBy({ id: In(ids) })
 
-    const triggerMap = new Map(existingTriggers.map((t: any) => [t.id, t]));
+    const triggerMap = new Map(existingTriggers.map((t: any) => [t.id, t]))
 
-    const toUpdate: Trigger[] = [];
-    const toInsert: Trigger[] = [];
+    const toUpdate: Trigger[] = []
+    const toInsert: Trigger[] = []
 
-    for (const { id, credential, ...rest } of triggerData) {
-        const existing = id ? triggerMap.get(id) : null;
-        const finalData = { ...rest, credential, flowId, workspaceId, botId: credentialBotMap.get(credential) || null };
+    for (const { id, ...rest } of triggerData) {
+        const existing = id ? triggerMap.get(id) : null
+        const finalData = { ...rest, flowId, workspaceId }
         if (existing) {
-            triggerRepo.merge(existing, finalData);
-            toUpdate.push(existing as any);
+            triggerRepo.merge(existing, finalData)
+            toUpdate.push(existing as any)
         } else {
-            toInsert.push({ id, ...finalData } as any);
+            toInsert.push({ id, ...finalData } as any)
         }
     }
 
-    toUpdate.length > 0 && await triggerRepo.save(toUpdate);
-    toInsert.length > 0 && await triggerRepo.insert(toInsert)
+    toUpdate.length > 0 && (await triggerRepo.save(toUpdate))
+    toInsert.length > 0 && (await triggerRepo.insert(toInsert))
 }
 
 const validateCredentialBot = async (data: any, flowId: string, workspaceId: string) => {
-    if(!data) return []
+    if (!data) return []
 
-    const appServer = getRunningExpressApp();
-    const triggerRepo = appServer.AppDataSource.getRepository(Trigger);
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+    const credentialRepo = appServer.AppDataSource.getRepository(Credential)
     const collectTriggerData = []
     const flowData = JSON.parse(data)
     const nodes = flowData.nodes ?? []
     const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor')
-    const credentialEventMap = new Map<string, {events: Set<string>, labels: Map<string, string>}>()
+    const credentialEventMap = new Map<string, { events: Set<string>; labels: Map<string, string> }>()
     // Check duplicate credential in the same flow
     for (const node of triggerNodes) {
         const { credential, label, inputs } = node.data
         const events: string[] = JSON.parse(inputs?.events || '[]')
-        if(events.length === 0) continue;
+        if (events.length === 0) continue
 
         if (!credential || typeof credential !== 'string') {
-            throw new InternalFlowiseError(
-                StatusCodes.BAD_REQUEST,
-                `Trigger '${label}' must have a valid credential.`
-            )
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Trigger '${label}' must have a valid credential.`)
         }
 
         if (!credentialEventMap.has(credential)) {
-            credentialEventMap.set(credential, {events: new Set(), labels: new Map()})
+            credentialEventMap.set(credential, { events: new Set(), labels: new Map() })
         }
 
         const meta = credentialEventMap.get(credential)!
@@ -341,20 +321,39 @@ const validateCredentialBot = async (data: any, flowId: string, workspaceId: str
             meta.labels.set(event, label)
         }
     }
+    // decrypt to get botId
+    const credentialIds = Array.from(credentialEventMap.keys())
+    const existingCredentials = await credentialRepo.findBy({ id: In(credentialIds) })
+    const decryptedCredentials = await Promise.all(
+        existingCredentials.map(async (credential: any) => {
+            const decrypted = await decryptCredentialData(credential?.encryptedData)
+            return {
+                credentialId: credential.id,
+                botId: decrypted?.botId
+            }
+        })
+    )
+    const botIds = decryptedCredentials.filter((c: any) => c.botId).map((c: any) => c.botId)
+    const credentialBotMap = new Map<string, string>(
+        decryptedCredentials.filter((c: any) => c.botId).map((c: any) => [c.botId, c.credentialId])
+    )
+    const reverseCredentialBotMap = new Map<string, string>(
+        decryptedCredentials.filter((c: any) => c.credentialId).map((c: any) => [c.credentialId, c.botId])
+    )
 
     // Check credential used in other flows, optimize using table (later)
-    const credentials = Array.from(credentialEventMap.keys())
     const existingTriggers = await triggerRepo.find({
         where: {
-            credential: In(credentials),
+            botId: In(botIds),
             ...(flowId && { flowId: Not(flowId) }),
-            workspaceId,
+            workspaceId
         }
     })
     for (const trigger of existingTriggers) {
-        const meta = credentialEventMap.get(trigger.credential)
+        const credential = credentialBotMap.get(trigger.botId)
+        const meta = credentialEventMap.get(credential!)
         if (!meta) continue
-    
+
         for (const event of trigger.events ?? []) {
             if (meta.events.has(event)) {
                 throw new InternalFlowiseError(
@@ -374,7 +373,7 @@ const validateCredentialBot = async (data: any, flowId: string, workspaceId: str
             isEnabled: inputs?.isEnabled || false,
             events: JSON.parse(inputs?.events || '[]'),
             description: inputs?.description || '',
-            credential,
+            botId: reverseCredentialBotMap.get(credential) || null
         })
     }
 
@@ -382,7 +381,7 @@ const validateCredentialBot = async (data: any, flowId: string, workspaceId: str
 }
 
 const validateSlug = async (chatflow: any, workspaceId: string, slug?: string) => {
-    if(!slug) return;
+    if (!slug) return
     const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== slug.toLowerCase().trim()
     isNeedCheck && (await chatflowsService.checkDuplicateSlug(slug, workspaceId))
 }
