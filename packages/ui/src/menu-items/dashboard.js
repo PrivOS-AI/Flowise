@@ -23,7 +23,8 @@ import {
     IconLockCheck,
     IconFileDatabase,
     IconShieldLock,
-    IconListCheck
+    IconListCheck,
+    IconServer
 } from '@tabler/icons-react'
 
 // constant
@@ -51,7 +52,8 @@ const icons = {
     IconLockCheck,
     IconFileDatabase,
     IconShieldLock,
-    IconListCheck
+    IconListCheck,
+    IconServer
 }
 
 // ==============================|| DASHBOARD MENU ITEMS ||============================== //
@@ -114,11 +116,31 @@ const dashboard = {
                 {
                     id: 'tools',
                     title: 'Tools',
-                    type: 'item',
-                    url: '/tools',
+                    type: 'collapse',
                     icon: icons.IconTool,
                     breadcrumbs: true,
-                    permission: 'tools:view'
+                    permission: 'tools:view',
+                    defaultOpen: true,
+                    children: [
+                        {
+                            id: 'tools-list',
+                            title: 'Tools',
+                            type: 'item',
+                            url: '/tools',
+                            icon: icons.IconTool,
+                            breadcrumbs: true,
+                            permission: 'tools:view'
+                        },
+                        {
+                            id: 'claudews-settings',
+                            title: 'ClaudeWS',
+                            type: 'item',
+                            url: '/tools/claudews',
+                            icon: icons.IconServer,
+                            breadcrumbs: true,
+                            permission: 'tools:view'
+                        }
+                    ]
                 },
                 {
                     id: 'credentials',

@@ -20,6 +20,7 @@ const APIKey = Loadable(lazy(() => import('@/views/apikey')))
 
 // tools routing
 const Tools = Loadable(lazy(() => import('@/views/tools')))
+const ClaudeWS = Loadable(lazy(() => import('@/views/claudews')))
 
 // assistants routing
 const Assistants = Loadable(lazy(() => import('@/views/assistants')))
@@ -138,6 +139,14 @@ const MainRoutes = {
             element: (
                 <RequireAuth permission={'tools:view'}>
                     <Tools />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/tools/claudews',
+            element: (
+                <RequireAuth permission={'tools:view'}>
+                    <ClaudeWS />
                 </RequireAuth>
             )
         },
