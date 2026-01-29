@@ -123,6 +123,15 @@ const dashboard = {
                     defaultOpen: true,
                     children: [
                         {
+                            id: 'tools-list',
+                            title: 'Tools',
+                            type: 'item',
+                            url: '/tools',
+                            icon: icons.IconTool,
+                            breadcrumbs: true,
+                            permission: 'tools:view'
+                        },
+                        {
                             id: 'claudews-settings',
                             title: 'ClaudeWS',
                             type: 'item',
