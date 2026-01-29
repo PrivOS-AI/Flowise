@@ -45,6 +45,7 @@ import { AddBotEnabledToChatFlow1760100000000 } from './1760100000000-AddBotEnab
 import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSubAgentEnabledToChatFlow'
 import { AddAgentflowFolder1770300000000 } from './1770300000000-AddAgentflowFolder'
 import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToFolder'
+import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/mariadb/1720230151482-AddAuthTables'
@@ -118,5 +119,6 @@ export const mariadbMigrations = [
     AddBotEnabledToChatFlow1760100000000,
     AddSubAgentEnabledToChatFlow1760200000000,
     AddAgentflowFolder1770300000000,
-    AddParentIdToFolder1770400000000
+    AddParentIdToFolder1770400000000,
+    AddClaudeWSEntities1770500000000
 ]
