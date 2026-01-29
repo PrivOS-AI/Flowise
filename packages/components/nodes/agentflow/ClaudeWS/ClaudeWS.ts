@@ -46,7 +46,8 @@ class ClaudeWS_Agentflow implements INode {
             if (!appDataSource) return returnData
 
             try {
-                const queryBuilder = appDataSource.getRepository(databaseEntities['ClaudeWSServer'])
+                const queryBuilder = appDataSource
+                    .getRepository(databaseEntities['ClaudeWSServer'])
                     .createQueryBuilder('server')
                     .where('server.isActive = :isActive', { isActive: true })
 
@@ -66,6 +67,200 @@ class ClaudeWS_Agentflow implements INode {
                 }
             } catch (error) {
                 console.error('[ClaudeWS Agentflow] Error loading servers:', error)
+            }
+
+            return returnData
+        },
+
+        async listSkills(nodeData: INodeData, options: ICommonObject) {
+            const returnData: { label: string; name: string; description: string }[] = []
+            const serverId = nodeData.inputs?.claudewsServer
+
+            if (!serverId) return returnData
+
+            const appDataSource = options.appDataSource
+            const databaseEntities = options.databaseEntities
+
+            if (!appDataSource) return returnData
+
+            try {
+                // Get server info
+                const server = await appDataSource.getRepository(databaseEntities['ClaudeWSServer']).findOneBy({ id: serverId })
+
+                if (!server) return returnData
+
+                // Decrypt API key
+                const { decryptCredentialData } = await import('../../../src/utils')
+                const decryptedData = await decryptCredentialData(server.apiKey)
+                const apiKey = decryptedData.apiKey
+                const baseUrl = server.endpointUrl.replace(/\/$/, '')
+
+                // Fetch plugins from ClaudeWS server
+                const response = await axios.get(`${baseUrl}/api/agent-factory/plugins`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    },
+                    timeout: 10000
+                })
+
+                const plugins = response.data?.plugins || []
+
+                // Get icon for plugin type
+                const getTypeIcon = (type: string): string => {
+                    const icons: Record<string, string> = {
+                        skill: '🔧',
+                        agent: '🤖',
+                        command: '⚡',
+                        'agent-set': '👥'
+                    }
+                    return icons[type] || '📦'
+                }
+
+                // Group by type and return as selectable options
+                for (const plugin of plugins) {
+                    const typeIcon = getTypeIcon(plugin.type)
+                    returnData.push({
+                        label: `${typeIcon} ${plugin.name}`,
+                        name: plugin.id || plugin.name,
+                        description: plugin.description || `${plugin.type} - ${plugin.name}`
+                    })
+                }
+
+                console.log('[ClaudeWS Agentflow] Loaded skills:', returnData.length)
+            } catch (error) {
+                console.error('[ClaudeWS Agentflow] Error loading skills:', error)
+            }
+
+            return returnData
+        },
+
+        async syncSkillsToProject(nodeData: INodeData, options: ICommonObject, skillIds?: string[]) {
+            if (!skillIds || skillIds.length === 0) {
+                return { success: true, message: 'No skills to sync', synced: 0 }
+            }
+
+            const serverId = nodeData.inputs?.claudewsServer
+            if (!serverId) {
+                throw new Error('ClaudeWS Server is required to sync skills')
+            }
+
+            const appDataSource = options.appDataSource
+            const databaseEntities = options.databaseEntities
+
+            if (!appDataSource) {
+                throw new Error('AppDataSource not available')
+            }
+
+            try {
+                // Get server info
+                const server = await appDataSource.getRepository(databaseEntities['ClaudeWSServer']).findOneBy({ id: serverId })
+
+                if (!server) {
+                    throw new Error('ClaudeWS Server not found')
+                }
+
+                // Decrypt API key
+                const decryptedData = await decryptCredentialData(server.apiKey)
+                const apiKey = decryptedData.apiKey
+                const baseUrl = server.endpointUrl.replace(/\/$/, '')
+
+                // Get project ID from node input (roomId serves as projectId in ClaudeWS)
+                const projectId = nodeData.inputs?.claudewsRoomId as string | undefined
+
+                if (!projectId) {
+                    throw new Error('Room ID is required to sync skills to project')
+                }
+
+                console.log('[ClaudeWS Agentflow] Syncing skills to project:', {
+                    projectId,
+                    skillIds,
+                    count: skillIds.length
+                })
+
+                // Batch sync all skills at once using /sync endpoint
+                const response = await axios.post(
+                    `${baseUrl}/api/agent-factory/projects/${projectId}/sync`,
+                    {
+                        componentIds: skillIds,
+                        agentSetIds: []
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey
+                        },
+                        timeout: 30000
+                    }
+                )
+
+                console.log('[ClaudeWS Agentflow] Skills sync completed:', {
+                    synced: skillIds.length,
+                    total: skillIds.length,
+                    response: response.data
+                })
+
+                return {
+                    success: true,
+                    synced: skillIds.length,
+                    total: skillIds.length
+                }
+            } catch (error: any) {
+                console.error('[ClaudeWS Agentflow] Error syncing skills:', error)
+                return {
+                    success: false,
+                    error: error.response?.data?.error || error.message,
+                    synced: 0
+                }
+            }
+        },
+
+        async getInstalledSkills(nodeData: INodeData, options: ICommonObject) {
+            const returnData: { label: string; name: string; description: string }[] = []
+            const serverId = nodeData.inputs?.claudewsServer
+            const roomId = nodeData.inputs?.claudewsRoomId as string | undefined
+
+            if (!serverId || !roomId) return returnData
+
+            const appDataSource = options.appDataSource
+            const databaseEntities = options.databaseEntities
+
+            if (!appDataSource) return returnData
+
+            try {
+                // Get server info
+                const server = await appDataSource.getRepository(databaseEntities['ClaudeWSServer']).findOneBy({ id: serverId })
+
+                if (!server) return returnData
+
+                // Decrypt API key
+                const decryptedData = await decryptCredentialData(server.apiKey)
+                const apiKey = decryptedData.apiKey
+                const baseUrl = server.endpointUrl.replace(/\/$/, '')
+
+                // Get installed plugins for the project
+                const response = await axios.get(`${baseUrl}/api/agent-factory/projects/${roomId}/installed`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    },
+                    timeout: 10000
+                })
+
+                const plugins = response.data?.plugins || []
+
+                for (const plugin of plugins) {
+                    const typeIcon = plugin.type === 'skill' ? '🔧' : '📦'
+                    returnData.push({
+                        label: `${typeIcon} ${plugin.name}`,
+                        name: plugin.id || plugin.name,
+                        description: `Installed: ${plugin.description || plugin.name}`
+                    })
+                }
+
+                console.log('[ClaudeWS Agentflow] Loaded installed skills:', returnData.length)
+            } catch (error) {
+                console.error('[ClaudeWS Agentflow] Error loading installed skills:', error)
             }
 
             return returnData
@@ -94,7 +289,7 @@ class ClaudeWS_Agentflow implements INode {
                 label: 'Room Name',
                 name: 'claudewsRoomName',
                 type: 'string',
-                description: 'Name of the room on ClaudeWS server',
+                description: 'Name of the room on PrivOS Chat server',
                 placeholder: 'my-room',
                 optional: true,
                 acceptVariable: true
@@ -103,7 +298,7 @@ class ClaudeWS_Agentflow implements INode {
                 label: 'Room ID',
                 name: 'claudewsRoomId',
                 type: 'string',
-                description: 'ID of the room on ClaudeWS server',
+                description: 'ID of the room on PrivOS Chat server',
                 placeholder: 'room-uuid',
                 optional: true,
                 acceptVariable: true
@@ -153,6 +348,24 @@ class ClaudeWS_Agentflow implements INode {
                 default: true
             },
             {
+                label: 'Import Skills to Project',
+                name: 'claudewsImportSkills',
+                type: 'boolean',
+                description:
+                    'Import selected skills to the ClaudeWS project (required for skills to work). If false, skills must already be imported.',
+                optional: true,
+                default: true
+            },
+            {
+                label: 'Enabled Skills',
+                name: 'claudewsEnabledSkills',
+                type: 'asyncMultiOptions',
+                loadMethod: 'listSkills',
+                description: 'Select skills to enable for this execution (auto-fetched from ClaudeWS server)',
+                optional: true,
+                default: []
+            },
+            {
                 label: 'Messages',
                 name: 'claudewsMessages',
                 type: 'array',
@@ -165,7 +378,8 @@ class ClaudeWS_Agentflow implements INode {
                         type: 'options',
                         options: [
                             { label: 'System', name: 'system' },
-                            { label: 'User', name: 'user' }
+                            { label: 'User', name: 'user' },
+                            { label: 'Assistant', name: 'assistant' }
                         ]
                     },
                     {
@@ -215,6 +429,8 @@ class ClaudeWS_Agentflow implements INode {
         const taskName = nodeData.inputs?.claudewsTaskName as string | undefined
         let taskId = nodeData.inputs?.claudewsTaskId as string | undefined
         const forceCreate = nodeData.inputs?.claudewsForceCreate as boolean | undefined
+        const importSkills = nodeData.inputs?.claudewsImportSkills as boolean | undefined
+        const enabledSkills = nodeData.inputs?.claudewsEnabledSkills as string[] | undefined
         const messages = nodeData.inputs?.claudewsMessages as Array<{ role: string; content: string }> | undefined
         const updateStateConfig = nodeData.inputs?.claudewsUpdateFlowState as Array<{ key: string; value: string }> | undefined
 
@@ -230,8 +446,7 @@ class ClaudeWS_Agentflow implements INode {
         if (!roomId && !roomName) throw new Error('Room ID or Room Name is required')
 
         // Get server from database
-        const server = await appDataSource.getRepository(databaseEntities['ClaudeWSServer'])
-            .findOneBy({ id: serverId })
+        const server = await appDataSource.getRepository(databaseEntities['ClaudeWSServer']).findOneBy({ id: serverId })
 
         if (!server) throw new Error('ClaudeWS Server not found')
 
@@ -346,6 +561,41 @@ class ClaudeWS_Agentflow implements INode {
             throw new Error('Failed to create or find task')
         }
 
+        // Sync skills to project if import is enabled and skills are selected
+        if (importSkills !== false && enabledSkills && Array.isArray(enabledSkills) && enabledSkills.length > 0) {
+            console.log('[ClaudeWS Agentflow] Syncing skills to project...', {
+                projectId: resolvedRoomId,
+                skillCount: enabledSkills.length,
+                skills: enabledSkills
+            })
+
+            try {
+                // Batch sync all skills at once using Agent Factory /sync endpoint
+                await axios.post(
+                    `${baseUrl}/api/agent-factory/projects/${resolvedRoomId}/sync`,
+                    {
+                        componentIds: enabledSkills,
+                        agentSetIds: []
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey
+                        },
+                        timeout: 30000
+                    }
+                )
+
+                console.log('[ClaudeWS Agentflow] Skills sync completed:', {
+                    total: enabledSkills.length,
+                    projectId: resolvedRoomId
+                })
+            } catch (syncError: any) {
+                console.error('[ClaudeWS Agentflow] Error during skill sync:', syncError.response?.data || syncError.message)
+                // Continue anyway - skills might already be installed
+            }
+        }
+
         // Execute streaming attempt via Socket.io
         // The attempt will be created automatically when we emit attempt:start
         const streamer = sseStreamer
@@ -365,7 +615,8 @@ class ClaudeWS_Agentflow implements INode {
                 roomName,
                 roomSessionKey,
                 privosEndpointUrl,
-                taskName
+                taskName,
+                enabledSkills
             )
             fullResponse = result.text
             const usedTools = result.usedTools || []
@@ -436,7 +687,8 @@ class ClaudeWS_Agentflow implements INode {
         roomNameParam?: string,
         roomSessionKeyParam?: string,
         privosEndpointUrlParam?: string,
-        taskNameParam?: string
+        taskNameParam?: string,
+        enabledSkills?: string[]
     ): Promise<{ text: string; usedTools: any[] }> {
         return new Promise((resolve, reject) => {
             let fullResponse = ''
@@ -483,6 +735,11 @@ class ClaudeWS_Agentflow implements INode {
                     attemptPayload.privosEndpointUrl = privosEndpointUrlParam
                 }
 
+                // Add enabled skills if provided
+                if (enabledSkills && Array.isArray(enabledSkills) && enabledSkills.length > 0) {
+                    attemptPayload.enabledSkills = enabledSkills
+                }
+
                 console.log('[ClaudeWS Agentflow] Sending attempt:start to ClaudeWS server:', {
                     baseUrl,
                     roomId,
@@ -491,6 +748,7 @@ class ClaudeWS_Agentflow implements INode {
                     privosEndpointUrl: privosEndpointUrlParam,
                     taskName: taskNameParam,
                     taskId,
+                    enabledSkills: enabledSkills || [],
                     prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
                     displayPrompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
                     force_create: attemptPayload.force_create,
@@ -499,6 +757,7 @@ class ClaudeWS_Agentflow implements INode {
                     taskTitle: attemptPayload.taskTitle,
                     payloadRoomSessionKey: attemptPayload.roomSessionKey,
                     payloadPrivosEndpointUrl: attemptPayload.privosEndpointUrl,
+                    payloadEnabledSkills: attemptPayload.enabledSkills,
                     fileIds: attemptPayload.fileIds
                 })
                 console.log('[ClaudeWS Agentflow] Exact payload being sent:', JSON.stringify(attemptPayload, null, 2))
@@ -593,7 +852,7 @@ class ClaudeWS_Agentflow implements INode {
                                 for (const block of content) {
                                     if (block.type === 'tool_result') {
                                         // Find the corresponding tool and update its output
-                                        const tool = usedTools.find(t => t.toolInput?.toolUseId === block.tool_use_id)
+                                        const tool = usedTools.find((t) => t.toolInput?.toolUseId === block.tool_use_id)
                                         if (tool) {
                                             tool.toolOutput = block.content || 'Tool executed successfully'
                                         }
