@@ -1,11 +1,10 @@
 import { StatusCodes } from 'http-status-codes'
-import { IsNull } from 'typeorm'
 import axios, { AxiosInstance } from 'axios'
 import { ClaudeWSServer } from '../../database/entities/ClaudeWSServer'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
-import { encryptCredentialData, decryptCredentialData } from '../../utils'
+import { encryptCredentialData, decryptCredentialData, getEncryptionKey } from '../../utils'
 
 /**
  * Create a new ClaudeWS server
@@ -20,8 +19,18 @@ const createServer = async (
     try {
         const appServer = getRunningExpressApp()
 
-        // Encrypt API key before storing
-        const encryptedApiKey = await encryptCredentialData({ apiKey: data.apiKey })
+        // Check if API key is already encrypted (starts with U2FsdGVkX1 which is "Salted__" in base64)
+        // CryptoJS AES encrypted strings start with this prefix
+        const isAlreadyEncrypted = data.apiKey && typeof data.apiKey === 'string' && data.apiKey.startsWith('U2FsdGVkX1')
+
+        let encryptedApiKey
+        if (isAlreadyEncrypted) {
+            console.log('[ClaudeWS Server] API key appears already encrypted, skipping encryption')
+            encryptedApiKey = data.apiKey
+        } else {
+            console.log('[ClaudeWS Server] Encrypting API key before storage')
+            encryptedApiKey = await encryptCredentialData({ apiKey: data.apiKey })
+        }
 
         const newServer = new ClaudeWSServer()
         Object.assign(newServer, {
@@ -46,13 +55,7 @@ const createServer = async (
 /**
  * Get all ClaudeWS servers with room isolation
  */
-const getAllServers = async (
-    workspaceId?: string,
-    roomId?: string,
-    isRootAdmin?: boolean,
-    page: number = -1,
-    limit: number = -1
-) => {
+const getAllServers = async (workspaceId?: string, roomId?: string, isRootAdmin?: boolean, page: number = -1, limit: number = -1) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(ClaudeWSServer)
@@ -114,13 +117,7 @@ const getServerById = async (id: string): Promise<ClaudeWSServer> => {
 /**
  * Update ClaudeWS server with room isolation check
  */
-const updateServer = async (
-    id: string,
-    data: any,
-    userId: string,
-    isRootAdmin?: boolean,
-    roomId?: string
-): Promise<ClaudeWSServer> => {
+const updateServer = async (id: string, data: any, userId: string, isRootAdmin?: boolean, roomId?: string): Promise<ClaudeWSServer> => {
     try {
         const appServer = getRunningExpressApp()
         const server = await appServer.AppDataSource.getRepository(ClaudeWSServer).findOneBy({ id })
@@ -138,16 +135,20 @@ const updateServer = async (
                 )
             }
             if (server.roomId !== roomId) {
-                throw new InternalFlowiseError(
-                    StatusCodes.FORBIDDEN,
-                    'Cannot modify ClaudeWS server from another room'
-                )
+                throw new InternalFlowiseError(StatusCodes.FORBIDDEN, 'Cannot modify ClaudeWS server from another room')
             }
         }
 
         // Encrypt API key if provided
         if (data.apiKey) {
-            data.apiKey = await encryptCredentialData({ apiKey: data.apiKey })
+            // Check if API key is already encrypted
+            const isAlreadyEncrypted = typeof data.apiKey === 'string' && data.apiKey.startsWith('U2FsdGVkX1')
+            if (isAlreadyEncrypted) {
+                console.log('[ClaudeWS Server] Update: API key appears already encrypted, skipping encryption')
+            } else {
+                console.log('[ClaudeWS Server] Update: Encrypting new API key')
+                data.apiKey = await encryptCredentialData({ apiKey: data.apiKey })
+            }
         }
 
         const updateData = new ClaudeWSServer()
@@ -186,10 +187,7 @@ const deleteServer = async (id: string, userId: string, isRootAdmin?: boolean, r
                 )
             }
             if (server.roomId !== roomId) {
-                throw new InternalFlowiseError(
-                    StatusCodes.FORBIDDEN,
-                    'Cannot delete ClaudeWS server from another room'
-                )
+                throw new InternalFlowiseError(StatusCodes.FORBIDDEN, 'Cannot delete ClaudeWS server from another room')
             }
         }
 
@@ -291,9 +289,37 @@ const testConnectionWithCredentials = async (credentials: {
  */
 const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
     try {
+        // Debug: log raw encrypted data (first 50 chars)
+        console.log('[ClaudeWS Client] Raw encrypted data:', server.apiKey.substring(0, 50) + '...')
+
         // Decrypt API key
-        const decryptedData = await decryptCredentialData(server.apiKey)
-        const apiKey = decryptedData.apiKey
+        let decryptedData = await decryptCredentialData(server.apiKey)
+        console.log('[ClaudeWS Client] First decryption - keys:', Object.keys(decryptedData))
+
+        let apiKey = decryptedData.apiKey
+        console.log('[ClaudeWS Client] Extracted API key after first decrypt:', apiKey ? apiKey.substring(0, 10) + '...' : 'UNDEFINED')
+
+        // Handle double-encryption case: if API key still looks encrypted, decrypt again
+        if (apiKey && typeof apiKey === 'string' && apiKey.startsWith('U2FsdGVkX1')) {
+            console.log('[ClaudeWS Client] API key still appears encrypted, attempting second decryption...')
+            try {
+                // Treat the string as directly encrypted (not wrapped in an object)
+                const encryptKey = await getEncryptionKey()
+                const AES = require('crypto-js/aes')
+                const encUtf8 = require('crypto-js/enc-utf8')
+                const decrypted = AES.decrypt(apiKey, encryptKey)
+                const decryptedStr = decrypted.toString(encUtf8)
+
+                if (decryptedStr && !decryptedStr.startsWith('U2FsdGVkX1')) {
+                    apiKey = decryptedStr
+                    console.log('[ClaudeWS Client] Second decryption successful, API key:', apiKey.substring(0, 10) + '...')
+                } else {
+                    console.log('[ClaudeWS Client] Second decryption did not help, API key may be invalid')
+                }
+            } catch (secondError) {
+                console.error('[ClaudeWS Client] Second decryption failed:', secondError)
+            }
+        }
 
         // Remove trailing slash from endpoint URL to prevent double slashes
         const baseURL = server.endpointUrl.replace(/\/$/, '')
@@ -309,7 +335,7 @@ const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
                 'Content-Type': 'application/json',
                 'x-api-key': apiKey
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 120000 // 120 seconds for upload operations
         })
 
         // Add request interceptor for debugging
@@ -317,10 +343,19 @@ const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
             console.log('[ClaudeWS HTTP Request]')
             console.log('  Method:', config.method?.toUpperCase() || 'GET')
             console.log('  URL:', (config.baseURL || '') + (config.url || ''))
-            console.log('  Headers:', JSON.stringify({
-                'content-type': config.headers['Content-Type'],
-                'x-api-key': config.headers['x-api-key'] ? String(config.headers['x-api-key']).substring(0, 10) + '...' : 'undefined'
-            }, null, 2))
+            console.log(
+                '  Headers:',
+                JSON.stringify(
+                    {
+                        'content-type': config.headers['Content-Type'],
+                        'x-api-key': config.headers['x-api-key']
+                            ? String(config.headers['x-api-key']).substring(0, 10) + '...'
+                            : 'undefined'
+                    },
+                    null,
+                    2
+                )
+            )
             if (config.data) {
                 if (config.data instanceof FormData) {
                     console.log('  Body: <FormData with boundaries>')
