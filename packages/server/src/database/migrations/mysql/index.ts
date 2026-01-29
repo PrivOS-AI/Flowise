@@ -47,6 +47,7 @@ import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSu
 import { AddAgentflowFolder1770300000000 } from './1770300000000-AddAgentflowFolder'
 import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToFolder'
 import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
+import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/mysql/1720230151482-AddAuthTables'
@@ -122,5 +123,6 @@ export const mysqlMigrations = [
     AddSubAgentEnabledToChatFlow1760200000000,
     AddAgentflowFolder1770300000000,
     AddParentIdToFolder1770400000000,
-    AddTriggerEntityAndSlug1737625150000
+    AddTriggerEntityAndSlug1737625150000,
+    AddClaudeWSEntities1770500000000
 ]
