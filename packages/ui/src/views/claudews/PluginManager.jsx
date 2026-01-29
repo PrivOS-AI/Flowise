@@ -31,7 +31,8 @@ import {
     IconTerminal,
     IconUsers,
     IconEye,
-    IconTrash
+    IconTrash,
+    IconAlertCircle
 } from '@tabler/icons-react'
 
 // API
@@ -60,14 +61,18 @@ const PluginManager = ({ server, setError }) => {
     const [showDiscoveryDialog, setShowDiscoveryDialog] = useState(false)
     const [showDetailsDialog, setShowDetailsDialog] = useState(false)
     const [selectedPlugin, setSelectedPlugin] = useState(null)
+    const [pluginError, setPluginError] = useState(null)
 
     const loadPlugins = async () => {
         if (!server) return
+        setPluginError(null)
         try {
             const response = await listPluginsApi.request(server.id, currentTab === 'all' ? null : currentTab)
             setPlugins(response.data || [])
         } catch (error) {
-            setError(error)
+            // Store error locally instead of global to avoid blocking UI
+            setPluginError(error)
+            setPlugins([])
         }
     }
 
@@ -124,7 +129,7 @@ const PluginManager = ({ server, setError }) => {
             }
         } catch (error) {
             console.error('[PluginManager] Delete error:', error)
-            setError(error)
+            setPluginError(error)
         }
     }
 
@@ -230,6 +235,21 @@ const PluginManager = ({ server, setError }) => {
 
             {listPluginsApi.loading ? (
                 <Typography>Loading plugins...</Typography>
+            ) : pluginError ? (
+                <Card sx={{ borderRadius: 2, textAlign: 'center', py: 4 }}>
+                    <CardContent>
+                        <IconAlertCircle size={48} style={{ color: theme.palette.error.main, marginBottom: 16 }} />
+                        <Typography variant='h6' gutterBottom color='error'>
+                            Connection Error
+                        </Typography>
+                        <Typography variant='body2' color='textSecondary' sx={{ mb: 2 }}>
+                            Failed to load plugins from server. Check your API key and endpoint URL.
+                        </Typography>
+                        <Button variant='outlined' startIcon={<IconRefresh size={16} />} onClick={loadPlugins}>
+                            Retry
+                        </Button>
+                    </CardContent>
+                </Card>
             ) : filteredPlugins.length === 0 ? (
                 <Card sx={{ borderRadius: 2, textAlign: 'center', py: 4 }}>
                     <CardContent>
