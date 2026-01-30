@@ -39,7 +39,8 @@ export default defineConfig(async ({ mode }) => {
                 '@uiw/codemirror-theme-vscode': resolve(__dirname, '../../node_modules/@uiw/codemirror-theme-vscode'),
                 '@uiw/codemirror-theme-sublime': resolve(__dirname, '../../node_modules/@uiw/codemirror-theme-sublime'),
                 '@lezer/common': resolve(__dirname, '../../node_modules/@lezer/common'),
-                '@lezer/highlight': resolve(__dirname, '../../node_modules/@lezer/highlight')
+                '@lezer/highlight': resolve(__dirname, '../../node_modules/@lezer/highlight'),
+                'socket.io-client': resolve(__dirname, '../../node_modules/.pnpm/socket.io-client@4.8.3_bufferutil@4.0.8_utf-8-validate@6.0.4/node_modules/socket.io-client/build/esm/index.js')
             }
         },
         root: resolve(__dirname),
@@ -68,7 +69,7 @@ export default defineConfig(async ({ mode }) => {
             }
         },
         optimizeDeps: {
-            include: ['react', 'react-dom', 'react-redux'],
+            include: ['react', 'react-dom', 'react-redux', 'socket.io-client'],
             exclude: ['flowise-components']
         }
     }

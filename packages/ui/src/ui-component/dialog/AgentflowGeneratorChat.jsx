@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types'
 import { useState, useEffect, useRef, useContext } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { Box, Button, TextField, Paper, Typography, IconButton, Fab, useTheme, Card, Avatar, Tooltip, CircularProgress, alpha } from '@mui/material'
+import { useDispatch } from 'react-redux'
+import { Box, TextField, Paper, Typography, IconButton, Fab, useTheme, Tooltip, CircularProgress, alpha } from '@mui/material'
 
 import { io } from 'socket.io-client'
 import ReactMarkdown from 'react-markdown'
@@ -9,13 +9,17 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { flowContext } from '@/store/context/ReactFlowContext'
-import { enqueueSnackbar as enqueueSnackbarAction, closeSnackbar as closeSnackbarAction } from '@/store/actions'
+import { enqueueSnackbar as enqueueSnackbarAction } from '@/store/actions'
 import { nanoid } from 'nanoid'
 import claudewsApi from '@/api/claudews'
-import agentflowv3Api from '@/api/agentflowv3'
+
+import nodesApi from '@/api/nodes'
+import { inflateFlow, generateTypeMap } from './AgentflowSimplifier'
+
 import useApi from '@/hooks/useApi'
 import { AnimatePresence, motion } from 'framer-motion'
 import { RunningDots } from './RunningDots'
+import { autoLayout } from './layoutUtils'
 
 // Icons mapping for ToolUseBlock
 import {
@@ -34,28 +38,14 @@ import {
     IconSearch,
     IconCheckbox,
     IconWorld,
-    IconAlertCircle,
     IconBolt,
-    IconCopy,
     IconCheck,
     IconFolder
 } from '@tabler/icons-react'
 
 // ==============================|| SUB-COMPONENTS ||============================== //
 
-const useTypewriter = (text, isStreaming) => {
-    const [display, setDisplay] = useState(text)
 
-    useEffect(() => {
-        if (!isStreaming) {
-            setDisplay(text)
-            return
-        }
-        setDisplay(text)
-    }, [text, isStreaming])
-
-    return display
-}
 
 const MessageBlock = ({ content, isThinking, isStreaming }) => {
     const theme = useTheme()
@@ -79,7 +69,7 @@ const MessageBlock = ({ content, isThinking, isStreaming }) => {
                 {children}
             </Box>
         ),
-        code({ node, inline, className, children, ...props }) {
+        code({ inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             return !inline && match ? (
                 <Box sx={{ my: 1.5, borderRadius: 1, overflow: 'hidden' }}>
@@ -113,7 +103,7 @@ const MessageBlock = ({ content, isThinking, isStreaming }) => {
     return (
         <Box sx={{ typography: 'body2' }}>
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                {content}
+                {typeof content === 'string' ? content : (content ? JSON.stringify(content) : '')}
             </ReactMarkdown>
         </Box>
     )
@@ -163,7 +153,9 @@ const ThinkingBlock = ({ content }) => {
                             typography: 'body2',
                             fontSize: '0.875rem'
                         }}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {typeof content === 'string' ? content : (content ? JSON.stringify(content) : '')}
+                            </ReactMarkdown>
                         </Box>
                     </motion.div>
                 )}
@@ -300,10 +292,30 @@ ToolUseBlock.propTypes = {
 }
 // ==============================|| AGENTFLOW GENERATOR CHAT ||============================== //
 
-const AgentflowGeneratorChat = () => {
+const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     const theme = useTheme()
     const dispatch = useDispatch()
     const [open, setOpen] = useState(false)
+    const [componentNodes, setComponentNodes] = useState({})
+    const [simplifierTypeMap, setSimplifierTypeMap] = useState(null)
+
+    // Fetch component nodes on mount for hydration
+    useEffect(() => {
+        nodesApi.getAllNodes().then((response) => {
+            const nodeMap = {}
+            if (response.data && Array.isArray(response.data)) {
+                response.data.forEach(node => {
+                    nodeMap[node.name] = node
+                })
+                setComponentNodes(nodeMap)
+                // Generate Type Map for Simplifier
+                const { typeMap, menuString } = generateTypeMap(nodeMap)
+                console.log('[AgentflowGenerator] Generated Menu:', menuString)
+                setSimplifierTypeMap(typeMap)
+            }
+        }).catch(err => console.error('Failed to fetch nodes:', err))
+    }, [])
+
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [isStreaming, setIsStreaming] = useState(false)
@@ -313,12 +325,63 @@ const AgentflowGeneratorChat = () => {
     const scrollContainerRef = useRef(null)
 
     const [activeServer, setActiveServer] = useState(null)
+    const [currentTaskId, setCurrentTaskId] = useState(null)
     const [isLoadingServer, setIsLoadingServer] = useState(false)
     const userScrollingRef = useRef(false)
     const userScrollTimeoutRef = useRef(null)
 
+    // DEBUG STATE
+    const [showDebug, setShowDebug] = useState(false)
+    const [debugJson, setDebugJson] = useState('')
+
+    const handleManualRender = () => {
+        try {
+            console.log('[Debug] Manual Render Triggered')
+            let flowData = JSON.parse(debugJson)
+
+            // INFLATION CHECK
+            // Check if it's a minified flow (has typeId OR name, but not a full flow with data property details usually)
+            // A full flow node usually has 'data' and 'position'. A minified node usually has 'typeId' or just 'name' and 'inputs'.
+            const isMinified = flowData.nodes[0].typeId || (flowData.nodes[0].name && !flowData.nodes[0].data)
+
+            if (flowData && flowData.nodes && flowData.nodes.length > 0 && isMinified) {
+                console.log('[Debug] Inflating Minified Flow...')
+                const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
+                console.log('[Debug] Inflated Result:', inflated)
+                flowData = inflated
+            }
+
+            if (flowData && flowData.nodes && Array.isArray(flowData.nodes) && flowData.nodes.length > 0) {
+                if (reactFlowInstance) {
+                    const safeNodes = flowData.nodes
+                    const processedEdges = (flowData.edges || []).map(edge => ({
+                        ...edge,
+                        type: 'agentFlow',
+                        id: edge.id || `e_${nanoid()}`,
+                        data: { ...edge.data, label: edge.data?.label || '' }
+                    }))
+
+                    const { nodes: alignedNodes, edges: alignedEdges } = autoLayout(safeNodes, processedEdges, { direction: 'LR' })
+
+                    reactFlowInstance.setNodes(alignedNodes)
+                    reactFlowInstance.setEdges(alignedEdges)
+                    setTimeout(() => reactFlowInstance.fitView(), 100)
+                    enqueueSnackbar({ message: 'Flow Rendered Successfully', options: { variant: 'success' } })
+                }
+            } else {
+                enqueueSnackbar({ message: 'Invalid Flow Data: No nodes found', options: { variant: 'warning' } })
+            }
+        } catch (e) {
+            console.error('[Debug] Render Error:', e)
+            enqueueSnackbar({ message: `Render Error: ${e.message}`, options: { variant: 'error' } })
+        }
+    }
+
+
     const getAllServersApi = useApi(claudewsApi.getAllServers)
-    const getV3PromptApi = useApi(agentflowv3Api.getV3Prompt)
+
+
+
     const { reactFlowInstance } = useContext(flowContext)
 
     const enqueueSnackbar = (...args) => dispatch(enqueueSnackbarAction(...args))
@@ -415,7 +478,7 @@ const AgentflowGeneratorChat = () => {
         if (open) {
             setIsLoadingServer(true)
             getAllServersApi.request()
-            getV3PromptApi.request()
+
         }
     }, [open])
 
@@ -437,6 +500,154 @@ const AgentflowGeneratorChat = () => {
             setIsLoadingServer(false)
         }
     }, [getAllServersApi.data, getAllServersApi.error])
+
+
+    // Refactored handleOutputJson (moved out of useEffect for access)
+    const handleOutputJson = (payload) => {
+        console.log('[DEBUG] handleOutputJson payload:', payload)
+        try {
+            const { data } = payload
+            setMessages((prev) => {
+                const newMessages = [...prev]
+                const lastMsgIndex = newMessages.length - 1
+                const lastMsg = newMessages[lastMsgIndex]
+
+                if (data.type === 'assistant') {
+                    if (lastMsg && lastMsg.isStreaming && lastMsg.role === data.message.role) {
+                        const prevContent = Array.isArray(lastMsg.content) ? lastMsg.content : (lastMsg.content ? [{ type: 'text', text: lastMsg.content }] : [])
+                        const newContent = Array.isArray(data.message.content) ? data.message.content : (data.message.content ? [{ type: 'text', text: data.message.content }] : [])
+
+                        // Check for duplicates based on ID or content to avoid double-adding if backend sends cumulative updates (though debug logs suggest distinct)
+                        // For now, simple append seems correct based on logs
+                        newMessages[lastMsgIndex] = { ...lastMsg, content: [...prevContent, ...newContent] }
+                        return newMessages
+                    } else {
+                        return [...newMessages, { role: data.message.role, content: data.message.content, id: nanoid(), isStreaming: true }]
+                    }
+                }
+
+                // Handle 'result'
+                if (data.type === 'result') {
+                    console.log('[DEBUG] Output Result Received:', data)
+                    setIsStreaming(false)
+                    let flowData = null
+
+
+                    if (data.content && typeof data.content === 'object') {
+                        // Support both direct flow object or nested in content
+                        flowData = data.content.flow || data.content
+
+                        // INFLATION CHECK:
+                        // If the flow data has 'typeId' in nodes, it is a simplified flow.
+                        // We inflate it before proceeding.
+                        if (flowData && flowData.nodes && flowData.nodes.length > 0 && flowData.nodes[0].typeId) {
+                            console.log('[AgentflowGenerator] Detected Simplified Flow. Inflating...', flowData)
+                            const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
+                            console.log('[AgentflowGenerator] Inflated Result:', inflated)
+                            flowData = inflated
+                        }
+
+                        const rawMsg = data.content.message
+
+                        if (rawMsg) {
+                            const newText = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg)
+                            // Append as new block
+                            if (lastMsg && lastMsg.role === 'assistant') {
+                                const prevContent = Array.isArray(lastMsg.content) ? lastMsg.content : (lastMsg.content ? [{ type: 'text', text: lastMsg.content }] : [])
+                                // Add a newline prefix if user wants separation, though distinct blocks usually suffice. 
+                                // User asked for newline explicitly, but separate blocks are better.
+                                // Let's ensure it is a separate block.
+                                const newBlock = { type: 'text', text: newText }
+                                newMessages[lastMsgIndex] = { ...lastMsg, content: [...prevContent, newBlock], isStreaming: false }
+                            } else {
+                                newMessages.push({ role: 'assistant', content: [{ type: 'text', text: newText }], isStreaming: false, id: nanoid(), timestamp: new Date() })
+                            }
+                        } else {
+                            // Just ensure streaming is off
+                            if (lastMsg && lastMsg.role === 'assistant') {
+                                newMessages[lastMsgIndex] = { ...lastMsg, isStreaming: false }
+                            }
+                        }
+                    }
+
+                    if (flowData && flowData.nodes && Array.isArray(flowData.nodes) && flowData.nodes.length > 0) {
+                        console.log('[DEBUG] Flow Received from Client:', JSON.stringify(flowData, null, 2))
+
+                        if (reactFlowInstance) {
+                            const safeNodes = flowData.nodes
+
+                            // 1. Enforce agentFlow type and inject colors if missing
+                            const processedEdges = (flowData.edges || []).map(edge => {
+                                const sourceNode = safeNodes.find(n => n.id === edge.source)
+                                const targetNode = safeNodes.find(n => n.id === edge.target)
+                                return {
+                                    ...edge,
+                                    type: 'agentFlow',
+                                    id: edge.id || `e_${nanoid()}`,
+                                    data: {
+                                        ...edge.data,
+                                        label: edge.data?.label || '',
+                                        sourceColor: sourceNode?.data?.color || '#333',
+                                        targetColor: targetNode?.data?.color || '#333'
+                                    }
+                                }
+                            })
+
+                            const { nodes: alignedNodes, edges: alignedEdges } = autoLayout(safeNodes, processedEdges, { direction: 'LR' })
+
+                            console.log('[DEBUG] Final ReactFlow Data:', { nodes: alignedNodes, edges: alignedEdges })
+
+                            reactFlowInstance.setNodes(alignedNodes)
+                            reactFlowInstance.setEdges(alignedEdges)
+                            setTimeout(() => reactFlowInstance.fitView(), 100)
+                            if (onFlowGenerated) onFlowGenerated()
+                        }
+                    }
+                    return newMessages
+                }
+
+                // Handle Content Block Delta (Streaming)
+                if (data.type === 'content_block_delta') {
+                    if (!lastMsg || lastMsg.role !== 'assistant') {
+                        return [...newMessages, {
+                            role: 'assistant',
+                            content: [],
+                            isStreaming: true,
+                            id: nanoid(),
+                            timestamp: new Date()
+                        }]
+                    }
+
+                    let targetMsg = lastMsg
+
+                    if (Array.isArray(targetMsg.content)) {
+                        const newContent = [...targetMsg.content]
+                        const blockIndex = data.index
+
+                        if (!newContent[blockIndex]) {
+                            if (data.delta.type === 'text_delta') newContent[blockIndex] = { type: 'text', text: '' }
+                            else if (data.delta.type === 'thinking_delta') newContent[blockIndex] = { type: 'thinking', thinking: '' }
+                        }
+
+                        const block = newContent[blockIndex]
+                        if (block) {
+                            if (data.delta.type === 'text_delta') {
+                                block.text = (block.text || '') + data.delta.text
+                            } else if (data.delta.type === 'thinking_delta') {
+                                block.thinking = (block.thinking || '') + data.delta.thinking
+                            }
+                        }
+                        newMessages[lastMsgIndex] = { ...targetMsg, content: newContent }
+                        return newMessages
+                    }
+                }
+
+                return newMessages
+            })
+        } catch (error) {
+            console.error('Error handling output json:', error)
+        }
+    }
 
     // Initialize Socket
     useEffect(() => {
@@ -489,127 +700,6 @@ const AgentflowGeneratorChat = () => {
                 })
             })
 
-            const handleOutputJson = (payload) => {
-                const { data } = payload
-
-                setMessages((prev) => {
-                    const newMessages = [...prev]
-                    const lastMsgIndex = newMessages.length - 1
-                    const lastMsg = newMessages[lastMsgIndex]
-
-                    // Handle Complete/Snapshot Messages (Assistant Only - Ignore User to avoid duplication)
-                    if (data.type === 'assistant') {
-                        const { message } = data
-                        // Check if we should update the last message or append a new one
-                        // If last message is streaming and role matches, likely an update/snapshot
-                        if (lastMsg && lastMsg.isStreaming && lastMsg.role === message.role) {
-                            newMessages[lastMsgIndex] = {
-                                ...lastMsg,
-                                content: message.content, // Replace content with latest snapshot
-                                id: message.id || lastMsg.id, // Update ID if provided
-                            }
-                            return newMessages
-                        } else {
-                            // Append new message
-                            return [...newMessages, {
-                                role: message.role,
-                                content: message.content,
-                                id: message.id || nanoid(),
-                                isStreaming: true // Assume streaming until result/stop
-                            }]
-                        }
-                    }
-
-                    // Handle 'result' -> Stop streaming
-                    if (data.type === 'result') {
-                        if (lastMsg) {
-                            newMessages[lastMsgIndex] = { ...lastMsg, isStreaming: false }
-                        }
-                        setIsStreaming(false)
-
-                        // Check for Generated Flow in Result (JSON)
-                        try {
-                            const possibleJson = data.content || (lastMsg?.content && typeof lastMsg.content === 'string' ? lastMsg.content : '')
-                            // If content is string, try to parse it. If it's already object/array, use it.
-                            // But usually result content is just the final text. 
-                            // However, we asked for JSON output.
-
-                            // Actually, in the V3 logic, the model returns JSON as text.
-                            // We need to find the JSON block.
-                            const jsonMatch = possibleJson.match(/\{[\s\S]*\}/)
-                            if (jsonMatch) {
-                                const flowData = JSON.parse(jsonMatch[0])
-                                if (flowData.nodes && flowData.edges) {
-                                    console.log('Flow Generated:', flowData)
-                                    if (reactFlowInstance) {
-                                        reactFlowInstance.setNodes(flowData.nodes)
-                                        reactFlowInstance.setEdges(flowData.edges)
-                                        enqueueSnackbar({
-                                            message: 'Agent Flow Generated Successfully!',
-                                            options: {
-                                                variant: 'success'
-                                            }
-                                        })
-                                    }
-                                }
-                            }
-                        } catch (e) {
-                            console.warn('Could not parse generated flow:', e)
-                        }
-
-                        return newMessages
-                    }
-
-                    // Handle Content Block Delta (Streaming)
-                    if (data.type === 'content_block_delta') {
-                        // Ensure we have a message to append to
-                        if (!lastMsg || lastMsg.role !== 'assistant') {
-                            // Force create a streaming assistant message if missing
-                            return [...newMessages, {
-                                role: 'assistant',
-                                content: [], // Initialize empty block array
-                                id: nanoid(),
-                                isStreaming: true
-                            }]
-                        }
-
-                        let targetMsgIndex = lastMsgIndex
-                        let targetMsg = lastMsg
-
-                        if (!targetMsg || targetMsg.role !== 'assistant') {
-                            targetMsg = { role: 'assistant', content: [], id: nanoid(), isStreaming: true }
-                            newMessages.push(targetMsg)
-                            targetMsgIndex = newMessages.length - 1
-                        }
-
-                        // Now apply delta to targetMsg
-                        if (Array.isArray(targetMsg.content)) {
-                            const newContent = [...targetMsg.content]
-                            const blockIndex = data.index
-
-                            // Ensure block exists
-                            if (!newContent[blockIndex]) {
-                                // Initialize block based on delta type
-                                if (data.delta.type === 'text_delta') newContent[blockIndex] = { type: 'text', text: '' }
-                                else if (data.delta.type === 'thinking_delta') newContent[blockIndex] = { type: 'thinking', thinking: '' }
-                            }
-
-                            const block = newContent[blockIndex]
-                            if (block) {
-                                if (data.delta.type === 'text_delta') {
-                                    block.text = (block.text || '') + data.delta.text
-                                } else if (data.delta.type === 'thinking_delta') {
-                                    block.thinking = (block.thinking || '') + data.delta.thinking
-                                }
-                                newMessages[targetMsgIndex] = { ...targetMsg, content: newContent }
-                                return newMessages
-                            }
-                        }
-                    }
-
-                    return prev
-                })
-            }
 
             socket.on('output:json', handleOutputJson)
 
@@ -619,67 +709,113 @@ const AgentflowGeneratorChat = () => {
                 setIsStreaming(true)
             })
 
+            // Listen for attempt finished (Safety net to ensure loading stops)
+            socket.on('attempt:finished', (data) => {
+                console.log('Attempt finished:', data)
+                setIsStreaming(false)
+            })
+
             // Listen for any output/response
             socket.on('output:stderr', (data) => {
                 console.log('Stderr:', data)
+                // Also stop streaming on error
+                setIsStreaming(false) // Safety unlock on error
             })
 
+
         }
+
 
         return () => {
         }
-    }, [open, activeServer])
+    }, [open, activeServer, simplifierTypeMap])
 
     const addMessage = (role, content) => {
         setMessages((prev) => [...prev, { role, content, id: nanoid(), timestamp: new Date() }])
     }
 
     const handleSendMessage = () => {
-        if (!input.trim() || !socketRef.current) return
+        if (!input.trim()) return
 
         const userMessage = input.trim()
         addMessage('user', userMessage)
         setInput('')
         setIsStreaming(true)
 
-        // Prepare V3 Prompt from API
-        let systemPrompt = ''
-        if (getV3PromptApi.data?.prompt) {
-            systemPrompt = getV3PromptApi.data.prompt
-        }
+
 
         // Emit attempt:start to trigger the agent
-        const taskId = nanoid()
+        let taskId = currentTaskId
+        let forceCreate = !currentTaskId
+
+        if (!taskId) {
+            taskId = nanoid()
+            setCurrentTaskId(taskId)
+            forceCreate = true
+        }
+
+        // Define the required output structure
+        const jsonStructure = {
+            flow: "Object. The agent flow JSON with 'nodes' and 'edges' arrays. Null if no flow generated."
+        }
+
+        // Format instructions (System Prompt is handled by Skill)
+        const combinedSchema = `${JSON.stringify(jsonStructure, null, 2)}`
+
+
+
+        // Create explicit instructions for the simplified schema
         const payload = {
             taskId: taskId,
-            prompt: userMessage,
-            system: systemPrompt, // Send the V3 System Prompt
-            force_create: true,
-            projectId: 'flowise-generator-project', // Fixed project for generation tasks
+            prompt: `/flow ${userMessage}`,
+            // We still use 'custom' but we rely on the prompt to enforce the schema for now
+            outputFormat: 'custom',
+            outputSchema: combinedSchema,
+            force_create: forceCreate,
+            projectId: 'flowise-generator-project',
             projectName: 'Flowise Generator',
-            taskTitle: `Generate Flow: ${userMessage.substring(0, 20)}...`,
-            outputFormat: 'json', // Request JSON output for the flow
+            taskTitle: `Generate Flow: ${String(userMessage).substring(0, 20)}...`,
             context: {
                 isAgentFlowGenerator: true
             }
         }
 
-        console.log('Sending prompt:', payload)
-        socketRef.current.emit('attempt:start', payload)
+        console.log('[AgentflowGeneratorChat] Sending Payload:', payload)
+
+        if (socketRef.current) {
+            socketRef.current.emit('attempt:start', payload)
+        } else {
+            console.error('[AgentflowGeneratorChat] Socket not connected!')
+            setIsStreaming(false)
+        }
+
+
+
     }
 
-    // Check if messages have visible content (text, thinking, or tool_use)
+
+
+
+
+
+    // Check if the LATEST message has visible content
     const hasVisibleContent = (msgs) => {
-        return msgs.some(msg => {
-            if (msg.role === 'assistant' && Array.isArray(msg.content) && msg.content.length > 0) {
-                return msg.content.some(block =>
+        if (!msgs || msgs.length === 0) return false
+        const lastMsg = msgs[msgs.length - 1]
+
+        if (lastMsg.role === 'assistant') {
+            if (Array.isArray(lastMsg.content) && lastMsg.content.length > 0) {
+                return lastMsg.content.some(block =>
                     (block.type === 'text' && block.text) ||
                     (block.type === 'thinking' && block.thinking) ||
                     block.type === 'tool_use'
                 )
             }
-            return false
-        })
+            if (typeof lastMsg.content === 'string' && lastMsg.content.trim()) {
+                return true
+            }
+        }
+        return false
     }
 
     // Prepare maps for rendering
@@ -727,6 +863,7 @@ const AgentflowGeneratorChat = () => {
             const rawText = Array.isArray(msg.content)
                 ? msg.content.map(b => b.text).join('')
                 : (typeof msg.content === 'string' ? msg.content : '')
+            // Clean up display text related to schema instructions if present
             const displayText = rawText.split('=== REQUIRED OUTPUT ===')[0].trim()
 
             if (!displayText) return null
@@ -799,214 +936,290 @@ const AgentflowGeneratorChat = () => {
                 </motion.div>
             )
         }
-
         return null
     }
 
     return (
-        <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: theme.zIndex.appBar + 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <AnimatePresence>
-                {open && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        style={{ transformOrigin: 'bottom right' }}
-                    >
-                        <Paper
-                            elevation={12}
-                            sx={{
-                                width: 400,
-                                height: 600,
-                                mb: 2,
-                                borderRadius: 3,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                overflow: 'hidden',
-                                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                                backdropFilter: 'blur(12px)',
-                                bgcolor: alpha(theme.palette.background.paper, 0.85),
-                                boxShadow: theme.customShadows?.primary || '0 12px 24px -4px rgba(0, 0, 0, 0.2)'
-                            }}
-                        >
-                            {/* Header */}
-                            <Box
-                                sx={{
-                                    p: 2,
-                                    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                                    color: 'white',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <IconSparkles size={20} />
-                                    <Typography variant="h4" color="inherit" sx={{ fontWeight: 600 }}>
-                                        Agent Generator
-                                    </Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                    {activeServer && (
-                                        <Tooltip title={isConnected ? `Connected to ${activeServer.name}` : `Connecting to ${activeServer.name}...`}>
-                                            <IconPlugConnected size={18} color={isConnected ? '#4caf50' : alpha('#fff', 0.5)} />
-                                        </Tooltip>
-                                    )}
-                                    <IconButton size="small" onClick={() => setOpen(false)} sx={{ color: 'white', '&:hover': { bgcolor: alpha('#fff', 0.1) } }}>
-                                        <IconX size={20} />
-                                    </IconButton>
-                                </Box>
-                            </Box>
-
-                            {/* Messages Area */}
-                            <Box
-                                ref={scrollContainerRef}
-                                sx={{
-                                    flex: 1,
-                                    p: 2,
-                                    overflowY: 'auto',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 2
-                                }}
-                            >
-                                {isLoadingServer && (
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                                        <CircularProgress size={24} />
-                                    </Box>
-                                )}
-
-                                {!isLoadingServer && !activeServer && (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.7, px: 3, textAlign: 'center' }}>
-                                        <IconAlertTriangle size={48} stroke={1} color={theme.palette.warning.main} />
-                                        <Typography variant="body1" sx={{ mt: 2, fontWeight: 600 }}>
-                                            No Claude WS Server Found
-                                        </Typography>
-                                        <Typography variant="caption" sx={{ mt: 1 }}>
-                                            Please configure a server in Claude WS settings.
-                                        </Typography>
-                                    </Box>
-                                )}
-
-                                {!isLoadingServer && activeServer && messages.length === 0 && !showLoadingDots && (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.7 }}>
-                                        <IconSparkles size={48} stroke={1} />
-                                        <Typography variant="body1" sx={{ mt: 2 }}>
-                                            Describe the agent flow you want to build.
-                                        </Typography>
-                                    </Box>
-                                )}
-
-                                {messages.map((msg, index) => renderMessage(msg, index))}
-
-                                {showLoadingDots && (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary, pl: 2, py: 1 }}>
-                                        <RunningDots />
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
-                                            Thinking...
-                                        </Typography>
-                                    </Box>
-                                )}
-
-                                <div ref={messagesEndRef} />
-                            </Box>
-
-                            {/* Input Area */}
-                            <Box sx={{ p: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        placeholder={isConnected ? "Describe your agent..." : (activeServer ? "Connecting..." : "No server configured")}
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault()
-                                                handleSendMessage()
-                                            }
-                                        }}
-                                        disabled={!isConnected || isStreaming || !activeServer}
-                                        multiline
-                                        maxRows={4}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': {
-                                                borderRadius: 3,
-                                                bgcolor: alpha(theme.palette.background.default, 0.7)
-                                            }
-                                        }}
-                                    />
-                                    <IconButton
-                                        color="primary"
-                                        onClick={handleSendMessage}
-                                        disabled={!input.trim() || !isConnected || isStreaming}
-                                        sx={{
-                                            bgcolor: input.trim() ? theme.palette.primary.main : 'transparent',
-                                            color: input.trim() ? '#fff' : 'inherit',
-                                            '&:hover': {
-                                                bgcolor: theme.palette.primary.dark
-                                            }
-                                        }}
-                                    >
-                                        <IconSend size={20} />
-                                    </IconButton>
-                                </Box>
-                            </Box>
-                        </Paper>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <Tooltip title="Generate Agent Flow" placement="left">
-                <motion.div
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                >
+        <>
+            {/* DEBUG FAB - Bottom Left */}
+            <Box sx={{ position: 'fixed', bottom: 30, left: 30, zIndex: theme.zIndex.appBar + 1 }}>
+                <Tooltip title="Debug Flow" placement="right">
                     <Fab
-                        color="primary"
-                        aria-label="generate"
-                        onClick={() => setOpen(!open)}
+                        size="medium"
+                        color="secondary"
+                        aria-label="debug"
+                        onClick={() => {
+                            setOpen(true)
+                            setShowDebug(true)
+                        }}
                         sx={{
-                            background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                            boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)'
+                            background: 'linear-gradient(45deg, #FF6B6B 30%, #FF8E53 90%)',
                         }}
                     >
-                        <Box sx={{ width: 24, height: 24, position: 'relative' }}>
-                            <AnimatePresence mode="wait">
-                                {open ? (
-                                    <motion.div
-                                        key="close"
-                                        initial={{ opacity: 0, rotate: -90 }}
-                                        animate={{ opacity: 1, rotate: 0 }}
-                                        exit={{ opacity: 0, rotate: 90 }}
-                                        transition={{ duration: 0.2 }}
-                                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        <IconX size={24} />
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        key="chat"
-                                        initial={{ opacity: 0, rotate: 90 }}
-                                        animate={{ opacity: 1, rotate: 0 }}
-                                        exit={{ opacity: 0, rotate: -90 }}
-                                        transition={{ duration: 0.2 }}
-                                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        <IconMessageChatbot size={24} />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </Box>
+                        <IconSparkles size={24} />
                     </Fab>
-                </motion.div>
-            </Tooltip>
-        </Box>
+                </Tooltip>
+            </Box>
+
+            {/* MAIN CHAT FAB - Bottom Right (Original Position) */}
+            <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: theme.zIndex.appBar + 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <AnimatePresence>
+                    {open && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            style={{ transformOrigin: 'bottom right' }}
+                        >
+                            <Paper
+                                elevation={12}
+                                sx={{
+                                    width: 400,
+                                    height: 600,
+                                    mb: 2,
+                                    borderRadius: 3,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden',
+                                    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                                    backdropFilter: 'blur(12px)',
+                                    bgcolor: alpha(theme.palette.background.paper, 0.85),
+                                    boxShadow: theme.customShadows?.primary || '0 12px 24px -4px rgba(0, 0, 0, 0.2)'
+                                }}
+                            >
+                                {/* Header */}
+                                <Box
+                                    sx={{
+                                        p: 2,
+                                        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                                        color: 'white',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconSparkles size={20} />
+                                        <Typography variant="h4" color="inherit" sx={{ fontWeight: 600 }}>
+                                            Agent Generator
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        {/* DEBUG BUTTON - HIDDEN IN HEADER (Moved to FAB) */}
+                                        {/* 
+                                        {process.env.NODE_ENV !== 'production' && (
+                                            <Tooltip title="Debug: Manual Render">
+                                                <IconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: 'white', '&:hover': { bgcolor: alpha('#fff', 0.1) } }}>
+                                                    <IconSparkles size={18} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )} 
+                                        */}
+
+                                        {activeServer && (
+                                            <Tooltip title={isConnected ? `Connected to ${activeServer.name}` : `Connecting to ${activeServer.name}...`}>
+                                                <IconPlugConnected size={18} color={isConnected ? '#4caf50' : alpha('#fff', 0.5)} />
+                                            </Tooltip>
+                                        )}
+                                        <IconButton size="small" onClick={() => setOpen(false)} sx={{ color: 'white', '&:hover': { bgcolor: alpha('#fff', 0.1) } }}>
+                                            <IconX size={20} />
+                                        </IconButton>
+                                    </Box>
+                                </Box>
+
+                                {/* Messages Area */}
+                                <Box
+                                    ref={scrollContainerRef}
+                                    sx={{
+                                        flex: 1,
+                                        p: 2,
+                                        overflowY: 'auto',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 2
+                                    }}
+                                >
+                                    {isLoadingServer && (
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                                            <CircularProgress size={24} />
+                                        </Box>
+                                    )}
+
+                                    {!isLoadingServer && !activeServer && (
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.7, px: 3, textAlign: 'center' }}>
+                                            <IconAlertTriangle size={48} stroke={1} color={theme.palette.warning.main} />
+                                            <Typography variant="body1" sx={{ mt: 2, fontWeight: 600 }}>
+                                                No Claude WS Server Found
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ mt: 1 }}>
+                                                Please configure a server in Claude WS settings.
+                                            </Typography>
+                                        </Box>
+                                    )}
+
+                                    {!isLoadingServer && activeServer && messages.length === 0 && !showLoadingDots && (
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.7 }}>
+                                            <IconSparkles size={48} stroke={1} />
+                                            <Typography variant="body1" sx={{ mt: 2 }}>
+                                                Describe the agent flow you want to build.
+                                            </Typography>
+                                        </Box>
+                                    )}
+
+                                    {messages.map((msg, index) => renderMessage(msg, index))}
+
+                                    {showLoadingDots && (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary, pl: 2, py: 1 }}>
+                                            <RunningDots />
+                                            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
+                                                Thinking...
+                                            </Typography>
+                                        </Box>
+                                    )}
+
+                                    <div ref={messagesEndRef} />
+                                </Box>
+
+                                {/* Input Area */}
+                                <Box sx={{ p: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <TextField
+                                            fullWidth
+                                            size="small"
+                                            placeholder={isConnected ? "Describe your agent..." : (activeServer ? "Connecting..." : "No server configured")}
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault()
+                                                    handleSendMessage()
+                                                }
+                                            }}
+                                            disabled={!isConnected || isStreaming || !activeServer}
+                                            multiline
+                                            maxRows={4}
+                                            sx={{
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: 3,
+                                                    bgcolor: alpha(theme.palette.background.default, 0.7)
+                                                }
+                                            }}
+                                        />
+                                        <IconButton
+                                            color="primary"
+                                            onClick={handleSendMessage}
+                                            disabled={!input.trim() || !isConnected || isStreaming}
+                                            sx={{
+                                                bgcolor: input.trim() ? theme.palette.primary.main : 'transparent',
+                                                color: input.trim() ? '#fff' : 'inherit',
+                                                '&:hover': {
+                                                    bgcolor: theme.palette.primary.dark
+                                                }
+                                            }}
+                                        >
+                                            <IconSend size={20} />
+                                        </IconButton>
+                                    </Box>
+                                </Box>
+                                {/* DEBUG OVERLAY */}
+                                {showDebug && (
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 60,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            bgcolor: 'background.paper',
+                                            zIndex: 20,
+                                            p: 2,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 2
+                                        }}
+                                    >
+                                        <Typography variant="h6">Debug Flow Renderer</Typography>
+                                        <TextField
+                                            multiline
+                                            rows={15}
+                                            fullWidth
+                                            placeholder="Paste Miniflow or Full Flow JSON here..."
+                                            value={debugJson}
+                                            onChange={(e) => setDebugJson(e.target.value)}
+                                            sx={{ fontFamily: 'monospace' }}
+                                        />
+                                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                                            <IconButton onClick={() => setShowDebug(false)} color="error">
+                                                <IconX />
+                                            </IconButton>
+                                            <Fab
+                                                variant="extended"
+                                                size="medium"
+                                                color="primary"
+                                                onClick={handleManualRender}
+                                            >
+                                                <IconPlugConnected size={20} style={{ marginRight: 8 }} />
+                                                Render Flow
+                                            </Fab>
+                                        </Box>
+                                    </Box>
+                                )}
+                            </Paper>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <Tooltip title="Generate Agent Flow" placement="left">
+                    <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                    >
+                        <Fab
+                            color="primary"
+                            aria-label="generate"
+                            onClick={() => setOpen(!open)}
+                            sx={{
+                                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                                boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)'
+                            }}
+                        >
+                            <Box sx={{ width: 24, height: 24, position: 'relative' }}>
+                                <AnimatePresence mode="wait">
+                                    {open ? (
+                                        <motion.div
+                                            key="close"
+                                            initial={{ opacity: 0, rotate: -90 }}
+                                            animate={{ opacity: 1, rotate: 0 }}
+                                            exit={{ opacity: 0, rotate: 90 }}
+                                            transition={{ duration: 0.2 }}
+                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            <IconX size={24} />
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div
+                                            key="chat"
+                                            initial={{ opacity: 0, rotate: 90 }}
+                                            animate={{ opacity: 1, rotate: 0 }}
+                                            exit={{ opacity: 0, rotate: -90 }}
+                                            transition={{ duration: 0.2 }}
+                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            <IconMessageChatbot size={24} />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </Box>
+                        </Fab>
+                    </motion.div>
+                </Tooltip>
+
+                {/* DEBUG FAB (Removed from here, moved to separate container) */}
+            </Box>
+        </>
     )
 }
 
-AgentflowGeneratorChat.propTypes = {
-}
-
 export default AgentflowGeneratorChat
+

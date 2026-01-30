@@ -10,6 +10,16 @@ const getV3Prompt = async (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
+const validateFlow = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const validated = agentflowv3Service.validateAgentflowV3(req.body)
+        return res.json(validated)
+    } catch (error) {
+        next(error)
+    }
+}
+
 export default {
-    getV3Prompt
+    getV3Prompt,
+    validateFlow
 }

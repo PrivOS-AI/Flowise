@@ -3,8 +3,7 @@ module.exports = {
         {
             name: 'privos-server',
             cwd: '/home/roxane/Privos/Flowise/packages/server',
-            script: 'node',
-            args: 'bin/start-patched.js',
+            script: 'bin/start-patched.js',
             env: {
                 NODE_ENV: 'production',
                 PORT: 3002

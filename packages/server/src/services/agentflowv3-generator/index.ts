@@ -226,6 +226,31 @@ const generateAgentflowv3 = async (question: string, selectedChatModel: Record<s
     }
 }
 
+const validateAgentflowV3 = (response: any) => {
+    try {
+        if (typeof response === 'string') {
+            const parsedResponse = JSON.parse(response)
+            const validatedResponse = AgentFlowV3Type.parse(parsedResponse)
+            logger.info('[validateAgentflowV3] Successfully validated workflow')
+            return validatedResponse
+        } else if (typeof response === 'object') {
+            // Check for error in response
+            if ('error' in response) {
+                logger.error('[validateAgentflowV3] Error in response:', (response as any).error)
+                throw new Error((response as any).error)
+            }
+            const validatedResponse = AgentFlowV3Type.parse(response)
+            logger.info('[validateAgentflowV3] Successfully validated workflow')
+            return validatedResponse
+        } else {
+            throw new Error(`Unexpected response type: ${typeof response}`)
+        }
+    } catch (parseError) {
+        logger.error('[validateAgentflowV3] Failed to validate response:', parseError)
+        throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Validation Error: ${getErrorMessage(parseError)}`)
+    }
+}
+
 // ============================================================================
 // ENHANCED SYSTEM PROMPT BUILDER
 // ============================================================================
@@ -313,5 +338,6 @@ const buildAgentflowV3Prompt = async () => {
 
 export default {
     generateAgentflowv3,
-    buildAgentflowV3Prompt
+    buildAgentflowV3Prompt,
+    validateAgentflowV3
 }

@@ -814,7 +814,7 @@ const AgentflowCanvas = () => {
                     </div>
                 </Box>
                 <ConfirmDialog />
-                <AgentflowGeneratorChat />
+                <AgentflowGeneratorChat onFlowGenerated={triggerConfetti} />
             </Box>
         </>
     )

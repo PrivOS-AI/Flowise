@@ -6,7 +6,8 @@
 **/node_modules
 **/package-lock.json
 **/yarn.lock
-
+test/
+nodes/
 ## logs
 **/logs
 **/*.log
@@ -52,7 +53,7 @@ docker/.env.production
 
 ## compressed
 **/*.tgz
-
+.claude/
 ## vscode
 .vscode/*
 !.vscode/settings.json

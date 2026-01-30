@@ -3,5 +3,6 @@ import agentflowv3GeneratorController from '../../controllers/agentflowv3-genera
 const router = express.Router()
 
 router.get('/prompt', agentflowv3GeneratorController.getV3Prompt)
+router.post('/validate', agentflowv3GeneratorController.validateFlow)
 
 export default router

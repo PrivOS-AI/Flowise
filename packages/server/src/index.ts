@@ -408,6 +408,14 @@ export class App {
         const uiBuildPath = path.join(packagePath, 'build')
         const uiHtmlPath = path.join(packagePath, 'build', 'index.html')
 
+        // Set correct Content-Type for manifest.json
+        this.app.use((req, res, next) => {
+            if (req.url === '/manifest.json') {
+                res.setHeader('Content-Type', 'application/manifest+json')
+            }
+            next()
+        })
+
         this.app.use('/', express.static(uiBuildPath))
 
         // All other requests not handled will return React app
