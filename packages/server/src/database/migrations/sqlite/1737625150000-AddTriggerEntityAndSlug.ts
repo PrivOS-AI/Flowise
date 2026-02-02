@@ -18,7 +18,8 @@ export class AddTriggerEntityAndSlug1737625150000 implements MigrationInterface 
                 description TEXT,
                 createdDate DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updatedDate DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                workspaceId TEXT
+                workspaceId TEXT,
+                jobKey TEXT,
             )
         `)
 

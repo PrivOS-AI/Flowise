@@ -7,6 +7,7 @@ import {
     INodeData as INodeDataFromComponent,
     INodeExecutionData,
     INodeParams,
+    ITriggerConfig,
     IServerSideEventStreamer
 } from 'flowise-components'
 import { DataSource } from 'typeorm'
@@ -331,6 +332,7 @@ export interface IncomingInput {
     history?: IMessage[]
     action?: IAction
     streaming?: boolean
+    triggerData?: ITriggerData
 }
 
 export interface IncomingAgentflowInput extends Omit<IncomingInput, 'question'> {
@@ -431,6 +433,8 @@ export interface ITriggerData {
     roomId?: string
     messageId?: string
     eventType?: string
+    config?: ITriggerConfig
+    triggerId?: string
 }
 
 export interface IExecuteFlowParams extends IPredictionQueueAppServer {

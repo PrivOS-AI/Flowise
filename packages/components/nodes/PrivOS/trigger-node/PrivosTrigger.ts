@@ -1,14 +1,4 @@
-import {
-    getCredentialData,
-    ICommonObject,
-    INode,
-    INodeData,
-    INodeOptionsValue,
-    INodeOutputsValue,
-    INodeParams,
-    IPrivosCredential,
-    processTemplateVariables,
-} from '../../../src'
+import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeOutputsValue, INodeParams, processTemplateVariables } from '../../../src'
 import { updateFlowState } from '../../agentflow/utils'
 import { PrivosEvent } from '../constants'
 import { PrivosErrorHandler } from '../utils'
@@ -20,7 +10,7 @@ const ALL_EVENTS = [
     { label: 'Room Joined', name: PrivosEvent.ROOM_JOINED, description: 'Triggered when a user joins a room' },
     { label: 'Room Left', name: PrivosEvent.ROOM_LEFT, description: 'Triggered when a user leaves a room' },
     { label: 'User Joined', name: PrivosEvent.USER_JOINED, description: 'Triggered when a user joins the workspace' },
-    { label: 'User Left', name: PrivosEvent.USER_LEFT, description: 'Triggered when a user leaves the workspace' },
+    { label: 'User Left', name: PrivosEvent.USER_LEFT, description: 'Triggered when a user leaves the workspace' }
 ]
 
 class PrivosTrigger implements INode {
@@ -36,10 +26,12 @@ class PrivosTrigger implements INode {
     credential: INodeParams
     inputs: INodeParams[]
     output?: INodeOutputsValue[] | undefined
+    triggerType?: string
 
     constructor() {
         this.label = 'PrivOS Trigger'
         this.name = 'privosTrigger'
+        this.triggerType = 'privos'
         this.version = 1.0
         this.type = 'triggerProcessor'
         this.category = 'Trigger'
@@ -70,10 +62,61 @@ class PrivosTrigger implements INode {
                 options: ALL_EVENTS
             },
             {
+                label: 'Retry on Fail',
+                name: 'retryOnFail',
+                type: 'boolean',
+                default: false,
+                description: 'Enable retry mechanism when trigger execution fails'
+            },
+            {
+                label: 'Max Tries',
+                name: 'attempts',
+                type: 'number',
+                default: 3,
+                description: 'Maximum number of retry attempts',
+                optional: true,
+                show: {
+                    retryOnFail: true
+                }
+            },
+            {
+                label: 'Retry Delay',
+                name: 'type',
+                type: 'options',
+                options: [
+                    {
+                        label: 'Fixed',
+                        name: 'fixed',
+                        description: 'Use a fixed delay between retry attempts'
+                    },
+                    {
+                        label: 'Exponential',
+                        name: 'exponential',
+                        description: 'Delay increases exponentially with each retry (wait * 2^attempt)'
+                    }
+                ],
+                default: 'fixed',
+                optional: true,
+                show: {
+                    retryOnFail: true
+                }
+            },
+            {
+                label: 'Wait Between Tries (ms)',
+                name: 'backoff',
+                type: 'number',
+                default: 3000,
+                description: 'Wait time in milliseconds between retry attempts',
+                optional: true,
+                show: {
+                    retryOnFail: true
+                }
+            },
+            {
                 label: 'Description',
                 name: 'description',
                 type: 'string',
-                rows: 3,
+                rows: 2,
                 description: 'Description of what this trigger does',
                 placeholder: 'Enter trigger description...',
                 optional: true
@@ -112,45 +155,37 @@ class PrivosTrigger implements INode {
             const startAgentflowNode = previousNodes.find((node) => node.name === 'startAgentflow')
             const state = startAgentflowNode?.inputs?.startState as ICommonObject[]
             return state.map((item) => ({ label: item.key, name: item.key }))
-        },
-        listEvents(_: INodeData, options: ICommonObject): INodeOptionsValue[] {
-            return ALL_EVENTS
         }
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
+        // set inputs to same Start node
         const payload = options.triggerData?.form || {}
         const _flowState = Object.keys(payload).map((key) => ({ key, value: payload[key] || '' }))
         const startInputType = payload?.question && typeof payload.question === 'string' ? 'chatInput' : 'formInput'
         const startEphemeralMemory = payload?.startEphemeralMemory as boolean
         const startPersistState = payload?.startPersistState as boolean
-        const input = Object.entries(payload).map(([key, value]) => `${key}: ${value}`).join('\n')
+        const input = Object.entries(payload)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join('\n')
 
+        // trigger inputs
         const isEnabled = (nodeData.inputs?.isEnabled as boolean) ?? true
+        const updateFLowState = nodeData.inputs?.updateFLowState
         // Check if trigger is enabled
-        if (!isEnabled) {
+        if (!isEnabled)
             return {
                 id: nodeData.id,
                 name: this.name,
                 input: nodeData.inputs,
-                output: { content: JSON.stringify({ message: 'Trigger is disabled' }, null, 2) },
+                output: { content: JSON.stringify({ message: 'Trigger is disabled' }, null, 2) }
             }
-        }
 
-        if (!nodeData.credential) { throw new Error('Credential not found') }
+        if (!nodeData.credential) throw new Error('Credential not found')
         let flowState: Record<string, any> = {}
 
         try {
-            let flowStateArray = []
-            if (_flowState) {
-                try {
-                    flowStateArray = typeof _flowState === 'string' ? JSON.parse(_flowState) : _flowState
-                } catch (error) {
-                    throw new Error('Invalid Flow State')
-                }
-            }
-
-            for (const state of flowStateArray) {
+            for (const state of _flowState) {
                 flowState[state.key] = state.value
             }
 
@@ -183,13 +218,15 @@ class PrivosTrigger implements INode {
                 outputData.form = form
             }
 
-            if (startEphemeralMemory) {
-                outputData.ephemeralMemory = true
-            }
+            if (startEphemeralMemory) outputData.ephemeralMemory = true
+            if (startPersistState) outputData.persistState = true
 
-            if (startPersistState) {
-                outputData.persistState = true
+            // Update flow state if needed
+            let newState = { ...runtimeState }
+            if (updateFLowState && Array.isArray(updateFLowState) && updateFLowState.length > 0) {
+                newState = updateFlowState(runtimeState, updateFLowState)
             }
+            newState = processTemplateVariables(newState, outputData)
 
             const returnOutput = {
                 id: nodeData.id,

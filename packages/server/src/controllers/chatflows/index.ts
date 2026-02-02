@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express'
 import { StatusCodes } from 'http-status-codes'
 import { ChatFlow } from '../../database/entities/ChatFlow'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
-import { ChatflowType } from '../../Interface'
+import { ChatflowType, MODE } from '../../Interface'
 import apiKeyService from '../../services/apikey'
 import chatflowsService from '../../services/chatflows'
 import triggerService from '../../services/triggers'
@@ -12,11 +12,14 @@ import { RateLimiterManager } from '../../utils/rateLimit'
 import { getPageAndLimitParams } from '../../utils/pagination'
 import { WorkspaceUserErrorMessage, WorkspaceUserService } from '../../enterprise/services/workspace-user.service'
 import { QueryRunner, In, Not } from 'typeorm'
-import { GeneralErrorMessage } from '../../utils/constants'
+import { GeneralErrorMessage, OMIT_QUEUE_JOB_DATA } from '../../utils/constants'
 import { ScheduleManager } from '../../services/schedule-manager'
 import { Trigger } from '../../database/entities/Trigger'
 import { Credential } from '../../database/entities/Credential'
 import { decryptCredentialData } from '../../utils'
+import { getBullMQJobOptions, ITriggerConfig, parseConfig, convertToBullMQConfig } from 'flowise-components'
+import { omit } from 'lodash'
+import logger from '../../utils/logger'
 
 const checkIfChatflowIsValidForStreaming = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -84,6 +87,12 @@ const deleteChatflow = async (req: Request, res: Response, next: NextFunction) =
         }
         const apiResponse = await chatflowsService.deleteChatflow(req.params.id, orgId, workspaceId)
 
+        const appServer = getRunningExpressApp()
+        const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+        const existingTriggers = await triggerRepo.findBy({ flowId: req.params.id })
+        for (const trigger of existingTriggers) {
+            await removeJobSchedule(orgId, req.params.id, trigger)
+        }
         await triggerService.deleteManyTrigger({ flowId: req.params.id })
         return res.json(apiResponse)
     } catch (error) {
@@ -189,7 +198,7 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
 
         // Update triggers, minimal -> don't batch
         if (collectTriggerData.length > 0) {
-            await handleTriggerData(collectTriggerData, apiResponse?.id, workspaceId)
+            await handleTriggerData(collectTriggerData, apiResponse?.id, workspaceId, orgId)
         }
 
         return res.json(apiResponse)
@@ -204,6 +213,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: chatflowsController.updateChatflow - id not provided!`)
         }
         const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        const currentFlow = chatflow?.flowData || ''
         if (!chatflow) {
             return res.status(404).send(`Chatflow ${req.params.id} not found`)
         }
@@ -246,7 +256,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
 
         // Update triggers, minimal -> don't batch
         if (collectTriggerData.length > 0) {
-            await handleTriggerData(collectTriggerData, chatflow.id, workspaceId)
+            await handleTriggerData(collectTriggerData, chatflow.id, workspaceId, orgId, currentFlow)
         }
 
         return res.json(apiResponse)
@@ -255,7 +265,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
-const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId: string) => {
+const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId: string, orgId: string, currentFlow?: string) => {
     const appServer = getRunningExpressApp()
     const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
 
@@ -281,6 +291,36 @@ const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId
 
     toUpdate.length > 0 && (await triggerRepo.save(toUpdate))
     toInsert.length > 0 && (await triggerRepo.insert(toInsert))
+
+    // schedule triggers
+    const toInsertSchedule = toInsert.filter((t) => t.type === 'schedule')
+    const toUpdateSchedule = toUpdate.filter((t) => t.type === 'schedule')
+
+    for (const trigger of toInsertSchedule) {
+        await handleJobSchedule(orgId, flowId, trigger)
+    }
+    for (const trigger of toUpdateSchedule) {
+        await handleJobSchedule(orgId, flowId, trigger, true)
+    }
+
+    // compare to trigger nodes in currentFlow and delete removed triggers
+    if (currentFlow) {
+        const flowData = JSON.parse(currentFlow)
+        const nodes = flowData.nodes ?? []
+        const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor')
+        const currentWebhookIds = triggerNodes.map((node: any) => node.data.trigger?.webhookId).filter(Boolean)
+        const newWebhookIds = toUpdate.map((t) => t.id).filter(Boolean)
+        const webhookIdsToDelete = currentWebhookIds.filter((webhookId: string) => !newWebhookIds.includes(webhookId))
+
+        if (webhookIdsToDelete.length > 0) {
+            const triggersToDelete = await triggerRepo.findBy({ id: In(webhookIdsToDelete) })
+            for (const trigger of triggersToDelete) {
+                await removeJobSchedule(orgId, flowId, trigger)
+            }
+
+            await triggerRepo.remove(triggersToDelete)
+        }
+    }
 }
 
 const validateCredentialBot = async (data: any, flowId: string, workspaceId: string) => {
@@ -366,14 +406,42 @@ const validateCredentialBot = async (data: any, flowId: string, workspaceId: str
 
     // Collect trigger data
     for (const node of triggerNodes) {
-        const { trigger, inputs, credential } = node.data
+        const {
+            trigger,
+            inputs: { isEnabled, events, description, updateFLowState, retryOnFail, credential, ...config },
+            triggerType
+        } = node.data
+        if (!trigger?.webhookId) continue
+
+        let finalConfig: ITriggerConfig = {
+            isEnabled: Boolean(retryOnFail || false), // on/off
+            ...config // other config first, then override to prevent error type
+        }
+        if (retryOnFail) {
+            finalConfig.retry = {
+                attempts: Number(config.attempts || '3'),
+                backoff: {
+                    delay: Number(config.backoff || '3000'),
+                    type: config.type || 'fixed'
+                }
+            }
+        }
+        if (triggerType === 'schedule') {
+            const config = parseConfig(node.data)
+            const repeatOptions = convertToBullMQConfig(config)
+            const jobOptions = getBullMQJobOptions(config, repeatOptions)
+            finalConfig.schedule = jobOptions
+        }
+
         collectTriggerData.push({
             id: trigger?.webhookId,
+            type: node.data?.triggerType || 'privos',
             slug: trigger?.slug || null,
-            isEnabled: inputs?.isEnabled || false,
-            events: JSON.parse(inputs?.events || '[]'),
-            description: inputs?.description || '',
-            botId: reverseCredentialBotMap.get(credential) || null
+            isEnabled: isEnabled || false,
+            events: triggerType === 'schedule' ? ['schedule'] : JSON.parse(events || '[]'),
+            description: description || '',
+            botId: reverseCredentialBotMap.get(credential) || null,
+            config: finalConfig
         })
     }
 
@@ -384,6 +452,37 @@ const validateSlug = async (chatflow: any, workspaceId: string, slug?: string) =
     if (!slug) return
     const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== slug.toLowerCase().trim()
     isNeedCheck && (await chatflowsService.checkDuplicateSlug(slug, workspaceId))
+}
+
+const handleJobSchedule = async (orgId: any, flowId: string, data: any, isRemove: boolean = false) => {
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+    const { config, ...jobData } = data
+
+    if (process.env.MODE === MODE.QUEUE) {
+        const scheduleQueue = appServer.queueManager.getQueue('schedule')
+        if (isRemove) await removeJobSchedule(orgId, flowId, data)
+
+        if (jobData?.isEnabled) {
+            const job = await scheduleQueue.addJob(
+                omit({ chatFlowId: flowId, triggerId: data?.id }, OMIT_QUEUE_JOB_DATA),
+                config?.schedule || {}
+            )
+            logger.debug(`[server]: [${orgId}/${flowId}/schedule]: Job added to queue: ${job.id}`)
+            await triggerRepo.update(jobData.id, { jobKey: job.repeatJobKey })
+        }
+    }
+}
+
+const removeJobSchedule = async (orgId: any, flowId: string, data: any) => {
+    const appServer = getRunningExpressApp()
+
+    if (process.env.MODE === MODE.QUEUE) {
+        const scheduleQueue = appServer.queueManager.getQueue('schedule')
+        const queue = scheduleQueue.getQueue()
+        data?.jobKey && (await queue.removeJobScheduler(data?.jobKey))
+        logger.debug(`[server]: [${orgId}/${flowId}/schedule]: Removed old job with id: ${data?.jobKey}`)
+    }
 }
 
 const getSinglePublicChatflow = async (req: Request, res: Response, next: NextFunction) => {

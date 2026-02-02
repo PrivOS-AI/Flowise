@@ -14,11 +14,12 @@ export class AddTriggerEntityAndSlug1737625150000 implements MigrationInterface 
                 events jsonb,
                 "isEnabled" boolean DEFAULT true NOT NULL,
                 slug VARCHAR(100) UNIQUE,
-                type VARCHAR(100) DEFAULT 'privos' NOT NULL,
+                type VARCHAR(50) DEFAULT 'privos' NOT NULL,
                 description text,
                 "createdDate" timestamp NOT NULL DEFAULT now(),
                 "updatedDate" timestamp NOT NULL DEFAULT now(),
-                "workspaceId" text,
+                "workspaceId" uuid,
+                "jobKey" varchar(50),
                 CONSTRAINT "PK_trigger" PRIMARY KEY (id)
             )
         `)

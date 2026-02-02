@@ -625,6 +625,7 @@ function setupNodeDependencies(
 
         // Check if this is a start/trigger node
         const isTriggerNode = sourceNode.data.name === 'startAgentflow' || sourceNode.data.type === 'triggerProcessor'
+        const isScheduleTrigger = triggerData?.eventType === 'schedule'
         if (isTriggerNode) {
             if (isTrigger === true && sourceNode.data.name === 'startAgentflow') {
                 logger.debug(`  ⏭️  Skipping startAgentflow node: ${connection.source}`)
@@ -632,7 +633,10 @@ function setupNodeDependencies(
             }
 
             if (isTrigger === true && sourceNode.data.type === 'triggerProcessor') {
-                if (!JSON.parse(sourceNode.data?.inputs?.events || '[]').includes(triggerData?.eventType)) {
+                const isMatched = isScheduleTrigger
+                    ? sourceNode.data?.trigger?.webhookId === triggerData?.triggerId
+                    : !JSON.parse(sourceNode.data?.inputs?.events || '[]').includes(triggerData?.eventType)
+                if (isMatched) {
                     logger.debug(`  ⏭️  Skipping other trigger type: ${connection.source}`)
                     continue
                 }
@@ -1541,7 +1545,13 @@ export const executeAgentFlow = async ({
     let nodeDependencies = rawNodeDeps
     let reachableNodesFromTrigger: Set<string> | undefined
     if (triggerData?.eventType) {
-        const triggerNode = nodes.find((n: any) => JSON.parse(n.data?.inputs?.events || '[]').includes(triggerData?.eventType))
+        const isSchedule = triggerData.eventType === 'schedule'
+
+        const triggerNode = nodes.find((n: any) =>
+            isSchedule
+                ? n.data?.trigger?.webhookId === triggerData?.triggerId
+                : JSON.parse(n.data?.inputs?.events || '[]').includes(triggerData?.eventType)
+        )
         if (triggerNode) {
             // build graph from trigger node to reachable nodes
             const reachableNodesMap = new Map<string, number>([[triggerNode.id, 0]]) // nodeId -> depth
