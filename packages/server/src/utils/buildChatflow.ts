@@ -71,6 +71,7 @@ import { OMIT_QUEUE_JOB_DATA } from './constants'
 import { executeAgentFlow } from './buildAgentflow'
 import { Workspace } from '../enterprise/database/entities/workspace.entity'
 import { Organization } from '../enterprise/database/entities/organization.entity'
+import { JobsOptions } from 'bullmq'
 
 const shouldAutoPlayTTS = (textToSpeechConfig: string | undefined | null): boolean => {
     if (!textToSpeechConfig) return false
@@ -985,17 +986,17 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
     }
 
     const isAgentFlow = chatflow.type === 'MULTIAGENT'
-    const httpProtocol = req.get('x-forwarded-proto') || req.protocol
-    const baseURL = `${httpProtocol}://${req.get('host')}`
+    const httpProtocol = typeof req.get === 'function' ? req.get('x-forwarded-proto') || req.protocol : req.protocol
+    const baseURL = typeof req.get === 'function' ? `${httpProtocol}://${req.get('host')}` : `${httpProtocol}://localhost`
     const incomingInput: IncomingInput = req.body || {} // Ensure incomingInput is never undefined
     const chatId = incomingInput.chatId ?? incomingInput.overrideConfig?.sessionId ?? uuidv4()
     const files = (req.files as Express.Multer.File[]) || []
     const abortControllerId = `${chatflow.id}_${chatId}`
-    const isTool = req.get('flowise-tool') === 'true'
-    const isEvaluation: boolean = req.headers['X-Flowise-Evaluation'] || req.body.evaluation
+    const isTool = typeof req.get === 'function' ? req.get('flowise-tool') === 'true' : false
+    const isEvaluation: boolean = req.headers && req.headers['X-Flowise-Evaluation'] || req.body?.evaluation
     let evaluationRunId = ''
-    evaluationRunId = req.body.evaluationRunId
-    if (isEvaluation && chatflow.type !== 'AGENTFLOW' && req.body.evaluationRunId) {
+    evaluationRunId = req.body?.evaluationRunId
+    if (isEvaluation && chatflow.type !== 'AGENTFLOW' && req.body?.evaluationRunId) {
         // this is needed for the collection of token metrics for non-agent flows,
         // for agentflows the execution trace has the info needed
         const newEval = {
@@ -1064,12 +1065,13 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             workspaceId,
             subscriptionId,
             productId,
-            triggerData: req.body.triggerData
+            triggerData: incomingInput.triggerData
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE && incomingInput.triggerData?.eventType !== 'schedule') {
             const predictionQueue = appServer.queueManager.getQueue('prediction')
-            const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            const jobOptions: JobsOptions = incomingInput.triggerData?.config?.isEnabled ? incomingInput.triggerData?.config?.retry : {}
+            const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA), jobOptions)
             logger.debug(`[server]: [${orgId}/${chatflow.id}/${chatId}]: Job added to queue: ${job.id}`)
 
             const queueEvents = predictionQueue.getQueueEvents()

@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express'
 import { StatusCodes } from 'http-status-codes'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import webhookTriggersService from '../../services/webhook-triggers'
-import type { WebhookEventRequest } from '../../services/webhook-triggers'
 
 /**
  * Handle incoming webhook events (for privOs system)
@@ -13,7 +12,7 @@ const handleWebhookEvent = async (req: Request, res: Response, next: NextFunctio
         const { event } = req.body
         if (!event) throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Missing eventType')
 
-        const result = await webhookTriggersService.processWebhookEvent(req, req.body as WebhookEventRequest)
+        const result = await webhookTriggersService.processWebhookEvent(req)
         if (!result.success) return res.status(StatusCodes.NOT_FOUND).json(result)
 
         return res.json(result)
@@ -33,7 +32,7 @@ const handleWebhookEventBySlug = async (req: Request, res: Response, next: NextF
 
         if (!event) throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, 'Missing eventType')
 
-        const result = await webhookTriggersService.processWebhookEventBySlug(req, slug, req.body as WebhookEventRequest)
+        const result = await webhookTriggersService.processWebhookEventBySlug(req, slug)
         if (!result.success) return res.status(StatusCodes.NOT_FOUND).json(result)
 
         return res.json(result)

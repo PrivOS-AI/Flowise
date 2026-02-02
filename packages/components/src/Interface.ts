@@ -150,6 +150,7 @@ export interface INodeProperties {
     warning?: string
     executionLabel?: string
     eventType?: string
+    triggerType?: string
 }
 
 export interface INode extends INodeProperties {
@@ -508,4 +509,28 @@ export interface IPrivosCredential {
     authToken?: string
     userId?: string
     secretKey?: string
+}
+
+export type RetryTriggerType = 'fixed' | 'exponential'
+
+export interface ITriggerConfig {
+    isEnabled: boolean
+    retry: {
+        attempts: number
+        backoff: {
+            type: RetryTriggerType
+            delay: number
+        }
+    },
+    // schedule interface bullmq
+    schedule?: {
+        repeat?: {
+            every?: number
+            cron?: string
+            tz?: string
+            startDate?: Date
+            endDate?: Date
+            count?: number
+        }
+    }
 }
