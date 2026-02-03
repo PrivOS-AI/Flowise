@@ -112,6 +112,7 @@ const getSingleNodeAsyncOptions = async (nodeName: string, requestBody: any): Pr
                 return []
             }
         } else {
+            console.error(`[NodesService] Node '${nodeName}' not found in componentNodes`)
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Node ${nodeName} not found`)
         }
     } catch (error) {

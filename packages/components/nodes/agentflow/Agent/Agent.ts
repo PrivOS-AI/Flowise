@@ -492,10 +492,23 @@ class Agent_Agentflow implements INode {
             return returnOptions
         },
         async listRuntimeStateKeys(_: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
-            const previousNodes = options.previousNodes as ICommonObject[]
-            const startAgentflowNode = previousNodes.find((node) => node.name === 'startAgentflow')
-            const state = startAgentflowNode?.inputs?.startState as ICommonObject[]
-            return state.map((item) => ({ label: item.key, name: item.key }))
+            const returnData: INodeOptionsValue[] = []
+            const previousNodes = options.previousNodes as any[]
+
+            if (previousNodes && previousNodes.length > 0) {
+                const startNode = previousNodes.find((node) => node.name === 'startAgentflow')
+                if (startNode && startNode.inputs && startNode.inputs.startState) {
+                    const startState = startNode.inputs.startState
+                    for (const item of startState) {
+                        returnData.push({
+                            label: item.key,
+                            name: item.key
+                        })
+                    }
+                }
+            }
+
+            return returnData
         },
         async listStores(_: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
             const returnData: INodeOptionsValue[] = []
@@ -541,7 +554,8 @@ class Agent_Agentflow implements INode {
                 }
             }
             return returnOptions
-        }
+        },
+
     }
 
     async run(nodeData: INodeData, input: string | Record<string, any>, options: ICommonObject): Promise<any> {
@@ -582,9 +596,9 @@ class Agent_Agentflow implements INode {
                 if (Array.isArray(toolInstance)) {
                     for (const subTool of toolInstance) {
                         const subToolInstance = subTool as Tool
-                        ;(subToolInstance as any).agentSelectedTool = tool.agentSelectedTool
+                            ; (subToolInstance as any).agentSelectedTool = tool.agentSelectedTool
                         if (tool.agentSelectedToolRequiresHumanInput) {
-                            ;(subToolInstance as any).requiresHumanInput = true
+                            ; (subToolInstance as any).requiresHumanInput = true
                         }
                         toolsInstance.push(subToolInstance)
                     }
@@ -805,14 +819,14 @@ class Agent_Agentflow implements INode {
                     if (tool === 'code_interpreter') {
                         builtInTool.container = { type: 'auto' }
                     }
-                    ;(toolsInstance as any).push(builtInTool)
-                    ;(availableTools as any).push({
-                        name: tool,
-                        toolNode: {
-                            label: tool,
-                            name: tool
-                        }
-                    })
+                    ; (toolsInstance as any).push(builtInTool)
+                        ; (availableTools as any).push({
+                            name: tool,
+                            toolNode: {
+                                label: tool,
+                                name: tool
+                            }
+                        })
                 }
             }
 
@@ -822,14 +836,14 @@ class Agent_Agentflow implements INode {
                     const builtInTool: ICommonObject = {
                         [tool]: {}
                     }
-                    ;(toolsInstance as any).push(builtInTool)
-                    ;(availableTools as any).push({
-                        name: tool,
-                        toolNode: {
-                            label: tool,
-                            name: tool
-                        }
-                    })
+                        ; (toolsInstance as any).push(builtInTool)
+                        ; (availableTools as any).push({
+                            name: tool,
+                            toolNode: {
+                                label: tool,
+                                name: tool
+                            }
+                        })
                 }
             }
 
@@ -840,7 +854,7 @@ class Agent_Agentflow implements INode {
                     const toolName = tool.split('_').slice(0, -1).join('_')
 
                     if (tool === 'code_execution_20250825') {
-                        ;(llmNodeInstance as any).clientOptions = {
+                        ; (llmNodeInstance as any).clientOptions = {
                             defaultHeaders: {
                                 'anthropic-beta': ['code-execution-2025-08-25', 'files-api-2025-04-14']
                             }
@@ -848,7 +862,7 @@ class Agent_Agentflow implements INode {
                     }
 
                     if (tool === 'web_fetch_20250910') {
-                        ;(llmNodeInstance as any).clientOptions = {
+                        ; (llmNodeInstance as any).clientOptions = {
                             defaultHeaders: {
                                 'anthropic-beta': ['web-fetch-2025-09-10']
                             }
@@ -859,14 +873,14 @@ class Agent_Agentflow implements INode {
                         type: tool,
                         name: toolName
                     }
-                    ;(toolsInstance as any).push(builtInTool)
-                    ;(availableTools as any).push({
-                        name: tool,
-                        toolNode: {
-                            label: tool,
-                            name: tool
-                        }
-                    })
+                        ; (toolsInstance as any).push(builtInTool)
+                        ; (availableTools as any).push({
+                            name: tool,
+                            toolNode: {
+                                label: tool,
+                                name: tool
+                            }
+                        })
                 }
             }
 

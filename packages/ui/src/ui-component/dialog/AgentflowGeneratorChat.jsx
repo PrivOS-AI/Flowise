@@ -310,7 +310,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                 setComponentNodes(nodeMap)
                 // Generate Type Map for Simplifier
                 const { typeMap, menuString } = generateTypeMap(nodeMap)
-                console.log('[AgentflowGenerator] Generated Menu:', menuString)
+                // console.log('[AgentflowGenerator] Generated Menu:', menuString)
                 setSimplifierTypeMap(typeMap)
             }
         }).catch(err => console.error('Failed to fetch nodes:', err))
@@ -347,7 +347,9 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
             if (flowData && flowData.nodes && flowData.nodes.length > 0 && isMinified) {
                 console.log('[Debug] Inflating Minified Flow...')
                 const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
-                console.log('[Debug] Inflated Result:', inflated)
+                // console.log('[Debug] Inflated Result:', inflated)
+                console.log(JSON.stringify(inflated, null, 2))
+                setDebugJson(JSON.stringify(inflated, null, 2)) // Update UI with inflated JSON
                 flowData = inflated
             }
 
@@ -541,7 +543,8 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                         // If the flow data has 'typeId' in nodes, it is a simplified flow.
                         // We inflate it before proceeding.
                         if (flowData && flowData.nodes && flowData.nodes.length > 0 && flowData.nodes[0].typeId) {
-                            console.log('[AgentflowGenerator] Detected Simplified Flow. Inflating...', flowData)
+                            console.log('[AgentflowGenerator] Detected Simplified Flow. Inflating...')
+                            console.log(JSON.stringify(flowData, null, 2))
                             const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
                             console.log('[AgentflowGenerator] Inflated Result:', inflated)
                             flowData = inflated
@@ -1083,7 +1086,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
 
                                 {/* Input Area */}
                                 <Box sx={{ p: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
-                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
                                         <TextField
                                             fullWidth
                                             size="small"
@@ -1101,7 +1104,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                             maxRows={4}
                                             sx={{
                                                 '& .MuiOutlinedInput-root': {
-                                                    borderRadius: 3,
+                                                    borderRadius: 2,
                                                     bgcolor: alpha(theme.palette.background.default, 0.7)
                                                 }
                                             }}
@@ -1113,6 +1116,8 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                             sx={{
                                                 bgcolor: input.trim() ? theme.palette.primary.main : 'transparent',
                                                 color: input.trim() ? '#fff' : 'inherit',
+                                                flexShrink: 0,
+                                                mb: 0.5, // Align with text field bottom
                                                 '&:hover': {
                                                     bgcolor: theme.palette.primary.dark
                                                 }

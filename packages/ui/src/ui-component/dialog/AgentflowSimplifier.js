@@ -1,4 +1,4 @@
-import { initNode } from '@/utils/genericHelper'
+import { initNode, showHideInputParams } from '@/utils/genericHelper'
 import { cloneDeep } from 'lodash'
 import { nodeDefaults } from './NodeTypeMap'
 
@@ -14,19 +14,27 @@ export const generateTypeMap = (componentNodes) => {
     const typeMap = {}
     const reverseMap = {}
     let menuItems = []
-    let idCounter = 1
+    let idCounter = 100 // Start dynamic IDs from 100 to avoid conflict with static map
 
+    // 1. Load Static Defaults First
+    Object.keys(nodeDefaults).forEach(id => {
+        const name = nodeDefaults[id].name
+        if (componentNodes[name]) {
+            typeMap[id] = name
+            reverseMap[name] = id
+            const node = componentNodes[name]
+            menuItems.push(`${id}: ${node.label} - ${node.description}`)
+        }
+    })
+
+    // 2. Load Remaining Nodes (Dynamic)
     // Filter for Agent Flows and PrivOS categories
     const agentNodes = Object.values(componentNodes).filter(
-        node => node.category === 'Agent Flows' || node.category === 'PrivOS'
+        node => (node.category === 'Agent Flows' || node.category === 'PrivOS') && !reverseMap[node.name]
     )
 
-    // Sort to ensure deterministic IDs (Start first, then alphabetical)
-    agentNodes.sort((a, b) => {
-        if (a.name === 'startAgentflow') return -1
-        if (b.name === 'startAgentflow') return 1
-        return a.label.localeCompare(b.label)
-    })
+    // Sort to ensure deterministic IDs
+    agentNodes.sort((a, b) => a.label.localeCompare(b.label))
 
     agentNodes.forEach(node => {
         const id = idCounter++
@@ -34,6 +42,14 @@ export const generateTypeMap = (componentNodes) => {
         reverseMap[node.name] = id
         menuItems.push(`${id}: ${node.label} - ${node.description}`)
     })
+
+    console.log('[Debug] TypeMap Generation:')
+    console.log('[Debug] Defaults for 9:', nodeDefaults['9'])
+    console.log('[Debug] Defaults for 7:', nodeDefaults['7'])
+    console.log('[Debug] Component Node httpAgentflow:', componentNodes['httpAgentflow'] ? 'Found' : 'Missing')
+    console.log('[Debug] Generated Map [9]:', typeMap[9])
+    console.log('[Debug] Generated Map [7]:', typeMap[7])
+    console.log('[Debug] Full TypeMap:', JSON.stringify(typeMap, null, 2))
 
     return {
         typeMap,
@@ -90,6 +106,8 @@ const findBestMatch = (key, inputParams) => {
     let bestMatch = null
     let minDistance = Infinity
 
+    if (!inputParams || !Array.isArray(inputParams)) return null
+
     for (const param of inputParams) {
         const paramName = param.name
         const paramLabel = (param.label || '').toLowerCase()
@@ -122,6 +140,8 @@ const findBestOptionMatch = (value, options) => {
 
     let bestMatch = value // Default to original if no better match found
     let minDistance = Infinity
+
+    if (!options || !Array.isArray(options)) return value
 
     for (const opt of options) {
         const optName = typeof opt === 'string' ? opt : opt.name
@@ -165,6 +185,20 @@ const expandVariables = (text, idMapping) => {
         const fullVar = `$form.${varName}`
         return `<p><span class="variable" data-type="mention" data-id="${fullVar}" data-label="${fullVar}">{{ ${fullVar} }}</span> </p>`
     })
+
+    // 2b. $flow.state.variable
+    // Format: <p><span class="variable" data-type="mention" data-id="$flow.state.param" data-label="$flow.state.param">{{ $flow.state.param }}</span> </p>
+    text = text.replace(/\$flow\.state\.([\w_]+)/g, (match, varName) => {
+        const fullVar = `$flow.state.${varName}`
+        return `<p><span class="variable" data-type="mention" data-id="${fullVar}" data-label="${fullVar}">{{ ${fullVar} }}</span> </p>`
+    })
+
+    // 2c. $output (Current Node Output)
+    // Format: <p><span class="variable" data-type="mention" data-id="output" data-label="output">{{ output }}</span> </p>
+    text = text.replace(
+        /\$output/g,
+        `<p><span class="variable" data-type="mention" data-id="output" data-label="output">{{ output }}</span> </p>`
+    )
 
     // 3. Node IDs ($1, $2, etc.)
     // Format: <p><span class="variable" data-type="mention" data-id="agentAgentflow_0" data-label="agentAgentflow_0">{{ agentAgentflow_0 }}</span> </p>
@@ -255,6 +289,20 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
             }
             if (!nodeData.inputs) nodeData.inputs = {}
 
+
+
+            // Fix: Normalize inputParams (Object -> Array) if loaded from JSON definition with 'parameters' object
+            if (nodeData.inputParams && !Array.isArray(nodeData.inputParams) && typeof nodeData.inputParams === 'object') {
+                // It might be the 'parameters' object directly or wrapped.
+                // If it's the raw object from JSON 'parameters': { "arg1": {...}, "arg2": {...} }
+                // We convert to array: [{name: "arg1", ...}, {name: "arg2", ...}]
+                nodeData.inputParams = Object.keys(nodeData.inputParams).map(k => {
+                    const val = nodeData.inputParams[k]
+                    // Ensure it has a name
+                    return { name: k, ...val }
+                })
+            }
+
             // Fix: Generate IDs for inputParams if they don't exist
             if (nodeData.inputParams && Array.isArray(nodeData.inputParams)) {
                 nodeData.inputParams.forEach((param) => {
@@ -295,17 +343,87 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
                 }
 
                 // Iterate user inputs
-                Object.keys(simpleNode.inputs).forEach((key) => {
+                // Sort keys to ensure controlling params (like startInputType) are processed first
+                const sortedKeys = Object.keys(simpleNode.inputs).sort((a, b) => {
+                    const aKey = findBestMatch(a, nodeData.inputParams) || a
+                    const bKey = findBestMatch(b, nodeData.inputParams) || b
+                    if (aKey === 'startInputType') return -1
+                    if (bKey === 'startInputType') return 1
+                    return 0
+                })
+
+                // 3.1 Handle Simplified Properties for Agent Nodes
+                if (nodeName === 'agentAgentflow') {
+                    let modelName = simpleNode.inputs.agentModel
+
+                    // Default Model if missing
+                    if (!modelName) {
+                        modelName = 'gpt-4o-mini'
+                        nodeData.inputs.agentModel = 'chatOpenAI'
+                        // We also need to set the config default later if needed
+                    }
+
+                    // Map specific model names to Providers (e.g. "gpt-4" -> "chatOpenAI")
+                    if (modelName) {
+                        if (modelName.startsWith('gpt')) {
+                            nodeData.inputs.agentModel = 'chatOpenAI'
+                            if (!nodeData.inputs.agentModelConfig) nodeData.inputs.agentModelConfig = {}
+                            nodeData.inputs.agentModelConfig.modelName = modelName
+                            nodeData.inputs.agentModelConfig.temperature = 0.7
+                        } else if (modelName.startsWith('claude')) {
+                            nodeData.inputs.agentModel = 'chatAnthropic'
+                            if (!nodeData.inputs.agentModelConfig) nodeData.inputs.agentModelConfig = {}
+                            nodeData.inputs.agentModelConfig.modelName = modelName
+                        } else if (modelName.startsWith('gemini')) {
+                            nodeData.inputs.agentModel = 'chatGoogleGenerativeAI'
+                            if (!nodeData.inputs.agentModelConfig) nodeData.inputs.agentModelConfig = {}
+                            nodeData.inputs.agentModelConfig.modelName = modelName
+                        } else {
+                            // Fallback or if user correctly provided 'chatOpenAI' etc.
+                            // If it's not a known provider standard name, assume it's a provider?
+                            // But usually users type 'gpt-4'
+                            // Let's assume if it doesn't match known providers, we trust it or default to OpenAI.
+                            nodeData.inputs.agentModel = 'chatOpenAI'
+                            // But keep the value as modelName if it's not "chatOpenAI"
+                            if (modelName !== 'chatOpenAI') {
+                                if (!nodeData.inputs.agentModelConfig) nodeData.inputs.agentModelConfig = {}
+                                nodeData.inputs.agentModelConfig.modelName = modelName
+                            }
+                        }
+                    }
+
+                    // Handle agentSystemPrompt -> agentMessages
+                    if (simpleNode.inputs.agentSystemPrompt) {
+                        const sysPrompt = expandVariables(simpleNode.inputs.agentSystemPrompt, idMapping)
+                        if (!nodeData.inputs.agentMessages) nodeData.inputs.agentMessages = []
+
+                        // Check if system message already exists
+                        const hasSystem = nodeData.inputs.agentMessages.some(m => m.role === 'system')
+                        if (!hasSystem) {
+                            nodeData.inputs.agentMessages.unshift({
+                                role: 'system',
+                                content: sysPrompt
+                            })
+                        }
+                    }
+                }
+
+                // 4. Map Inputs from Simplified to Real
+                sortedKeys.forEach((key) => {
+                    let value = simpleNode.inputs[key]
+                    if (value === undefined || value === null) return
+
+                    // Skip already handled simplified keys
+                    if (key === 'agentSystemPrompt') return
+
+                    // EXPAND VARIABLES (Top Level)
+                    if (typeof value === 'string') {
+                        value = expandVariables(value, idMapping)
+                    }
+
                     const mappedKey = findBestMatch(key, nodeData.inputParams)
 
                     if (mappedKey) {
-                        let value = simpleNode.inputs[key]
-
-                        // EXPAND VARIABLES (String inputs only)
-                        if (typeof value === 'string') {
-                            value = expandVariables(value, idMapping)
-                        }
-
                         // VALUE MATCHING FOR OPTIONS
                         const paramDef = nodeData.inputParams.find((p) => p.name === mappedKey)
                         if (
@@ -323,30 +441,107 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
                         }
 
                         // ARRAY DEEP MAPPING (e.g. agentMessages: [{Role: 'System', ...}] -> [{role: 'system', ...}])
-                        if (paramDef && paramDef.type === 'array' && Array.isArray(value) && paramDef.array) {
-                            value = value.map(item => {
-                                if (typeof item !== 'object' || !item) return item
-                                const newItem = {}
-                                Object.keys(item).forEach(subKey => {
-                                    const subParamDef = findBestMatch(subKey, paramDef.array) // findBestMatch returns NAME
-                                    if (subParamDef) {
-                                        let subValue = item[subKey]
+                        if (paramDef && (paramDef.type === 'array' || paramDef.type === 'datagrid')) {
 
-                                        // Handle Options inside Array
-                                        const subDef = paramDef.array.find(p => p.name === subParamDef)
-                                        if (subDef && (subDef.type === 'options' || subDef.type === 'asyncOptions')) {
-                                            subValue = findBestOptionMatch(subValue, subDef.options)
+                            // 1. Handle Stringified JSON Input
+                            if (typeof value === 'string') {
+                                try {
+                                    const parsedOptions = JSON.parse(value)
+                                    value = parsedOptions
+                                } catch (e) {
+                                    // Not JSON, leave as string
+                                }
+                            }
+
+                            // 2. Handle Object -> Array mapping (for key/value pairs like headers)
+                            const isKeyValueArray = paramDef.array && paramDef.array.some(p => p.name === 'key') && paramDef.array.some(p => p.name === 'value')
+
+                            if (typeof value === 'object' && value !== null && !Array.isArray(value) && isKeyValueArray) {
+                                // Convert { "Content-Type": "application/json" } -> [ { key: "Content-Type", value: "application/json" } ]
+                                try {
+                                    value = Object.keys(value).map(k => {
+                                        let val = value[k]
+                                        if (typeof val === 'object') val = JSON.stringify(val) // stringify nested objects if needed
+                                        return {
+                                            key: k,
+                                            value: val
+                                        }
+                                    })
+                                } catch (e) {
+                                    console.error('Error converting object to key-value array:', e)
+                                }
+                            }
+
+                            if (Array.isArray(value) && paramDef.array) {
+                                value = value.map(item => {
+                                    // SPECIAL CASE: Handle simple string array for 'addOptions'
+                                    // if item is string and array definition has only 1 field of type string (like 'option')
+                                    if (typeof item === 'string' && mappedKey === 'addOptions' && paramDef.array.length === 1) {
+                                        const singleField = paramDef.array[0]
+                                        return { [singleField.name]: item }
+                                    }
+
+                                    if (typeof item !== 'object' || !item) return item
+                                    const newItem = {}
+                                    Object.keys(item).forEach(subKey => {
+                                        // Normalize sub-parameters (Handle parameters object vs array list)
+                                        let subParams = paramDef.array
+                                        if (!subParams && paramDef.parameters) {
+                                            subParams = Object.keys(paramDef.parameters).map(k => ({
+                                                name: k,
+                                                ...paramDef.parameters[k]
+                                            }))
                                         }
 
-                                        newItem[subParamDef] = subValue
-                                    } else {
-                                        // Keep original if no match found (or maybe it is already correct)
-                                        newItem[subKey] = item[subKey]
-                                    }
+                                        // Debug logging removed per request
+                                        // console.log(`[Simplifier] Processing array item key: ${subKey}`)
+
+                                        const subParamDef = findBestMatch(subKey, subParams) // findBestMatch returns NAME
+
+                                        // if (!subParamDef) console.log(`[Simplifier] No match found for ${subKey}`)
+
+                                        if (subParamDef) {
+                                            let subValue = item[subKey]
+
+                                            // Handle Options inside Array
+                                            // Ensure subDef lookup uses the normalized subParams
+                                            const subDef = subParams.find(p => p.name === subParamDef)
+                                            if (subDef && (subDef.type === 'options' || subDef.type === 'asyncOptions') && Array.isArray(subDef.options)) {
+                                                subValue = findBestOptionMatch(subValue, subDef.options)
+                                            }
+
+                                            // EXPAND VARIABLES (Nested String inputs)
+                                            if (typeof subValue === 'string') {
+                                                subValue = expandVariables(subValue, idMapping)
+                                            }
+
+                                            // RECURSIVE ARRAY/OBJECT MAPPING FOR SUB-PROPERTIES (Fixed for addOptions)
+                                            // Check if this sub-property is an array that needs transformation (like addOptions)
+                                            if (subDef && subDef.type === 'array' && Array.isArray(subValue) && subDef.array) {
+                                                subValue = subValue.map(subItem => {
+                                                    // 1. Transform String Array -> Object Array (["A"] -> [{option: "A"}])
+                                                    if (typeof subItem === 'string' && subDef.array.length === 1) {
+                                                        const singleField = subDef.array[0]
+                                                        return { [singleField.name]: subItem }
+                                                    }
+                                                    // 2. Already object, return as is
+                                                    return subItem
+                                                })
+                                            }
+
+                                            newItem[subParamDef] = subValue
+                                        } else {
+                                            // Keep original if no match found (or maybe it is already correct)
+                                            newItem[subKey] = item[subKey]
+                                        }
+                                    })
+                                    return newItem
                                 })
-                                return newItem
-                            })
-                        }
+                            }
+
+                        } // End of Array/Datagrid Logic
+
+
 
                         nodeData.inputs[mappedKey] = value
                     }
@@ -357,6 +552,10 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
             // Layout: Simple Horizontal Layout
             // x = index * 350, y = 100
             const position = { x: index * 350, y: 100 }
+
+            // VISIBILITY CHECK
+            // Use core helper to ensure consistent behavior
+            nodeData.inputParams = showHideInputParams(nodeData)
 
             inflatedNodes.push({
                 id: realId,
@@ -405,6 +604,9 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
             })
         })
     }
+
+    // Final Log of Mapped Flow
+    console.log('[AgentflowSimplifier] Inflated Nodes:', inflatedNodes)
 
     return {
         nodes: inflatedNodes,
