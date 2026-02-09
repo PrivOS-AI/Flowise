@@ -196,6 +196,10 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
     const [fileUploadAllowedTypes, setFileUploadAllowedTypes] = useState('')
     const [inputHistory] = useState(new ChatInputHistory(10))
 
+    // ClaudeWS Questions state
+    const [pendingQuestions, setPendingQuestions] = useState(null)
+    const [questionDialogOpen, setQuestionDialogOpen] = useState(false)
+
     const inputRef = useRef(null)
     const getChatmessageApi = useApi(chatmessageApi.getInternalChatmessageFromChatflow)
     const getAllExecutionsApi = useApi(executionsApi.getAllExecutions)
@@ -632,6 +636,34 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
         })
     }
 
+    // Handle ClaudeWS questions
+    const updateLastMessageQuestion = (questionData) => {
+        const { attemptId, toolUseId, questions } = questionData
+        setPendingQuestions({ attemptId, toolUseId, questions })
+        setQuestionDialogOpen(true)
+    }
+
+    const submitQuestionAnswer = async (answers) => {
+        if (!pendingQuestions) return
+
+        try {
+            const response = await axios.post('/api/v1/claudews/answer', {
+                attemptId: pendingQuestions.attemptId,
+                toolUseId: pendingQuestions.toolUseId,
+                questionHeader: answers.questionHeader,
+                answer: answers.answer
+            })
+
+            if (response.data.success) {
+                // Close dialog and clear pending questions
+                setQuestionDialogOpen(false)
+                setPendingQuestions(null)
+            }
+        } catch (error) {
+            console.error('Error submitting question answer:', error)
+        }
+    }
+
     const updateAgentFlowEvent = (event) => {
         if (event === 'INPROGRESS') {
             setMessages((prevMessages) => [...prevMessages, { message: '', type: 'apiMessage', agentFlowEventStatus: event }])
@@ -704,6 +736,17 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
             allMessages[allMessages.length - 1].usedTools = usedTools
             return allMessages
         })
+
+        // Check for AskUserQuestion tool and auto-open question modal
+        const askUserTool = usedTools?.find((t) => t.tool === 'AskUserQuestion')
+        if (askUserTool?.toolInput?.questions) {
+            setPendingQuestions({
+                attemptId: askUserTool.toolInput.toolUseId || 'unknown',
+                toolUseId: askUserTool.toolInput.toolUseId || 'unknown',
+                questions: askUserTool.toolInput.questions
+            })
+            setQuestionDialogOpen(true)
+        }
     }
 
     const updateLastMessageFileAnnotations = (fileAnnotations) => {
@@ -1060,6 +1103,9 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                         break
                     case 'thinking':
                         updateLastMessageThinking(payload.data)
+                        break
+                    case 'question':
+                        updateLastMessageQuestion(payload.data)
                         break
                     case 'agentFlowEvent':
                         updateAgentFlowEvent(payload.data)
@@ -3076,6 +3122,53 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                     <Button onClick={handleSubmitFeedback} variant='contained'>
                         Submit
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ClaudeWS Question Dialog */}
+            <Dialog maxWidth='md' fullWidth open={questionDialogOpen} onClose={() => setQuestionDialogOpen(false)}>
+                <DialogTitle variant='h5'>❓ Answer Question</DialogTitle>
+                <DialogContent>
+                    {pendingQuestions?.questions?.map((q, idx) => (
+                        <Box key={idx} sx={{ mb: 3 }}>
+                            <Typography variant='h6' sx={{ mb: 1 }}>
+                                {q.question}
+                            </Typography>
+                            {q.header && (
+                                <Typography variant='subtitle2' color='textSecondary' sx={{ mb: 2 }}>
+                                    {q.header}
+                                </Typography>
+                            )}
+                            <Stack spacing={1}>
+                                {q.options?.map((opt, optIdx) => (
+                                    <Button
+                                        key={optIdx}
+                                        variant='outlined'
+                                        onClick={() => {
+                                            const answer = q.multiSelect ? [opt.label] : opt.label
+                                            submitQuestionAnswer({
+                                                questionHeader: q.header,
+                                                answer
+                                            })
+                                        }}
+                                        sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                                            <Typography variant='body1' sx={{ fontWeight: 'bold', mr: 1 }}>
+                                                {opt.label}
+                                            </Typography>
+                                            <Typography variant='body2' color='textSecondary'>
+                                                {opt.description}
+                                            </Typography>
+                                        </Box>
+                                    </Button>
+                                ))}
+                            </Stack>
+                        </Box>
+                    ))}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setQuestionDialogOpen(false)}>Cancel</Button>
                 </DialogActions>
             </Dialog>
         </div>
