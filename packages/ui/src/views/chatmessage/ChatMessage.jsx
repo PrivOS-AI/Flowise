@@ -47,6 +47,36 @@ import multiagent_supervisorPNG from '@/assets/images/multiagent_supervisor.png'
 import multiagent_workerPNG from '@/assets/images/multiagent_worker.png'
 import audioUploadSVG from '@/assets/images/wave-sound.jpg'
 
+// ==================== Constants ====================
+
+const SSEEventType = {
+    START: 'start',
+    TOKEN: 'token',
+    SOURCE_DOCUMENTS: 'sourceDocuments',
+    ARTIFACTS: 'artifacts',
+    USED_TOOLS: 'usedTools',
+    CALLED_TOOLS: 'calledTools',
+    FILE_ANNOTATIONS: 'fileAnnotations',
+    TOOL: 'tool',
+    AGENT_REASONING: 'agentReasoning',
+    NEXT_AGENT: 'nextAgent',
+    AGENT_FLOW_EVENT: 'agentFlowEvent',
+    AGENT_FLOW_EXECUTED_DATA: 'agentFlowExecutedData',
+    NEXT_AGENT_FLOW: 'nextAgentFlow',
+    ACTION: 'action',
+    ABORT: 'abort',
+    ERROR: 'error',
+    METADATA: 'metadata',
+    USAGE_METADATA: 'usageMetadata',
+    TTS_START: 'tts_start',
+    TTS_DATA: 'tts_data',
+    TTS_END: 'tts_end',
+    TTS_ABORT: 'tts_abort',
+    THINKING: 'thinking',
+    QUESTION: 'question',
+    HEARTBEAT: 'heartbeat'
+}
+
 // project import
 import NodeInputHandler from '@/views/canvas/NodeInputHandler'
 import { MemoizedReactMarkdown } from '@/ui-component/markdown/MemoizedReactMarkdown'
@@ -1083,68 +1113,68 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
             async onmessage(ev) {
                 const payload = JSON.parse(ev.data)
                 switch (payload.event) {
-                    case 'start':
+                    case SSEEventType.START:
                         setMessages((prevMessages) => [...prevMessages, { message: '', type: 'apiMessage' }])
                         break
-                    case 'token':
+                    case SSEEventType.TOKEN:
                         updateLastMessage(payload.data)
                         break
-                    case 'sourceDocuments':
+                    case SSEEventType.SOURCE_DOCUMENTS:
                         updateLastMessageSourceDocuments(payload.data)
                         break
-                    case 'usedTools':
+                    case SSEEventType.USED_TOOLS:
                         updateLastMessageUsedTools(payload.data)
                         break
-                    case 'fileAnnotations':
+                    case SSEEventType.FILE_ANNOTATIONS:
                         updateLastMessageFileAnnotations(payload.data)
                         break
-                    case 'agentReasoning':
+                    case SSEEventType.AGENT_REASONING:
                         updateLastMessageAgentReasoning(payload.data)
                         break
-                    case 'thinking':
+                    case SSEEventType.THINKING:
                         updateLastMessageThinking(payload.data)
                         break
-                    case 'question':
+                    case SSEEventType.QUESTION:
                         updateLastMessageQuestion(payload.data)
                         break
-                    case 'agentFlowEvent':
+                    case SSEEventType.AGENT_FLOW_EVENT:
                         updateAgentFlowEvent(payload.data)
                         break
-                    case 'agentFlowExecutedData':
+                    case SSEEventType.AGENT_FLOW_EXECUTED_DATA:
                         updateAgentFlowExecutedData(payload.data)
                         break
-                    case 'artifacts':
+                    case SSEEventType.ARTIFACTS:
                         updateLastMessageArtifacts(payload.data)
                         break
-                    case 'action':
+                    case SSEEventType.ACTION:
                         updateLastMessageAction(payload.data)
                         break
-                    case 'nextAgent':
+                    case SSEEventType.NEXT_AGENT:
                         updateLastMessageNextAgent(payload.data)
                         break
-                    case 'nextAgentFlow':
+                    case SSEEventType.NEXT_AGENT_FLOW:
                         updateLastMessageNextAgentFlow(payload.data)
                         break
-                    case 'metadata':
+                    case SSEEventType.METADATA:
                         updateMetadata(payload.data, input)
                         break
-                    case 'error':
+                    case SSEEventType.ERROR:
                         updateErrorMessage(payload.data)
                         break
-                    case 'abort':
+                    case SSEEventType.ABORT:
                         abortMessage(payload.data)
                         closeResponse()
                         break
-                    case 'tts_start':
+                    case SSEEventType.TTS_START:
                         handleTTSStart(payload.data)
                         break
-                    case 'tts_data':
+                    case SSEEventType.TTS_DATA:
                         handleTTSDataChunk(payload.data.audioChunk)
                         break
-                    case 'tts_end':
+                    case SSEEventType.TTS_END:
                         handleTTSEnd()
                         break
-                    case 'tts_abort':
+                    case SSEEventType.TTS_ABORT:
                         handleTTSAbort(payload.data)
                         break
                     case 'end':
@@ -1771,14 +1801,14 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                         const event = parseSSEEvent(eventBlock)
                         if (event) {
                             switch (event.event) {
-                                case 'tts_start':
+                                case SSEEventType.TTS_START:
                                     break
-                                case 'tts_data':
+                                case SSEEventType.TTS_DATA:
                                     if (!abortController.signal.aborted) {
                                         handleTTSDataChunk(event.data.audioChunk)
                                     }
                                     break
-                                case 'tts_end':
+                                case SSEEventType.TTS_END:
                                     if (!abortController.signal.aborted) {
                                         handleTTSEnd()
                                     }

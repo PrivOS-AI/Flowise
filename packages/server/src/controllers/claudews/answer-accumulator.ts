@@ -4,6 +4,20 @@
  * Accumulates individual answers and emits complete event when all questions answered
  */
 
+// ==================== Constants ====================
+
+/**
+ * Default timeout for answer accumulation (15 minutes)
+ */
+const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000
+
+/**
+ * Interval for periodic cleanup of expired attempts (1 minute)
+ */
+const CLEANUP_INTERVAL_MS = 60 * 1000
+
+// ==================== Interfaces ====================
+
 interface PendingAttempt {
     attemptId: string
     toolUseId: string
@@ -17,7 +31,7 @@ interface PendingAttempt {
 
 class AnswerAccumulator {
     private pendingAttempts = new Map<string, PendingAttempt>()
-    private readonly TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+    private readonly TIMEOUT_MS = DEFAULT_TIMEOUT_MS
 
     /**
      * Initialize questions for an attempt (called when questions are stored)
@@ -145,5 +159,5 @@ export const answerAccumulator = new AnswerAccumulator()
 if (typeof setInterval !== 'undefined') {
     setInterval(() => {
         answerAccumulator.cleanupExpired()
-    }, 60 * 1000)
+    }, CLEANUP_INTERVAL_MS)
 }
