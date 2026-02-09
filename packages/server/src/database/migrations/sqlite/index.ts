@@ -44,6 +44,7 @@ import { AddSubAgentEnabledToChatFlow1760200000000 } from './1760200000000-AddSu
 import { AddAgentflowFolder1770300000000 } from './1770300000000-AddAgentflowFolder'
 import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToFolder'
 import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
+import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
 import { FinalSafetyMigration9999999999999 } from './9999999999999-FinalSafetyMigration'
 
@@ -118,5 +119,6 @@ export const sqliteMigrations = [
     AddAgentflowFolder1770300000000,
     AddParentIdToFolder1770400000000,
     AddTriggerEntityAndSlug1737625150000,
+    AddClaudeWSEntities1770500000000,
     FinalSafetyMigration9999999999999
 ]
