@@ -408,11 +408,11 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
             if (req.cookies && req.cookies.refreshToken) {
                 return res.status(401).json({ message: ErrorMessage.TOKEN_EXPIRED, retry: true })
             }
-            // return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
+            return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
         }
 
         if (!user) {
-            // return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
+            return res.status(401).json({ message: ErrorMessage.INVALID_MISSING_TOKEN })
         }
 
         const identityManager = getRunningExpressApp().identityManager
