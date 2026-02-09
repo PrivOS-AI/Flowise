@@ -467,6 +467,21 @@ export class RedisEventPublisher implements IServerSideEventStreamer {
         }
     }
 
+    streamQuestionEvent(chatId: string, data: any): void {
+        try {
+            this.redisPublisher.publish(
+                chatId,
+                JSON.stringify({
+                    chatId,
+                    eventType: 'question',
+                    data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming question event:', error)
+        }
+    }
+
     async disconnect() {
         if (this.redisPublisher) {
             await this.redisPublisher.quit()
