@@ -2,6 +2,38 @@ import { createClient } from 'redis'
 import { SSEStreamer } from '../utils/SSEStreamer'
 import logger from '../utils/logger'
 
+/**
+ * SSE Event Types
+ * Used for streaming events to clients via Server-Sent Events
+ */
+const SSEEventType = {
+    START: 'start',
+    TOKEN: 'token',
+    SOURCE_DOCUMENTS: 'sourceDocuments',
+    ARTIFACTS: 'artifacts',
+    USED_TOOLS: 'usedTools',
+    CALLED_TOOLS: 'calledTools',
+    FILE_ANNOTATIONS: 'fileAnnotations',
+    TOOL: 'tool',
+    AGENT_REASONING: 'agentReasoning',
+    NEXT_AGENT: 'nextAgent',
+    AGENT_FLOW_EVENT: 'agentFlowEvent',
+    AGENT_FLOW_EXECUTED_DATA: 'agentFlowExecutedData',
+    NEXT_AGENT_FLOW: 'nextAgentFlow',
+    ACTION: 'action',
+    ABORT: 'abort',
+    ERROR: 'error',
+    METADATA: 'metadata',
+    USAGE_METADATA: 'usageMetadata',
+    TTS_START: 'tts_start',
+    TTS_DATA: 'tts_data',
+    TTS_END: 'tts_end',
+    TTS_ABORT: 'tts_abort',
+    THINKING: 'thinking',
+    QUESTION: 'question',
+    HEARTBEAT: 'heartbeat'
+} as const
+
 export class RedisEventSubscriber {
     private redisSubscriber: ReturnType<typeof createClient>
     private sseStreamer: SSEStreamer
@@ -114,79 +146,79 @@ export class RedisEventSubscriber {
 
         // Stream the event to the client
         switch (eventType) {
-            case 'start':
+            case SSEEventType.START:
                 this.sseStreamer.streamStartEvent(chatId, data)
                 break
-            case 'token':
+            case SSEEventType.TOKEN:
                 this.sseStreamer.streamTokenEvent(chatId, data)
                 break
-            case 'sourceDocuments':
+            case SSEEventType.SOURCE_DOCUMENTS:
                 this.sseStreamer.streamSourceDocumentsEvent(chatId, data)
                 break
-            case 'artifacts':
+            case SSEEventType.ARTIFACTS:
                 this.sseStreamer.streamArtifactsEvent(chatId, data)
                 break
-            case 'usedTools':
+            case SSEEventType.USED_TOOLS:
                 this.sseStreamer.streamUsedToolsEvent(chatId, data)
                 break
-            case 'calledTools':
+            case SSEEventType.CALLED_TOOLS:
                 this.sseStreamer.streamCalledToolsEvent(chatId, data)
                 break
-            case 'fileAnnotations':
+            case SSEEventType.FILE_ANNOTATIONS:
                 this.sseStreamer.streamFileAnnotationsEvent(chatId, data)
                 break
-            case 'tool':
+            case SSEEventType.TOOL:
                 this.sseStreamer.streamToolEvent(chatId, data)
                 break
-            case 'agentReasoning':
+            case SSEEventType.AGENT_REASONING:
                 this.sseStreamer.streamAgentReasoningEvent(chatId, data)
                 break
-            case 'nextAgent':
+            case SSEEventType.NEXT_AGENT:
                 this.sseStreamer.streamNextAgentEvent(chatId, data)
                 break
-            case 'agentFlowEvent':
+            case SSEEventType.AGENT_FLOW_EVENT:
                 this.sseStreamer.streamAgentFlowEvent(chatId, data)
                 break
-            case 'agentFlowExecutedData':
+            case SSEEventType.AGENT_FLOW_EXECUTED_DATA:
                 this.sseStreamer.streamAgentFlowExecutedDataEvent(chatId, data)
                 break
-            case 'nextAgentFlow':
+            case SSEEventType.NEXT_AGENT_FLOW:
                 this.sseStreamer.streamNextAgentFlowEvent(chatId, data)
                 break
-            case 'action':
+            case SSEEventType.ACTION:
                 this.sseStreamer.streamActionEvent(chatId, data)
                 break
-            case 'abort':
+            case SSEEventType.ABORT:
                 this.sseStreamer.streamAbortEvent(chatId)
                 break
-            case 'error':
+            case SSEEventType.ERROR:
                 this.sseStreamer.streamErrorEvent(chatId, data)
                 break
-            case 'metadata':
+            case SSEEventType.METADATA:
                 this.sseStreamer.streamMetadataEvent(chatId, data)
                 break
-            case 'usageMetadata':
+            case SSEEventType.USAGE_METADATA:
                 this.sseStreamer.streamUsageMetadataEvent(chatId, data)
                 break
-            case 'tts_start':
+            case SSEEventType.TTS_START:
                 this.sseStreamer.streamTTSStartEvent(chatId, chatMessageId, data.format)
                 break
-            case 'tts_data':
+            case SSEEventType.TTS_DATA:
                 this.sseStreamer.streamTTSDataEvent(chatId, chatMessageId, data)
                 break
-            case 'tts_end':
+            case SSEEventType.TTS_END:
                 this.sseStreamer.streamTTSEndEvent(chatId, chatMessageId)
                 break
-            case 'tts_abort':
+            case SSEEventType.TTS_ABORT:
                 this.sseStreamer.streamTTSAbortEvent(chatId, chatMessageId)
                 break
-            case 'thinking':
+            case SSEEventType.THINKING:
                 this.sseStreamer.streamThinkingEvent(chatId, data)
                 break
-            case 'question':
+            case SSEEventType.QUESTION:
                 this.sseStreamer.streamQuestionEvent(chatId, data)
                 break
-            case 'heartbeat':
+            case SSEEventType.HEARTBEAT:
                 // Heartbeat events are handled by the controller's timer, not via Redis
                 // This case exists for completeness but shouldn't be used
                 break
