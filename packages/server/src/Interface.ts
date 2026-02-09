@@ -372,6 +372,7 @@ export interface ICredentialReqBody {
     credentialName: string
     plainDataObj: ICredentialDataDecrypted
     workspaceId?: string
+    roomId?: string
 }
 
 // Decrypted credential object sent back to client
@@ -459,6 +460,7 @@ export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     iterationContext?: ICommonObject
     isTool?: boolean
     triggerData?: ITriggerData
+    roomId?: string
 }
 
 export interface INodeOverrides {

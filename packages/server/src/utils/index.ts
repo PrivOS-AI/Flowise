@@ -1686,6 +1686,10 @@ export const transformToCredentialEntity = async (body: ICredentialReqBody): Pro
         newCredential.workspaceId = body.workspaceId
     }
 
+    if (body.roomId) {
+        newCredential.roomId = body.roomId
+    }
+
     return newCredential
 }
 

@@ -77,7 +77,7 @@ const createDocumentStore = async (newDocumentStore: DocumentStore, orgId: strin
     }
 }
 
-const getAllDocumentStores = async (workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllDocumentStores = async (isRootAdmin?: boolean, roomId?: string, workspaceId?: string, page: number = -1, limit: number = -1) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(DocumentStore)
@@ -89,6 +89,11 @@ const getAllDocumentStores = async (workspaceId?: string, page: number = -1, lim
             queryBuilder.take(limit)
         }
         if (workspaceId) queryBuilder.andWhere('doc_store.workspaceId = :workspaceId', { workspaceId })
+
+        // Room isolation: Root admin sees all, room users see their room + global resources
+        if (!isRootAdmin && roomId) {
+            queryBuilder.andWhere('(doc_store.roomId = :roomId OR doc_store.roomId IS NULL)', { roomId })
+        }
 
         const [data, total] = await queryBuilder.getManyAndCount()
 
@@ -115,7 +120,7 @@ const deleteLoaderFromDocumentStore = async (
     docId: string,
     orgId: string,
     workspaceId: string,
-    usageCacheManager: UsageCacheManager
+    usageCacheManager: UsageCacheManager,
 ) => {
     try {
         const appServer = getRunningExpressApp()

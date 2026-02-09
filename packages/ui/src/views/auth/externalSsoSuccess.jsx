@@ -30,7 +30,16 @@ const ExternalSSOSuccess = () => {
                 if (response && response.data) {
                     setStatus('Authentication successful! Redirecting...')
                     store.dispatch(loginSuccess(response.data))
-                    navigate('/chatflows')
+                    // Wait for roomWorkspaceId to be set, then navigate
+                    // The WorkspaceContext will handle the redirect with roomWorkspaceId in URL
+                    setTimeout(() => {
+                        const roomWorkspaceId = localStorage.getItem('roomWorkspaceId')
+                        if (roomWorkspaceId) {
+                            navigate(`/${roomWorkspaceId}/chatflows`)
+                        } else {
+                            navigate('/chatflows')
+                        }
+                    }, 300)
                 } else {
                     setError('Invalid server response')
                     setStatus('Authentication failed')

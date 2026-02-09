@@ -2,9 +2,6 @@ import { RedisEventPublisher } from './RedisEventPublisher'
 import { BaseQueue } from './BaseQueue'
 import { RedisOptions } from 'bullmq'
 import { utilBuildChatflow } from '../utils/buildChatflow'
-import { getRunningExpressApp } from '../utils/getRunningExpressApp'
-import { Trigger } from '../database/entities/Trigger'
-import { ChatFlow } from '../database/entities/ChatFlow'
 
 interface IScheduleJobData {
     chatFlowId: string

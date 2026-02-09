@@ -55,7 +55,9 @@ export const PRIVOS_ENDPOINTS = {
     ROOMS: '/internal/rooms.get',
     USERS: '/internal/users.list',
     ROOM_MEMBERS: '/internal/rooms.members',
-    BOTS: '/bot'
+    BOTS: '/bot',
+    ROOM_BY_USER_ID: '/internal/rooms.byUserId',
+    ROOM_EXISTS: '/internal/rooms.exists'
 } as const
 
 // ============================================================================

@@ -167,7 +167,8 @@ const addExecution = async (
     agentflowId: string,
     agentFlowExecutedData: IAgentflowExecutedData[],
     sessionId: string,
-    workspaceId: string
+    workspaceId: string,
+    roomId?: string
 ) => {
     const newExecution = new Execution()
     const bodyExecution = {
@@ -175,6 +176,7 @@ const addExecution = async (
         state: 'INPROGRESS',
         sessionId,
         workspaceId,
+        roomId,
         executionData: JSON.stringify(agentFlowExecutedData)
     }
     Object.assign(newExecution, bodyExecution)
@@ -1511,7 +1513,8 @@ export const executeAgentFlow = async ({
     workspaceId,
     subscriptionId,
     productId,
-    triggerData
+    triggerData,
+    roomId
 }: IExecuteAgentFlowParams) => {
     logger.debug('\n🚀 Starting flow execution')
 
@@ -1828,7 +1831,7 @@ export const executeAgentFlow = async ({
             newExecution = parentExecution
         } else {
             console.warn(`   ⚠️ Parent execution ID ${parentExecutionId} not found, will create new execution`)
-            newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId)
+            newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId, roomId)
             parentExecutionId = newExecution.id
         }
     } else {
@@ -1837,7 +1840,7 @@ export const executeAgentFlow = async ({
         checkForMultipleStartNodes(startingNodeIds, isRecursive, nodes)
 
         // Only create a new execution if this is not a recursive call
-        newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId)
+        newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId, roomId)
         parentExecutionId = newExecution.id
     }
 

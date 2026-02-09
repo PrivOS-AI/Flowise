@@ -319,7 +319,8 @@ export const executeFlow = async ({
     workspaceId,
     subscriptionId,
     productId,
-    triggerData
+    triggerData,
+    roomId
 }: IExecuteFlowParams) => {
     // Ensure incomingInput has all required properties with default values
     incomingInput = {
@@ -493,7 +494,8 @@ export const executeFlow = async ({
             workspaceId,
             subscriptionId,
             productId,
-            triggerData
+            triggerData,
+            roomId
         })
     }
 
@@ -1036,6 +1038,12 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Organization ${workspace.organizationId} not found`)
         }
 
+        // Room isolation: Root admin sees all, room users see their room
+        let roomId = undefined
+        if (!req.isRootAdmin && req.roomId) {
+            roomId = req.roomId
+        }
+
         const orgId = org.id
         organizationId = orgId
         const subscriptionId = org.subscriptionId as string
@@ -1065,7 +1073,8 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             workspaceId,
             subscriptionId,
             productId,
-            triggerData: incomingInput.triggerData
+            triggerData: incomingInput.triggerData,
+            roomId
         }
 
         if (process.env.MODE === MODE.QUEUE && incomingInput.triggerData?.eventType !== 'schedule') {

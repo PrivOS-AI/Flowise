@@ -70,9 +70,9 @@ const getAllCredentials = async (paramCredentialName: any, workspaceId?: string,
                 qb.andWhere('credential.workspaceId = :workspaceId', { workspaceId })
             }
 
-            // Room isolation: Root admin sees all, room users see their room + global resources
+            // Room isolation: Root admin sees all, room users see their room
             if (!isRootAdmin && roomId) {
-                qb.andWhere('(credential.roomId = :roomId OR credential.roomId IS NULL)', { roomId })
+                qb.andWhere('(credential.roomId = :roomId)', { roomId })
             }
 
             return qb
