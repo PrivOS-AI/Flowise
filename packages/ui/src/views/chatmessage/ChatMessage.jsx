@@ -230,6 +230,10 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
     const [pendingQuestions, setPendingQuestions] = useState(null)
     const [questionDialogOpen, setQuestionDialogOpen] = useState(false)
 
+    // ClaudeWS Questions state
+    const [pendingQuestions, setPendingQuestions] = useState(null)
+    const [questionDialogOpen, setQuestionDialogOpen] = useState(false)
+
     const inputRef = useRef(null)
     const getChatmessageApi = useApi(chatmessageApi.getInternalChatmessageFromChatflow)
     const getAllExecutionsApi = useApi(executionsApi.getAllExecutions)
@@ -1134,10 +1138,7 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                     case SSEEventType.THINKING:
                         updateLastMessageThinking(payload.data)
                         break
-                    case SSEEventType.QUESTION:
-                        updateLastMessageQuestion(payload.data)
-                        break
-                    case SSEEventType.AGENT_FLOW_EVENT:
+                    case 'agentFlowEvent':
                         updateAgentFlowEvent(payload.data)
                         break
                     case SSEEventType.AGENT_FLOW_EXECUTED_DATA:
