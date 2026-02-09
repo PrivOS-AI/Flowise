@@ -153,6 +153,16 @@ export class SSEStreamer implements IServerSideEventStreamer {
             client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
         }
     }
+    streamQuestionEvent(chatId: string, data: any): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'question',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
     streamAgentFlowEvent(chatId: string, data: any): void {
         const client = this.clients[chatId]
         if (client) {
