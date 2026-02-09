@@ -8,7 +8,6 @@
  */
 
 import { Socket } from 'socket.io-client'
-import { DEFAULT_TIMEOUT_MS, CLEANUP_INTERVAL_MS } from './constants'
 
 export interface QuestionOption {
     label: string
@@ -38,7 +37,7 @@ type PendingQuestionInput = Omit<PendingQuestionData, 'createdAt'>
 
 class QuestionStorage {
     private questions = new Map<string, PendingQuestionData>()
-    private readonly TIMEOUT_MS = DEFAULT_TIMEOUT_MS
+    private readonly TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
     /**
      * Store a pending question
@@ -161,5 +160,5 @@ export const claudewsQuestionStorage = new QuestionStorage()
 if (typeof setInterval !== 'undefined') {
     setInterval(() => {
         claudewsQuestionStorage.cleanupExpired()
-    }, CLEANUP_INTERVAL_MS)
+    }, 60 * 1000)
 }
