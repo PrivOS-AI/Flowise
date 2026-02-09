@@ -76,7 +76,7 @@ const getAllExecutions = async (req: Request, res: Response, next: NextFunction)
             filters.limit = parseInt(req.query.limit as string, 10)
         }
 
-        const apiResponse = await executionsService.getAllExecutions(filters)
+        const apiResponse = await executionsService.getAllExecutions(filters, req.isRootAdmin, req.roomId)
 
         return res.json(apiResponse)
     } catch (error) {

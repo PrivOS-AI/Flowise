@@ -63,7 +63,7 @@ const getPublicExecutionById = async (executionId: string): Promise<Execution | 
     }
 }
 
-const getAllExecutions = async (filters: ExecutionFilters = {}): Promise<{ data: Execution[]; total: number }> => {
+const getAllExecutions = async (filters: ExecutionFilters = {}, isRootAdmin?: boolean, roomId?: string): Promise<{ data: Execution[]; total: number }> => {
     try {
         const appServer = getRunningExpressApp()
         const { id, agentflowId, agentflowName, sessionId, state, startDate, endDate, page = 1, limit = 12, workspaceId } = filters
@@ -84,6 +84,10 @@ const getAllExecutions = async (filters: ExecutionFilters = {}): Promise<{ data:
         if (sessionId) queryBuilder.andWhere('execution.sessionId = :sessionId', { sessionId })
         if (state) queryBuilder.andWhere('execution.state = :state', { state })
         if (workspaceId) queryBuilder.andWhere('execution.workspaceId = :workspaceId', { workspaceId })
+         // Room isolation: Root admin sees all, room users see their room
+        if (!isRootAdmin && roomId) {
+            queryBuilder.andWhere('(execution.roomId = :roomId)', { roomId })
+        }
 
         // Date range conditions
         if (startDate && endDate) {

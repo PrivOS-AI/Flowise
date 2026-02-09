@@ -32,6 +32,11 @@ export const extractRoomDataMiddleware = (req: Request, res: Response, next: Nex
                 req.roomId = decoded.roomId
                 req.isRootAdmin = decoded.isRootAdmin !== undefined ? decoded.isRootAdmin : true // Default to true for native login
             }
+
+            // If rid is query filter
+            if(req.query.rid){
+                req.roomId = req.query.rid as string
+            }
         } else {
             // No token - default to root admin (for API key access, etc.)
             req.isRootAdmin = true

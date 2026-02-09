@@ -69,6 +69,7 @@ import workspaceRouter from '../enterprise/routes/workspace.route'
 import workspaceUserRouter from '../enterprise/routes/workspace-user.route'
 import accountRouter from '../enterprise/routes/account.route'
 import loginMethodRouter from '../enterprise/routes/login-method.route'
+import privosChatRouter from './privos-chat'
 import { IdentityManager } from '../IdentityManager'
 
 const router = express.Router()
@@ -143,5 +144,7 @@ router.use('/account', accountRouter)
 router.use('/loginmethod', loginMethodRouter)
 router.use('/logs', IdentityManager.checkFeatureByPlan('feat:logs'), logsRouter)
 router.use('/files', IdentityManager.checkFeatureByPlan('feat:files'), filesRouter)
+router.use('/privos-chat', privosChatRouter)
+
 
 export default router

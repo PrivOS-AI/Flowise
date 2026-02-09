@@ -172,7 +172,12 @@ export class App {
                 const predictionQueue = this.queueManager.getQueue('prediction')
                 predictionQueue.createWorker()
                 logger.info('🔄 [server]: Prediction Worker started in server process')
-            }
+
+                // Same process -> sholud be moved to separate process in production
+                const scheduleQueue = this.queueManager.getQueue('schedule')
+                scheduleQueue.createWorker()
+                logger.info('🔄 [server]: Schedule Worker started in server process')
+                }
 
             // TODO: Remove this by end of 2025
             await migrateApiKeysFromJsonToDb(this.AppDataSource, this.identityManager.getPlatformType())

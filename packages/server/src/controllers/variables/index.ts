@@ -23,6 +23,10 @@ const createVariable = async (req: Request, res: Response, next: NextFunction) =
         }
         const body = req.body
         body.workspaceId = workspaceId
+        // Room isolation: Only set roomId if user is NOT root admin
+        if (!req.isRootAdmin && req.roomId) {
+            body.roomId = req.roomId
+        }
         const newVariable = new Variable()
         Object.assign(newVariable, body)
         const apiResponse = await variablesService.createVariable(newVariable, orgId)
@@ -62,7 +66,7 @@ const deleteVariable = async (req: Request, res: Response, next: NextFunction) =
 const getAllVariables = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { page, limit } = getPageAndLimitParams(req)
-        const apiResponse = await variablesService.getAllVariables(req.user?.activeWorkspaceId, page, limit)
+        const apiResponse = await variablesService.getAllVariables(req.isRootAdmin, req.roomId,req.user?.activeWorkspaceId, page, limit)
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -82,7 +86,7 @@ const updateVariable = async (req: Request, res: Response, next: NextFunction) =
         }
         const variable = await variablesService.getVariableById(req.params.id)
         if (!variable) {
-            return res.status(404).send(`Variable ${req.params.id} not found in the database`)
+            return res.status(404).send(`Error: variablesController.updateVariable - Variable ${req.params.id} not found in the database`)
         }
 
         // Room isolation: Prevent room users from editing global resources

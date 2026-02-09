@@ -7,7 +7,9 @@ const exportData = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const apiResponse = await exportImportService.exportData(
             exportImportService.convertExportInput(req.body),
-            req.user?.activeWorkspaceId
+            req.user?.activeWorkspaceId,
+            req.isRootAdmin,
+            req.roomId
         )
         return res.json(apiResponse)
     } catch (error) {
