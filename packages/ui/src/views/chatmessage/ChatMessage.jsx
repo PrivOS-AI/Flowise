@@ -1138,7 +1138,10 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                     case SSEEventType.THINKING:
                         updateLastMessageThinking(payload.data)
                         break
-                    case 'agentFlowEvent':
+                    case SSEEventType.QUESTION:
+                        updateLastMessageQuestion(payload.data)
+                        break
+                    case SSEEventType.AGENT_FLOW_EVENT:
                         updateAgentFlowEvent(payload.data)
                         break
                     case SSEEventType.AGENT_FLOW_EXECUTED_DATA:

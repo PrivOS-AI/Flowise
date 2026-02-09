@@ -9,6 +9,7 @@ import { decryptCredentialData } from '../../../src/utils'
 import { updateFlowState } from '../utils'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { claudewsQuestionStorage, Question } from './question-storage'
+import { DEFAULT_TIMEOUT_MS, ClaudeWSOutputEventTypes, ClaudeWSDeltaTypes, ClaudeWSContentBlockTypes, SocketEventNames } from './constants'
 
 interface ClaudeWSOutput {
     type: string
@@ -707,7 +708,7 @@ class ClaudeWS_Agentflow implements INode {
 
             const socket = io(baseUrl, {
                 reconnection: false,
-                timeout: 15 * 60 * 1000,
+                timeout: DEFAULT_TIMEOUT_MS,
                 auth: { 'x-api-key': apiKey },
                 extraHeaders: { 'x-api-key': apiKey }
             })
@@ -717,7 +718,7 @@ class ClaudeWS_Agentflow implements INode {
                 socket.disconnect()
             }
 
-            socket.on('connect', () => {
+            socket.on(SocketEventNames.CONNECT, () => {
                 // Start the attempt - the server will create it and emit attempt:started
                 const attemptPayload: ICommonObject = {
                     taskId,
@@ -770,24 +771,24 @@ class ClaudeWS_Agentflow implements INode {
                     fileIds: attemptPayload.fileIds
                 })
                 console.log('[ClaudeWS Agentflow] Exact payload being sent:', JSON.stringify(attemptPayload, null, 2))
-                socket.emit('attempt:start', attemptPayload)
+                socket.emit(SocketEventNames.ATTEMPT_START, attemptPayload)
             })
 
-            socket.on('attempt:started', (data: { attemptId: string }) => {
+            socket.on(SocketEventNames.ATTEMPT_STARTED, (data: { attemptId: string }) => {
                 attemptId = data.attemptId
                 // Explicitly subscribe to attempt room to receive events
-                socket.emit('attempt:subscribe', { attemptId })
+                socket.emit(SocketEventNames.ATTEMPT_SUBSCRIBE, { attemptId })
                 console.log('[ClaudeWS Agentflow] Attempt started, socket ID:', socket.id, 'attemptId:', attemptId)
             })
 
-            socket.on('connect_error', (err: Error) => {
+            socket.on(SocketEventNames.CONNECT_ERROR, (err: Error) => {
                 if (resolved) return
                 resolved = true
                 cleanup()
                 reject(new Error(`Connection failed: ${err.message}`))
             })
 
-            socket.on('output:json', (data: { attemptId: string; data: ClaudeWSOutput }) => {
+            socket.on(SocketEventNames.OUTPUT_JSON, (data: { attemptId: string; data: ClaudeWSOutput }) => {
                 // Only process messages for this attempt
                 if (!attemptId || data.attemptId !== attemptId) {
                     return
@@ -796,33 +797,33 @@ class ClaudeWS_Agentflow implements INode {
                 const output = data.data
 
                 switch (output.type) {
-                    case 'content_block_delta':
-                        if (output.delta?.type === 'text_delta' && output.delta.text) {
+                    case ClaudeWSOutputEventTypes.CONTENT_BLOCK_DELTA:
+                        if (output.delta?.type === ClaudeWSDeltaTypes.TEXT_DELTA && output.delta.text) {
                             fullResponse += output.delta.text
                             if (shouldStream && streamer && chatId) {
                                 streamer.streamTokenEvent(chatId, output.delta.text)
                             }
-                        } else if (output.delta?.type === 'thinking_delta' && output.delta.thinking) {
+                        } else if (output.delta?.type === ClaudeWSDeltaTypes.THINKING_DELTA && output.delta.thinking) {
                             if (shouldStream && streamer && chatId) {
                                 streamer.streamThinkingEvent(chatId, output.delta.thinking)
                             }
                         }
                         break
 
-                    case 'assistant':
+                    case ClaudeWSOutputEventTypes.ASSISTANT:
                         // Complete assistant message - extract text from it
                         if ((output as any).message && (output as any).message.content) {
                             const content = (output as any).message.content
                             if (Array.isArray(content)) {
                                 // Extract text and tool_use from content blocks
                                 for (const block of content) {
-                                    if (block.type === 'text' && block.text) {
+                                    if (block.type === ClaudeWSContentBlockTypes.TEXT && block.text) {
                                         // Append to fullResponse (deltas are incremental)
                                         fullResponse += block.text
                                         if (shouldStream && streamer && chatId) {
                                             streamer.streamTokenEvent(chatId, block.text)
                                         }
-                                    } else if (block.type === 'tool_use') {
+                                    } else if (block.type === ClaudeWSContentBlockTypes.TOOL_USE) {
                                         // Collect tool_use from assistant messages
                                         const filePath = block.input?.file_path || ''
                                         const toolLabel = filePath ? `${block.name} → ${filePath}` : block.name
@@ -845,7 +846,7 @@ class ClaudeWS_Agentflow implements INode {
                         }
                         break
 
-                    case 'tool_use':
+                    case ClaudeWSOutputEventTypes.TOOL_USE:
                         // Collect standalone tool_use events
                         usedTools.push({
                             tool: output.tool_name || '',
@@ -854,13 +855,13 @@ class ClaudeWS_Agentflow implements INode {
                         })
                         break
 
-                    case 'user':
+                    case ClaudeWSOutputEventTypes.USER:
                         // Check if this is a tool_result message
                         if ((output as any).message && (output as any).message.content) {
                             const content = (output as any).message.content
                             if (Array.isArray(content)) {
                                 for (const block of content) {
-                                    if (block.type === 'tool_result') {
+                                    if (block.type === ClaudeWSContentBlockTypes.TOOL_RESULT) {
                                         // Find the corresponding tool and update its output
                                         const tool = usedTools.find((t) => t.toolInput?.toolUseId === block.tool_use_id)
                                         if (tool) {
@@ -874,7 +875,7 @@ class ClaudeWS_Agentflow implements INode {
                 }
             })
 
-            socket.on('attempt:finished', (data: { attemptId: string }) => {
+            socket.on(SocketEventNames.ATTEMPT_FINISHED, (data: { attemptId: string }) => {
                 if (!attemptId || data.attemptId !== attemptId) return
                 if (resolved) return
 
@@ -886,7 +887,7 @@ class ClaudeWS_Agentflow implements INode {
                 resolve({ text: fullResponse, usedTools })
             })
 
-            socket.on('error', (data: { message: string }) => {
+            socket.on(SocketEventNames.ERROR, (data: { message: string }) => {
                 if (resolved) return
                 resolved = true
                 cleanup()
@@ -894,7 +895,7 @@ class ClaudeWS_Agentflow implements INode {
             })
 
             // Handle question:ask event from ClaudeWS server
-            socket.on('question:ask', (data: QuestionAskData) => {
+            socket.on(SocketEventNames.QUESTION_ASK, (data: QuestionAskData) => {
                 console.log('[ClaudeWS Agentflow] Received question:ask event:', {
                     socketId: socket.id,
                     currentAttemptId: attemptId,
@@ -978,7 +979,7 @@ class ClaudeWS_Agentflow implements INode {
                 resolved = true
                 cleanup()
                 reject(new Error('Attempt timeout'))
-            }, 15 * 60 * 1000)
+            }, DEFAULT_TIMEOUT_MS)
         })
     }
 
