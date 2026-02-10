@@ -98,7 +98,8 @@ const RoomWorkspaceSwitcher = () => {
     const [searchKeyword, setSearchKeyword] = useState('')
 
     // Pagination state
-    const [page, setPage] = useState(1)
+    const [offset, setOffset] = useState(0)
+    const count = 10 // Items per page (limit)
     const [hasMore, setHasMore] = useState(true)
     const [totalCount, setTotalCount] = useState(0)
 
@@ -112,7 +113,7 @@ const RoomWorkspaceSwitcher = () => {
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget)
         setSearchKeyword('')
-        setPage(1)
+        setOffset(0)
         setHasMore(true)
         isSearchModeRef.current = false
     }
@@ -132,7 +133,7 @@ const RoomWorkspaceSwitcher = () => {
     )
 
     // Fetch roomWorkspaces - support pagination and search
-    const fetchWorkspaces = async (keyword = '', pageNum = 1, append = false) => {
+    const fetchWorkspaces = async (search = '', offsetValue = 0, append = false) => {
         try {
             if (!append) {
                 setLoading(true)
@@ -141,8 +142,9 @@ const RoomWorkspaceSwitcher = () => {
             }
 
             const response = await privosChatApi.getRoomsByUserId(currentUser?.id || '', {
-                keyword,
-                page: pageNum
+                search,
+                offset: offsetValue,
+                count
             })
 
             const responseData = response.data
@@ -158,7 +160,7 @@ const RoomWorkspaceSwitcher = () => {
             setHasMore(responseData?.offset * responseData?.count < responseData?.total)
 
             // Set initial workspace if none selected
-            if (!currentRoomWorkspace && !keyword && pageNum === 1 && newWorkspaces.length > 0) {
+            if (!currentRoomWorkspace && !keyword && offsetValue === 0 && newWorkspaces.length > 0) {
                 const initialWs = urlRoomWorkspaceId
                     ? newWorkspaces.find((ws) => ws._id === urlRoomWorkspaceId) || newWorkspaces[0]
                     : newWorkspaces[0]
@@ -175,24 +177,24 @@ const RoomWorkspaceSwitcher = () => {
     // Search handler
     const handleSearch = (keyword) => {
         isSearchModeRef.current = keyword.length > 0
-        setPage(1)
+        setOffset(0)
         setHasMore(true)
-        fetchWorkspaces(keyword, 1, false)
+        fetchWorkspaces(keyword, 0, false)
     }
 
     // Load more handler
     const handleLoadMore = () => {
         if (!loadingMore && hasMore) {
-            const nextPage = page + 1
-            setPage(nextPage)
-            fetchWorkspaces(searchKeyword, nextPage, true)
+            const newOffset = offset + count
+            setOffset(newOffset)
+            fetchWorkspaces(searchKeyword, newOffset, true)
         }
     }
 
     // Initial fetch on mount
     useEffect(() => {
         if (!isAuthenticated || !currentUser?._id) return
-        fetchWorkspaces('', 1, false)
+        fetchWorkspaces('', 0, false)
     }, [isAuthenticated, currentUser?._id])
 
     // Sync with URL roomWorkspaceId
@@ -209,8 +211,8 @@ const RoomWorkspaceSwitcher = () => {
     useEffect(() => {
         if (open && !loading) {
             const keyword = isSearchModeRef.current ? searchKeyword : ''
-            setPage(1)
-            fetchWorkspaces(keyword, 1, false)
+            setOffset(0)
+            fetchWorkspaces(keyword, 0, false)
         }
     }, [open])
 
@@ -315,7 +317,7 @@ const RoomWorkspaceSwitcher = () => {
                             selected={(currentRoomWorkspace?._id || roomWorkspaceId) === roomWorkspace._id}
                             disableRipple
                         >
-                            {roomWorkspace?.fname || ''}
+                            {roomWorkspace?.fname || roomWorkspace?.name || ''}
                         </MenuItem>
                     ))}
 
