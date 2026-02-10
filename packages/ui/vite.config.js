@@ -42,10 +42,26 @@ export default defineConfig(async ({ mode }) => {
             outDir: './build'
         },
         server: {
-            open: true,
+            open: false,
             proxy,
             port: process.env.VITE_PORT ?? 8080,
-            host: process.env.VITE_HOST
+            host: process.env.VITE_HOST ?? 'localhost',
+            watch: {
+                ignored: [
+                    '**/node_modules/**',
+                    '**/dist/**',
+                    '**/.git/**',
+                    '**/build/**',
+                    '**/.turbo/**'
+                ],
+                usePolling: false,
+                depth: 15
+            },
+            hmr: false
+        },
+        optimizeDeps: {
+            include: ['react', 'react-dom', 'react-redux'],
+            exclude: ['flowise-components']
         }
     }
 })

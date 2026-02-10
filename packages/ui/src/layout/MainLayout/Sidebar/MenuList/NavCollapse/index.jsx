@@ -19,7 +19,7 @@ const NavCollapse = ({ menu, level }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
 
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(menu.defaultOpen || false)
     const [selected, setSelected] = useState(null)
 
     const handleClick = () => {

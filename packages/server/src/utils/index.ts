@@ -56,6 +56,8 @@ import { CachePool } from '../CachePool'
 import { Variable } from '../database/entities/Variable'
 import { DocumentStore } from '../database/entities/DocumentStore'
 import { DocumentStoreFileChunk } from '../database/entities/DocumentStoreFileChunk'
+import { ClaudeWSServer } from '../database/entities/ClaudeWSServer'
+import { ClaudeWSPlugin } from '../database/entities/ClaudeWSPlugin'
 import { InternalFlowiseError } from '../errors/internalFlowiseError'
 import { StatusCodes } from 'http-status-codes'
 import {
@@ -102,7 +104,9 @@ export const databaseEntities: IDatabaseEntity = {
     Assistant: Assistant,
     Variable: Variable,
     DocumentStore: DocumentStore,
-    DocumentStoreFileChunk: DocumentStoreFileChunk
+    DocumentStoreFileChunk: DocumentStoreFileChunk,
+    ClaudeWSServer: ClaudeWSServer,
+    ClaudeWSPlugin: ClaudeWSPlugin
 }
 
 /**

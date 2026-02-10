@@ -10,7 +10,7 @@
 ## logs
 **/logs
 **/*.log
-
+.agent/
 ## pnpm
 .pnpm-store/
 

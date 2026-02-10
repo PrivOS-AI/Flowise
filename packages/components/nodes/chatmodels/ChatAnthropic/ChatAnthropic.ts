@@ -1,10 +1,9 @@
 import { AnthropicInput, ChatAnthropic as LangchainChatAnthropic } from '@langchain/anthropic'
 import { BaseCache } from '@langchain/core/caches'
 import { BaseLLMParams } from '@langchain/core/language_models/llms'
-import { ICommonObject, IMultiModalOption, INode, INodeData, INodeOptionsValue, INodeParams } from '../../../src/Interface'
+import { ICommonObject, IMultiModalOption, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { getBaseClasses, getCredentialData, getCredentialParam } from '../../../src/utils'
 import { ChatAnthropic } from './FlowiseChatAnthropic'
-import { getModels, MODEL_TYPE } from '../../../src/modelLoader'
 
 class ChatAnthropic_ChatModels implements INode {
     label: string
@@ -43,9 +42,9 @@ class ChatAnthropic_ChatModels implements INode {
             {
                 label: 'Model Name',
                 name: 'modelName',
-                type: 'asyncOptions',
-                loadMethod: 'listModels',
-                default: 'claude-3-haiku'
+                type: 'string',
+                default: 'claude-4-5-sonnet',
+                placeholder: 'claude-3-5-sonnet-20241022, glm-4.7, ...'
             },
             {
                 label: 'Temperature',
@@ -115,13 +114,6 @@ class ChatAnthropic_ChatModels implements INode {
                 optional: true
             }
         ]
-    }
-
-    //@ts-ignore
-    loadMethods = {
-        async listModels(): Promise<INodeOptionsValue[]> {
-            return await getModels(MODEL_TYPE.CHAT, 'chatAnthropic')
-        }
     }
 
     async init(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {

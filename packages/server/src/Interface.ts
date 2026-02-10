@@ -216,6 +216,33 @@ export interface ITrigger {
     workspaceId?: string
 }
 
+export interface IClaudeWSServer {
+    id: string
+    name: string
+    description: string
+    endpointUrl: string
+    apiKey: string
+    isActive: boolean
+    createdDate: Date
+    updatedDate: Date
+    workspaceId?: string
+    roomId?: string
+}
+
+export interface IClaudeWSPlugin {
+    id: string
+    serverId: string
+    pluginId: string
+    type: string
+    name: string
+    description: string
+    sourcePath?: string
+    storageType: string
+    metadata?: string
+    createdDate: Date
+    updatedDate: Date
+}
+
 export interface IComponentNodes {
     [key: string]: INode
 }

@@ -462,6 +462,7 @@ export interface IServerSideEventStreamer {
     streamTTSDataEvent(chatId: string, chatMessageId: string, audioChunk: string): void
     streamTTSEndEvent(chatId: string, chatMessageId: string): void
     streamThinkingEvent(chatId: string, data: string): void
+    streamQuestionEvent(chatId: string, data: any): void
 }
 
 export enum FollowUpPromptProvider {

@@ -57,6 +57,7 @@ const createPrediction = async (req: Request, res: Response, next: NextFunction)
             const isStreamingRequested = req.body.streaming === 'true' || req.body.streaming === true
             if (streamable?.isStreaming && isStreamingRequested) {
                 const sseStreamer = getRunningExpressApp().sseStreamer
+                let stopHeartbeat: (() => void) | undefined
 
                 let chatId = req.body.chatId
                 if (!req.body.chatId) {
@@ -73,6 +74,8 @@ const createPrediction = async (req: Request, res: Response, next: NextFunction)
 
                     if (process.env.MODE === MODE.QUEUE) {
                         getRunningExpressApp().redisSubscriber.subscribe(chatId)
+                        // Start heartbeat for queue mode to keep SSE connection alive
+                        stopHeartbeat = sseStreamer.startHeartbeat(chatId, 20000)
                     }
 
                     const apiResponse = await predictionsServices.buildChatflow(req)
@@ -83,6 +86,10 @@ const createPrediction = async (req: Request, res: Response, next: NextFunction)
                     }
                     next(error)
                 } finally {
+                    // Stop heartbeat before removing client
+                    if (stopHeartbeat) {
+                        stopHeartbeat()
+                    }
                     sseStreamer.removeClient(chatId)
                 }
             } else {

@@ -818,18 +818,38 @@ class LLM_Agentflow implements INode {
         abortController: AbortController
     ): Promise<AIMessageChunk> {
         let response = new AIMessageChunk('')
+        let thinkingBuffer = ''
 
         try {
             for await (const chunk of await llmNodeInstance.stream(messages, { signal: abortController?.signal })) {
                 if (sseStreamer) {
+                    // Check for thinking content in additional_kwargs
+                    if (chunk.additional_kwargs?.thinking) {
+                        const thinking = chunk.additional_kwargs.thinking as string
+                        const isThinking = chunk.additional_kwargs.isThinking as boolean
+
+                        if (isThinking) {
+                            // Stream thinking content
+                            if (thinking !== thinkingBuffer) {
+                                const newThinking = thinking.slice(thinkingBuffer.length)
+                                sseStreamer.streamThinkingEvent(chatId, newThinking)
+                                thinkingBuffer = thinking
+                            }
+                        }
+                    }
+
+                    // Handle regular content
                     let content = ''
                     if (Array.isArray(chunk.content) && chunk.content.length > 0) {
                         const contents = chunk.content as MessageContentText[]
                         content = contents.map((item) => item.text).join('')
-                    } else {
+                    } else if (chunk.content !== '') {
                         content = chunk.content.toString()
                     }
-                    sseStreamer.streamTokenEvent(chatId, content)
+
+                    if (content) {
+                        sseStreamer.streamTokenEvent(chatId, content)
+                    }
                 }
 
                 response = response.concat(chunk)
