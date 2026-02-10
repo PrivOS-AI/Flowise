@@ -54,7 +54,10 @@ export const PRIVOS_ENDPOINTS = {
     LISTS_TEMPLATE_DK: '/internal/lists.byTemplateListKey',
     ROOMS: '/internal/rooms.get',
     USERS: '/internal/users.list',
-    ROOM_MEMBERS: '/internal/rooms.members'
+    ROOM_MEMBERS: '/internal/rooms.members',
+    BOTS: '/bot',
+    ROOM_BY_USER_ID: '/internal/rooms.byUserId',
+    ROOM_EXISTS: '/internal/rooms.exists'
 } as const
 
 // ============================================================================

@@ -28,6 +28,11 @@ const createDocumentStore = async (req: Request, res: Response, next: NextFuncti
         const body = req.body
         body.workspaceId = req.user?.activeWorkspaceId
 
+        // Room isolation: Only set roomId if user is NOT root admin
+        if (!req.isRootAdmin && req.roomId) {
+            body.roomId = req.roomId
+        }
+
         const docStore = DocumentStoreDTO.toEntity(body)
         const apiResponse = await documentStoreService.createDocumentStore(docStore, orgId)
         return res.json(apiResponse)
@@ -40,7 +45,7 @@ const getAllDocumentStores = async (req: Request, res: Response, next: NextFunct
     try {
         const { page, limit } = getPageAndLimitParams(req)
 
-        const apiResponse: any = await documentStoreService.getAllDocumentStores(req.user?.activeWorkspaceId, page, limit)
+        const apiResponse: any = await documentStoreService.getAllDocumentStores(req.isRootAdmin, req.roomId, req.user?.activeWorkspaceId, page, limit)
         if (apiResponse?.total >= 0) {
             return res.json({
                 total: apiResponse.total,

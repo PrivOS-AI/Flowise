@@ -6,7 +6,8 @@
 import FormData from 'form-data'
 import { secureAxiosRequest } from '../../src/httpSecurity'
 import { PRIVOS_ENDPOINTS, PRIVOS_HEADERS, ERROR_MESSAGES } from './constants'
-import { ICommonObject } from '../../src'
+import { ICommonObject, INodeData } from '../../src'
+import { CRON_TEMPLATES, INTERVAL_MS, SCHEDULE_DEFAULTS, SCHEDULE_TYPES } from './trigger-node/constant'
 
 // MIME type mapping for file extensions
 export const MIME_TYPE_MAP: { [key: string]: string } = {
@@ -187,4 +188,243 @@ export const parseMultiSelectFields = (selectedFields: any): string[] => {
         }
     })
     return flattened
+}
+
+/**
+ * Calculate delay for one-time execution (ONCE type)
+ * @param executeAt - ISO string or timestamp
+ * @returns Milliseconds until execution
+ */
+export function calculateOnceDelay(executeAt: string | Date): number {
+    const targetTime = new Date(executeAt).getTime()
+    const now = Date.now()
+    const delay = targetTime - now
+
+    if (delay < 0) {
+        throw new Error('Execution time must be in the future')
+    }
+
+    return delay
+}
+
+interface BullMQRepeatOptions {
+    pattern?: string // Cron pattern
+    every?: number // Milliseconds
+    limit?: number // Max executions
+    immediately?: boolean // Start immediately
+    endDate?: Date | string | number // When to stop
+    tz?: string // Timezone
+}
+
+/**
+ * Get full job options including retry config
+ *
+ * @param config - Parsed config from node inputs
+ * @param bullMQRepeat - BullMQ repeat options
+ * @returns Complete job options for BullMQ (already includes repeat inside)
+ */
+export function getBullMQJobOptions(config: ICommonObject, bullMQRepeat?: BullMQRepeatOptions): ICommonObject {
+    const jobOptions: ICommonObject = {}
+
+    // Add repeat config if exists (this is the "repeat" option you remember!)
+    if (bullMQRepeat && Object.keys(bullMQRepeat).length > 0) {
+        jobOptions.repeat = bullMQRepeat
+    }
+
+    // Handle one-time execution
+    if (config.scheduleType === SCHEDULE_TYPES.ONCE && config.executeAt) {
+        jobOptions.delay = calculateOnceDelay(config.executeAt)
+    }
+
+    // Retry configuration
+    if (config.retryOnFail) {
+        jobOptions.attempts = config.attempts || SCHEDULE_DEFAULTS.RETRY_ATTEMPTS
+        jobOptions.backoff = {
+            type: config.type || 'fixed',
+            delay: config.backoff || SCHEDULE_DEFAULTS.RETRY_DELAY
+        }
+    }
+
+    // Remove old jobs on restart
+    jobOptions.removeOnComplete = true
+    jobOptions.removeOnFail = false
+
+    return jobOptions
+}
+
+/**
+ * Parse and validate schedule configuration
+ */
+export function parseConfig(nodeData: INodeData): ICommonObject {
+    const inputs = nodeData.inputs || {}
+    const scheduleType = inputs.scheduleType as string
+
+    const config: ICommonObject = {
+        scheduleType,
+        enabled: inputs.isEnabled ?? true,
+        maxExecutions: inputs.maxExecutions ?? -1,
+        retryOnFail: inputs.retryOnFail ?? false,
+        attempts: inputs.attempts ?? 3,
+        backoff: inputs.backoff ?? 3000
+    }
+
+    // Type-specific config
+    switch (scheduleType) {
+        case SCHEDULE_TYPES.INTERVAL:
+            config.interval = inputs.interval ?? 5
+            config.intervalUnit = inputs.intervalUnit ?? 'minutes'
+            break
+
+        case SCHEDULE_TYPES.CRON:
+            // Use custom pattern or template
+            config.cronPattern = inputs.cronPattern || getCronFromTemplate(inputs.cronTemplate) || SCHEDULE_DEFAULTS.CRON
+            break
+
+        case SCHEDULE_TYPES.ONCE:
+            config.executeAt = inputs.executeAt
+            break
+
+        case SCHEDULE_TYPES.DAILY:
+            config.time = getTimeFromArray(inputs.executionTime)
+            config.timezone = inputs.timezone || 'UTC'
+            break
+
+        case SCHEDULE_TYPES.WEEKLY:
+            config.days = inputs.weeklyDays || ['1']
+            config.time = getTimeFromArray(inputs.executionTime)
+            config.timezone = inputs.timezone || 'UTC'
+            break
+
+        case SCHEDULE_TYPES.MONTHLY:
+            config.days = parseCommaSeparated(inputs.monthlyDays) || [1]
+            config.time = getTimeFromArray(inputs.executionTime)
+            config.timezone = inputs.timezone || 'UTC'
+            break
+    }
+
+    return config
+}
+
+/**
+ * Extract time from array format (hour, minute)
+ */
+export function getTimeFromArray(timeArray: any): string {
+    if (!timeArray || !Array.isArray(timeArray) || timeArray.length === 0) {
+        return SCHEDULE_DEFAULTS.TIME
+    }
+    const timeObj = timeArray[0]
+    const h = timeObj?.hour !== undefined ? parseInt(timeObj.hour.toString(), 10) : 9
+    const m = timeObj?.minute !== undefined ? parseInt(timeObj.minute.toString(), 10) : 0
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+}
+
+/**
+ * Get cron pattern from template name
+ */
+function getCronFromTemplate(templateName: string | undefined): string | undefined {
+    if (!templateName) return undefined
+    const template = CRON_TEMPLATES.find((t) => t.name === templateName)
+    return template?.cronExpression
+}
+
+/**
+ * Parse comma-separated string to array of strings or numbers
+ */
+function parseCommaSeparated(value: string | undefined): any[] | undefined {
+    if (!value) return undefined
+    return value
+        .split(',')
+        .map((s) => {
+            const trimmed = s.trim()
+            const num = Number(trimmed)
+            return isNaN(num) ? trimmed : num
+        })
+        .filter((v) => v !== '')
+}
+
+export function convertToBullMQConfig(config: ICommonObject): BullMQRepeatOptions {
+    const scheduleType = config.scheduleType as string
+    const bullMQConfig: BullMQRepeatOptions = {}
+
+    // Max executions
+    if (config.maxExecutions && config.maxExecutions > 0) {
+        bullMQConfig.limit = config.maxExecutions
+    }
+
+    // Convert based on schedule type
+    switch (scheduleType) {
+        case SCHEDULE_TYPES.INTERVAL:
+            bullMQConfig.every = convertIntervalToMs(config.interval, config.intervalUnit)
+            break
+
+        case SCHEDULE_TYPES.CRON:
+            bullMQConfig.pattern = config.cronPattern || SCHEDULE_DEFAULTS.CRON
+            bullMQConfig.tz = 'UTC'
+            break
+
+        case SCHEDULE_TYPES.ONCE:
+            // For one-time execution, don't use repeat - handle differently
+            // Return empty config and use delay instead in job options
+            return {}
+
+        case SCHEDULE_TYPES.DAILY:
+            bullMQConfig.pattern = convertToCron(config.time, '*', '*', '*')
+            bullMQConfig.tz = config.timezone || 'UTC'
+            break
+
+        case SCHEDULE_TYPES.WEEKLY:
+            bullMQConfig.pattern = convertToCron(config.time, '*', '*', formatDaysOfWeek(config.days))
+            bullMQConfig.tz = config.timezone || 'UTC'
+            break
+
+        case SCHEDULE_TYPES.MONTHLY:
+            bullMQConfig.pattern = convertToCron(config.time, formatDaysOfMonth(config.days), '*', '*')
+            bullMQConfig.tz = config.timezone || 'UTC'
+            break
+
+        default:
+            throw new Error(`Unknown schedule type: ${scheduleType}`)
+    }
+
+    return bullMQConfig
+}
+
+/**
+ * Convert interval to milliseconds
+ */
+function convertIntervalToMs(interval: number, unit: string): number {
+    const multiplier = INTERVAL_MS[unit] || INTERVAL_MS.minutes
+    return interval * multiplier
+}
+
+/**
+ * Convert time (HH:MM) to cron pattern
+ * @param time - Time in HH:MM format
+ * @param day - Day of month (* or specific)
+ * @param month - Month (* or specific)
+ * @param dayOfWeek - Day of week (* or specific)
+ * @returns Cron pattern string
+ */
+function convertToCron(time: string, day: string, month: string, dayOfWeek: string): string {
+    if (!time) {
+        time = SCHEDULE_DEFAULTS.TIME
+    }
+    const [hour, minute] = time.split(':').map((s) => parseInt(s, 10))
+    return `${minute} ${hour} ${day} ${month} ${dayOfWeek}`
+}
+
+/**
+ * Format days of week for cron (array to comma-separated)
+ */
+function formatDaysOfWeek(days: string[] | number[]): string {
+    if (!days || days.length === 0) return '*'
+    return days.join(',')
+}
+
+/**
+ * Format days of month for cron (array to comma-separated)
+ */
+function formatDaysOfMonth(days: string[] | number[]): string {
+    if (!days || days.length === 0) return '*'
+    return days.join(',')
 }

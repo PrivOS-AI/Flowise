@@ -20,6 +20,7 @@ import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { utilGetUploadsConfig } from '../../utils/getUploadsConfig'
 import logger from '../../utils/logger'
 import { updateStorageUsage } from '../../utils/quotaUsage'
+import { validate as isUUID } from 'uuid'
 
 export const enum ChatflowErrorMessage {
     INVALID_CHATFLOW_TYPE = 'Invalid Chatflow Type'
@@ -35,9 +36,9 @@ const checkIfChatflowIsValidForStreaming = async (chatflowId: string): Promise<a
     try {
         const appServer = getRunningExpressApp()
         //**
-        const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-            id: chatflowId
-        })
+        const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+            isUUID(chatflowId) ? { id: chatflowId } : { slug: chatflowId?.toLowerCase()?.trim() }
+        )
         if (!chatflow) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found`)
         }
@@ -261,9 +262,9 @@ const getChatflowByApiKey = async (apiKeyId: string, keyonly?: unknown): Promise
 const getChatflowById = async (chatflowId: string): Promise<any> => {
     try {
         const appServer = getRunningExpressApp()
-        const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-            id: chatflowId
-        })
+        const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+            isUUID(chatflowId) ? { id: chatflowId } : { slug: chatflowId?.toLowerCase()?.trim() }
+        )
         if (!dbResponse) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found in the database!`)
         }
@@ -523,6 +524,21 @@ const updateChatflowFolder = async (chatflowId: string, folderId: string | null)
     }
 }
 
+const checkDuplicateSlug = async (slug: string, workspaceId: string): Promise<any> => {
+    const appServer = getRunningExpressApp()
+    const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow)
+        .createQueryBuilder('chatflow')
+        .select('chatflow.id')
+        .where('LOWER(chatflow.slug) = :slug', { slug: slug.toLowerCase().trim() })
+        .andWhere('chatflow.workspaceId = :workspaceId', { workspaceId })
+        .getOne()
+    if (dbResponse) {
+        throw new InternalFlowiseError(StatusCodes.CONFLICT, `Slug already exists. Please choose another.`)
+    }
+
+    return dbResponse
+}
+
 export default {
     checkIfChatflowIsValidForStreaming,
     checkIfChatflowIsValidForUploads,
@@ -538,5 +554,6 @@ export default {
     getAllChatflowsCountByOrganization,
     getAllBotEnabledChatflows,
     getAllSubAgentEnabledChatflows,
-    updateChatflowFolder
+    updateChatflowFolder,
+    checkDuplicateSlug
 }

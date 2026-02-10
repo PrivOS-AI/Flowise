@@ -1004,6 +1004,7 @@ const NodeInputHandler = ({
                         )}
                         {inputParam.type === 'credential' && (
                             <CredentialInputHandler
+                                key={data?.id} // force re-mount component
                                 disabled={disabled}
                                 data={data}
                                 inputParam={inputParam}

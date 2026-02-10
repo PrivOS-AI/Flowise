@@ -14,6 +14,7 @@ import ConfirmContextProvider from '@/store/context/ConfirmContextProvider'
 import { ReactFlowContext } from '@/store/context/ReactFlowContext'
 import { ConfigProvider } from '@/store/context/ConfigContext'
 import { ErrorProvider } from '@/store/context/ErrorContext'
+import { RoomWorkspaceProvider } from '@/store/context/RoomWorkspaceContext'
 
 const container = document.getElementById('root')
 const root = createRoot(container)
@@ -26,9 +27,11 @@ root.render(
                     <ConfigProvider>
                         <ErrorProvider>
                             <ConfirmContextProvider>
-                                <ReactFlowContext>
-                                    <App />
-                                </ReactFlowContext>
+                                <RoomWorkspaceProvider>
+                                    <ReactFlowContext>
+                                        <App />
+                                    </ReactFlowContext>
+                                </RoomWorkspaceProvider>
                             </ConfirmContextProvider>
                         </ErrorProvider>
                     </ConfigProvider>

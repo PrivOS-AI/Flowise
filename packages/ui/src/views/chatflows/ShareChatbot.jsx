@@ -45,12 +45,13 @@ const defaultConfig = {
     }
 }
 
-const ShareChatbot = ({ isSessionMemory, isAgentCanvas }) => {
+const ShareChatbot = ({ isSessionMemory, isAgentCanvas, getChatflowIdentifier }) => {
     const dispatch = useDispatch()
     const theme = useTheme()
     const chatflow = useSelector((state) => state.canvas.chatflow)
     const chatflowid = chatflow.id
     const chatbotConfig = chatflow.chatbotConfig ? JSON.parse(chatflow.chatbotConfig) : {}
+    const chatbotUrl = `${baseURL}/chatbot/${getChatflowIdentifier()}`
 
     useNotifier()
 
@@ -426,13 +427,13 @@ const ShareChatbot = ({ isSessionMemory, isAgentCanvas }) => {
                     }}
                     variant='h5'
                 >
-                    {`${baseURL}/chatbot/${chatflowid}`}
+                    {chatbotUrl}
                 </Typography>
                 <IconButton
                     title='Copy Link'
                     color='success'
                     onClick={(event) => {
-                        navigator.clipboard.writeText(`${baseURL}/chatbot/${chatflowid}`)
+                        navigator.clipboard.writeText(chatbotUrl)
                         setCopyAnchorEl(event.currentTarget)
                         setTimeout(() => {
                             handleCloseCopyPopOver()
@@ -441,7 +442,7 @@ const ShareChatbot = ({ isSessionMemory, isAgentCanvas }) => {
                 >
                     <IconCopy />
                 </IconButton>
-                <IconButton title='Open New Tab' color='primary' onClick={() => window.open(`${baseURL}/chatbot/${chatflowid}`, '_blank')}>
+                <IconButton title='Open New Tab' color='primary' onClick={() => window.open(chatbotUrl, '_blank')}>
                     <IconArrowUpRightCircle />
                 </IconButton>
                 <div style={{ flex: 1 }} />

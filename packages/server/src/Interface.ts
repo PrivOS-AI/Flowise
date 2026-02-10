@@ -7,6 +7,7 @@ import {
     INodeData as INodeDataFromComponent,
     INodeExecutionData,
     INodeParams,
+    ITriggerConfig,
     IServerSideEventStreamer
 } from 'flowise-components'
 import { DataSource } from 'typeorm'
@@ -75,6 +76,7 @@ export interface IChatFlow {
     scheduleConfig?: string
     scheduleEnabled?: boolean
     folderId?: string
+    slug?: string
 }
 
 export interface IAgentflowFolder {
@@ -196,6 +198,21 @@ export interface IExecution {
     createdDate: Date
     updatedDate: Date
     stoppedDate: Date
+    workspaceId?: string
+}
+
+export interface ITrigger {
+    id: string
+    flowId: string
+    botId: string
+    slug?: string
+    type: string
+    isEnabled: boolean
+    events: string[]
+    config?: any
+    description?: string
+    updatedDate: Date
+    createdDate: Date
     workspaceId?: string
 }
 
@@ -342,6 +359,7 @@ export interface IncomingInput {
     history?: IMessage[]
     action?: IAction
     streaming?: boolean
+    triggerData?: ITriggerData
 }
 
 export interface IncomingAgentflowInput extends Omit<IncomingInput, 'question'> {
@@ -381,6 +399,7 @@ export interface ICredentialReqBody {
     credentialName: string
     plainDataObj: ICredentialDataDecrypted
     workspaceId?: string
+    roomId?: string
 }
 
 // Decrypted credential object sent back to client
@@ -437,6 +456,15 @@ export interface IPredictionQueueAppServer {
     usageCacheManager: UsageCacheManager
 }
 
+export interface ITriggerData {
+    botCredentialId?: string
+    roomId?: string
+    messageId?: string
+    eventType?: string
+    config?: ITriggerConfig
+    triggerId?: string
+}
+
 export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     incomingInput: IncomingInput
     chatflow: IChatFlow
@@ -458,6 +486,8 @@ export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     parentExecutionId?: string
     iterationContext?: ICommonObject
     isTool?: boolean
+    triggerData?: ITriggerData
+    roomId?: string
 }
 
 export interface INodeOverrides {

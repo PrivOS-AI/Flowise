@@ -226,25 +226,27 @@ class HTTP_Agentflow implements INode {
             }
 
             // Add credentials if provided
-            const credentialData = await getCredentialData(nodeData.credential ?? '', options)
-            if (credentialData && Object.keys(credentialData).length !== 0) {
-                const basicAuthUsername = getCredentialParam('basicAuthUsername', credentialData, nodeData)
-                const basicAuthPassword = getCredentialParam('basicAuthPassword', credentialData, nodeData)
-                const bearerToken = getCredentialParam('token', credentialData, nodeData)
-                const apiKeyName = getCredentialParam('key', credentialData, nodeData)
-                const apiKeyValue = getCredentialParam('value', credentialData, nodeData)
+            if(nodeData.credential){
+                const credentialData = await getCredentialData(nodeData.credential ?? '', options)
+                if (credentialData && Object.keys(credentialData).length !== 0) {
+                    const basicAuthUsername = getCredentialParam('basicAuthUsername', credentialData, nodeData)
+                    const basicAuthPassword = getCredentialParam('basicAuthPassword', credentialData, nodeData)
+                    const bearerToken = getCredentialParam('token', credentialData, nodeData)
+                    const apiKeyName = getCredentialParam('key', credentialData, nodeData)
+                    const apiKeyValue = getCredentialParam('value', credentialData, nodeData)
 
-                // Determine which type of auth to use based on available credentials
-                if (basicAuthUsername || basicAuthPassword) {
-                    // Basic Auth
-                    const auth = Buffer.from(`${basicAuthUsername}:${basicAuthPassword}`).toString('base64')
-                    requestHeaders['Authorization'] = `Basic ${auth}`
-                } else if (bearerToken) {
-                    // Bearer Token
-                    requestHeaders['Authorization'] = `Bearer ${bearerToken}`
-                } else if (apiKeyName && apiKeyValue) {
-                    // API Key in header
-                    requestHeaders[apiKeyName] = apiKeyValue
+                    // Determine which type of auth to use based on available credentials
+                    if (basicAuthUsername || basicAuthPassword) {
+                        // Basic Auth
+                        const auth = Buffer.from(`${basicAuthUsername}:${basicAuthPassword}`).toString('base64')
+                        requestHeaders['Authorization'] = `Basic ${auth}`
+                    } else if (bearerToken) {
+                        // Bearer Token
+                        requestHeaders['Authorization'] = `Bearer ${bearerToken}`
+                    } else if (apiKeyName && apiKeyValue) {
+                        // API Key in header
+                        requestHeaders[apiKeyName] = apiKeyValue
+                    }
                 }
             }
 

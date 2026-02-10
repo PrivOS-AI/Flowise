@@ -18,6 +18,7 @@ import { ApiKey } from './ApiKey'
 import { CustomTemplate } from './CustomTemplate'
 import { Execution } from './Execution'
 import { AgentflowFolder } from './AgentflowFolder'
+import { Trigger } from './Trigger'
 import { ClaudeWSServer } from './ClaudeWSServer'
 import { ClaudeWSPlugin } from './ClaudeWSPlugin'
 import { LoginActivity, WorkspaceShared, WorkspaceUsers } from '../../enterprise/database/entities/EnterpriseEntities'
@@ -54,6 +55,7 @@ export const entities = {
     CustomTemplate,
     Execution,
     AgentflowFolder,
+    Trigger,
     ClaudeWSServer,
     ClaudeWSPlugin,
     Organization,

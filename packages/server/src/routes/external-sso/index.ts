@@ -5,6 +5,7 @@ import logger from '../../utils/logger'
 import { v4 as uuidv4 } from 'uuid'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { encryptToken } from '../../enterprise/utils/tempTokenUtils'
+import privosChatService from '../../services/privos-chat'
 
 const router = express.Router()
 
@@ -56,6 +57,12 @@ router.get('/', async (req: Request, res: Response) => {
         if (!roomId) {
             logger.error('[ExternalSSO]: Missing roomId parameter')
             return res.status(400).json({ error: 'RoomId parameter is required' })
+        }
+
+        const roomExists = await privosChatService.checkRoomExists(roomId)
+        if (!roomExists) {
+            logger.error('[ExternalSSO]: Room does not exist')
+            return res.status(404).json({ error: 'Room does not exist' })
         }
 
         const profileUrl = process.env.EXTERNAL_AUTH_PROFILE_URL

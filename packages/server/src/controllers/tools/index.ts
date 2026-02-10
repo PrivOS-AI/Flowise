@@ -20,6 +20,11 @@ const createTool = async (req: Request, res: Response, next: NextFunction) => {
         const body = req.body
         body.workspaceId = workspaceId
 
+        // Room isolation: Only set roomId if user is NOT root admin
+        if (!req.isRootAdmin && req.roomId) {
+            body.roomId = req.roomId
+        }
+
         const apiResponse = await toolsService.createTool(body, orgId)
         return res.json(apiResponse)
     } catch (error) {
@@ -57,7 +62,7 @@ const deleteTool = async (req: Request, res: Response, next: NextFunction) => {
 const getAllTools = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { page, limit } = getPageAndLimitParams(req)
-        const apiResponse = await toolsService.getAllTools(req.user?.activeWorkspaceId, page, limit)
+        const apiResponse = await toolsService.getAllTools(req.isRootAdmin, req.roomId, req.user?.activeWorkspaceId, page, limit)
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -82,7 +87,7 @@ const updateTool = async (req: Request, res: Response, next: NextFunction) => {
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: toolsController.updateTool - id not provided!`)
         }
         if (!req.body) {
-            throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: toolsController.deleteTool - body not provided!`)
+            throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: toolsController.updateTool - body not provided!`)
         }
 
         // Room isolation: Check if user can update this tool
