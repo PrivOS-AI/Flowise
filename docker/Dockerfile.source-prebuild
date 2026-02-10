@@ -1,0 +1,35 @@
+FROM node:20-alpine
+
+RUN apk add --update libc6-compat python3 make g++
+# needed for pdfjs-dist
+RUN apk add --no-cache build-base cairo-dev pango-dev
+
+# Install Chromium and curl
+RUN apk add --no-cache chromium curl
+
+#install PNPM globally
+RUN npm install -g pnpm
+
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+WORKDIR /usr/src
+
+# Copy pre-built source (build on host first!)
+COPY . .
+
+# Install ALL dependencies (need dev deps for run-script-os)
+# We need to run scripts for native modules like sqlite3, but skip husky
+RUN pnpm install --frozen-lockfile || pnpm install
+
+# Rebuild native modules for Alpine Linux (sqlite3, etc.)
+RUN pnpm rebuild sqlite3 better-sqlite3 || true
+
+# Set PORT env (will be overridden by docker-compose)
+ENV PORT=3000
+
+# Expose port
+EXPOSE ${PORT}
+
+# Start flowise main server
+CMD ["pnpm", "start"]

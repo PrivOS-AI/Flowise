@@ -1,0 +1,180 @@
+# Claude Code Rules for Privos Flow Development
+# This file defines rules and constraints that must be followed during development
+
+## LICENSE COMPLIANCE RULES
+
+### CRITICAL: Never Modify Enterprise Folder
+# The /enterprise folder is covered by FlowiseAI Commercial License
+# Modifications require a valid Enterprise subscription for production use
+# See: packages/server/src/enterprise/LICENSE.md
+
+FORBIDDEN_PATHS:
+  - packages/server/src/enterprise/**/*.ts
+  - packages/server/src/enterprise/**/*.js
+  - packages/ui/src/enterprise/**/*
+
+EXCEPTIONS:
+  # Only for development/testing purposes (not production)
+  # Must get explicit user confirmation before modifying these paths
+
+ALTERNATIVE_APPROACHES:
+  # Instead of modifying enterprise files, use these approaches:
+  # 1. Extend types in non-enterprise Interface files
+  # 2. Use JWT payload directly for custom claims
+  # 3. Create wrapper functions in non-enterprise code
+  # 4. Use middleware to augment requests without touching enterprise code
+
+### License Verification Before Changes
+BEFORE_MODIFYING:
+  1. Check if file is in /enterprise folder
+  2. If yes, propose alternative implementation outside /enterprise
+
+## SECURITY RULES
+
+### API Keys and Secrets
+NEVER_COMMIT:
+  - .env files with real values
+  - API keys, tokens, passwords
+  - Database connection strings with real credentials
+  - License keys
+
+ALWAYS_USE:
+  - Environment variables for secrets
+  - .env.example for documentation
+  - Placeholder values in committed files
+
+### Authentication
+REQUIREMENTS:
+  - All endpoints must check authentication
+  - Room isolation must be enforced server-side
+  - Never trust client-side validation alone
+  - Always validate roomId ownership on the backend
+
+## CODE QUALITY RULES
+
+### TypeScript
+STANDARDS:
+  - Use explicit types, avoid 'any'
+  - Prefer interfaces over types for objects
+  - Use optional chaining (?.) for nullable values
+  - Add JSDoc comments for complex functions
+
+### Error Handling
+REQUIREMENTS:
+  - Always catch and log errors
+  - Return meaningful error messages
+  - Use appropriate HTTP status codes
+  - Never expose sensitive data in error messages
+
+### Testing
+BEFORE_COMMIT:
+  - Run 'pnpm build' to verify no TypeScript errors
+  - Test critical paths (auth, room isolation)
+  - Verify database migrations work
+
+## BRANDING RULES
+
+NAMING_CONVENTIONS:
+  - Product name: "Privos Flow" (not "Flowise")
+  - Only change user-facing text
+  - Never change package names or npm dependencies
+  - Keep original Flowise attribution in code comments
+
+## FEATURE DEVELOPMENT RULES
+
+### Room Isolation Pattern
+WHEN_ADDING_RESOURCES:
+  1. Add 'roomId?: string' column to entity
+  2. Create database migration for ALL database types (SQLite, MySQL, PostgreSQL, MariaDB)
+  3. Update service layer with room filtering: (roomId = X OR roomId IS NULL)
+  4. Update controller to auto-assign roomId from req.user
+  5. Add read-only validation (prevent room users from editing global resources)
+  6. Disable UI buttons for read-only resources
+
+FILTERING_LOGIC:
+  - Root admins (isRootAdmin=true): See everything
+  - Room users (!isRootAdmin && activeRoomId): See own room + global resources (roomId=NULL)
+  - Always use query builder with OR clause for room isolation
+
+### UI Patterns
+DISABLED_BUTTONS:
+  - Add 'disabled' prop to buttons
+  - Change styling (opacity, cursor, colors)
+  - Show helpful tooltip explaining why disabled
+  - Never just hide - show as disabled for better UX
+
+## GIT COMMIT RULES
+
+COMMIT_MESSAGE_FORMAT:
+  type: description
+
+  Examples:
+  - feat: add room isolation to credentials
+  - fix: prevent SSO cookie persistence issue
+  - refactor: move LoggedInUser type to shared interface
+  - docs: update README with room isolation feature
+
+BEFORE_COMMIT:
+  1. Run 'pnpm build'
+  2. Review git diff for enterprise folder changes
+  3. Check for hardcoded secrets or API keys
+  4. Verify no .env files staged
+
+## COMMUNICATION RULES
+
+WHEN_UNCERTAIN:
+  - ASK before modifying enterprise folder
+  - ASK before making breaking changes
+  - ASK before changing database schema
+  - ASK before modifying authentication flow
+
+ALWAYS_EXPLAIN:
+  - Why a change is needed
+  - What files will be modified
+  - Whether it affects enterprise code
+  - Potential license implications
+
+PROVIDE_ALTERNATIVES:
+  - If requested change violates rules, suggest alternatives
+  - Show pros/cons of different approaches
+  - Let user make final decision
+
+## TODO LIST USAGE
+
+USE_TODO_WHEN:
+  - Task has 3+ steps
+  - Multiple files need modification
+  - Complex feature implementation
+  - Database migrations required
+
+SKIP_TODO_WHEN:
+  - Single trivial task
+  - Simple text changes
+  - Quick bug fixes
+  - Informational queries
+
+## DOCKER & DEPLOYMENT
+
+DEPLOYMENT_SAFETY:
+  - Never run 'docker-compose down' without confirmation
+  - Always backup database before migrations
+  - Test migrations on development database first
+  - Use blue-green deployment for zero downtime
+
+## SUMMARY OF CRITICAL RULES
+
+⛔ NEVER modify /enterprise folder without explicit confirmation
+⛔ NEVER commit secrets or API keys
+⛔ NEVER skip authentication/authorization checks
+⛔ NEVER deploy without running 'pnpm build' first
+⛔ NEVER modify database schema without creating migrations
+
+✅ ALWAYS check license implications before changes
+✅ ALWAYS enforce room isolation server-side
+✅ ALWAYS create migrations for ALL database types
+✅ ALWAYS ask when uncertain
+✅ ALWAYS provide alternative approaches
+
+## VERSION HISTORY
+# v1.0 - Initial rules created - 2025-10-22
+# Focus: License compliance, security, room isolation pattern

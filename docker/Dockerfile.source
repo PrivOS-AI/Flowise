@@ -1,0 +1,36 @@
+FROM node:20-alpine
+
+RUN apk add --update libc6-compat python3 make g++
+# needed for pdfjs-dist
+RUN apk add --no-cache build-base cairo-dev pango-dev
+
+# Install Chromium and curl
+RUN apk add --no-cache chromium curl
+
+#install PNPM globally
+RUN npm install -g pnpm
+
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Increase Node memory limit for build
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
+WORKDIR /usr/src
+
+# Copy app source
+COPY . .
+
+RUN pnpm install
+
+# Build with limited parallelism to reduce memory usage
+RUN pnpm build
+
+# Set PORT env (will be overridden by docker-compose)
+ENV PORT=3000
+
+# Expose port
+EXPOSE ${PORT}
+
+# Start flowise main server
+CMD ["pnpm", "start"]
