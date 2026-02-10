@@ -12,16 +12,16 @@ import {
 } from '../../../src'
 import { updateFlowState } from '../../agentflow/utils'
 import { PRIVOS_ENDPOINTS } from '../constants'
-import { mapCustomFields, PrivosErrorHandler } from '../utils'
+import { PrivosErrorHandler } from '../utils'
 
 const ALL_FIELDS = [
-    { label: 'Custom Fields', name: 'customFields', description: 'All custom fields' },
     { label: 'Stages', name: 'stages', description: 'Stages info' },
     { label: 'Members Info', name: 'membersInfo', description: 'Information about members' },
-    { label: 'Assignee', name: 'assignee', description: 'Assignee information' }
+    { label: 'Assignee', name: 'assignee', description: 'Assignee information' },
+    { label: 'Items Info', name: 'itemsInfo', description: 'Information about items in the list' }
 ]
 
-class GetItemInfo_Privos implements INode {
+class GetListInfo_Privos implements INode {
     label: string
     name: string
     version: number
@@ -36,12 +36,12 @@ class GetItemInfo_Privos implements INode {
     output?: INodeOutputsValue[] | undefined
 
     constructor() {
-        this.label = 'Get Item Info'
-        this.name = 'getItemInfoPrivos'
+        this.label = 'Get List Info'
+        this.name = 'getListInfoPrivos'
         this.version = 1.0
-        this.type = 'ItemProcessor'
+        this.type = 'ListProcessor'
         this.category = 'PrivOS'
-        this.description = 'Fetch item info and select custom fields from Privos API'
+        this.description = 'Fetch list info and select custom fields from Privos API'
         this.icon = 'privos.svg'
         this.color = '#4318FF'
         this.baseClasses = [this.type]
@@ -53,8 +53,8 @@ class GetItemInfo_Privos implements INode {
         }
         this.inputs = [
             {
-                label: 'Item ID',
-                name: 'itemId',
+                label: 'List ID',
+                name: 'listId',
                 type: 'string',
                 acceptVariable: true
             },
@@ -109,28 +109,12 @@ class GetItemInfo_Privos implements INode {
         ]
     }
 
-    private async fetchPrivosData(baseUrl: string, apiKey: string, itemId: string) {
-        const headers = { 'X-API-KEY': apiKey }
-
-        // 1. Fetch Item Info
-        const itemRes = await secureAxiosRequest({
-            url: `${baseUrl}${PRIVOS_ENDPOINTS.ITEMS_INFO}`,
-            headers,
-            params: { itemId }
+    private async fetchPrivosData(baseUrl: string, apiKey: string, listId: string) {
+        const listRes = await secureAxiosRequest({
+            url: `${baseUrl}${PRIVOS_ENDPOINTS.LISTS}/${listId}`,
+            headers: { 'X-API-KEY': apiKey }
         })
-        const item = itemRes.data.item
-
-        // 2. Fetch List Definitions (if listId exists)
-        let listInfo = null
-        if (item?.listId) {
-            const listRes = await secureAxiosRequest({
-                url: `${baseUrl}${PRIVOS_ENDPOINTS.LISTS}/${item.listId}`,
-                headers
-            })
-            listInfo = listRes.data
-        }
-
-        return { item, rawData: itemRes.data, listInfo }
+        return listRes.data
     }
 
     //@ts-ignore
@@ -156,40 +140,34 @@ class GetItemInfo_Privos implements INode {
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        const { itemId, outputStructure, selectedDataFields, updateFLowState } = nodeData.inputs as ICommonObject
-        if (!itemId) throw new Error('Item ID is required')
+        const { listId, outputStructure, selectedDataFields, updateFLowState } = nodeData.inputs as ICommonObject
+        if (!listId) throw new Error('Item ID is required')
 
         const state = options.agentflowRuntime?.state
 
         try {
             const { baseUrl, apiKey } = (await getCredentialData(nodeData.credential, options)) as IPrivosCredential
-            const { item, rawData, listInfo } = await this.fetchPrivosData(baseUrl, apiKey, itemId as string)
+            const listInfo = await this.fetchPrivosData(baseUrl, apiKey, listId)
 
             const selectedFields = new Set(JSON.parse(selectedDataFields as string))
             const result: any = {
-                itemId: item?._id,
-                name: item?.name || '',
-                description: item?.description || '',
-                stageId: item?.stageId || null,
-                listId: item?.listId || null,
-                key: item?.key || '',
-                ...(selectedFields?.has('customFields') && {
-                    customFields: mapCustomFields(rawData, listInfo)
-                }),
+                listId: listInfo?.list?._id,
                 ...(selectedFields?.has('stages') && {
                     stages: this.handleStageDataField(listInfo)
+                }),
+                ...(selectedFields?.has('assignee') && {
+                    assigneeFieldId: this.handleAssignFieldId(listInfo)
+                }),
+                ...(selectedFields?.has('membersInfo') && {
+                    membersInfo: await this.handleMembersInfoDataField(baseUrl, apiKey, listInfo?.list?.roomId)
+                }),
+                ...(selectedFields?.has('itemsInfo') && {
+                    itemsInfo: await this.handleItemsInfoDataField(
+                        listInfo?.items,
+                        this.handleAssignFieldId(listInfo),
+                        listInfo?.list?.roomId
+                    )
                 })
-            }
-            if (selectedFields?.has('assignee')) {
-                const customFields = mapCustomFields(rawData, listInfo)
-                const { assigneeCount, assignees, assigneeFieldId, isAssigned } = this.handleAssigneeDataField(listInfo, customFields)
-                result['assigneeCount'] = assigneeCount
-                result['assignees'] = assignees
-                result['assigneeFieldId'] = assigneeFieldId
-                result['isAssigned'] = isAssigned
-            }
-            if (selectedFields?.has('membersInfo')) {
-                result['membersInfo'] = await this.handleMembersInfoDataField(listInfo, baseUrl, apiKey)
             }
 
             const finalOutput = outputStructure === 'object' ? result : [result]
@@ -205,7 +183,7 @@ class GetItemInfo_Privos implements INode {
                 itemResult: finalOutput,
                 id: nodeData.id,
                 name: this.name,
-                input: { itemId, selectedDataFields },
+                input: { listId, selectedDataFields },
                 output: { content: JSON.stringify(finalOutput, null, 2) },
                 state: newState
             }
@@ -223,111 +201,55 @@ class GetItemInfo_Privos implements INode {
         }))
     }
 
-    private handleAssigneeDataField(listInfo: any, customFields: any[]) {
-        let assigneeFieldId = null
+    private handleAssignFieldId(listInfo: any) {
+        let assigneeFieldId = []
         const fieldDefinitions = listInfo?.list?.fieldDefinitions || []
 
         // Method 1: Find USER type field in fieldDefinitions
         if (Array.isArray(fieldDefinitions) && fieldDefinitions.length > 0) {
-            // First try to find field named "Persons" with type USER
-            let userField = fieldDefinitions.find((field) => {
-                const fieldName = (field.name || '').toLowerCase()
-                const fieldType = (field.type || '').toUpperCase()
-                return fieldName === 'persons' && fieldType === 'USER'
-            })
+            const userFields = fieldDefinitions
+                .filter((f) => f?.type === 'USER')
+                .map((f) => f?._id)
+                .filter(Boolean)
 
-            // If not found, find ANY field with type USER
-            if (!userField) {
-                userField = fieldDefinitions.find((field) => {
-                    const fieldType = (field.type || '').toUpperCase()
-                    return fieldType === 'USER'
-                })
-            }
-
-            if (userField && userField._id) {
-                assigneeFieldId = userField._id
-            }
+            assigneeFieldId.push(...userFields)
         }
 
         // Method 2: If fieldDefinitions empty, detect from items' customFields
-        if (!assigneeFieldId && listInfo?.items && listInfo.items.length > 0) {
-            // Find a field that has array of user objects (with _id and username)
+        if (assigneeFieldId.length === 0 && listInfo?.items && listInfo.items.length > 0) {
             for (const item of listInfo.items) {
                 const customFields = item?.customFields || []
                 for (const cf of customFields) {
                     if (Array.isArray(cf.value) && cf.value.length > 0) {
-                        // Check if it looks like user array
                         const firstValue = cf.value[0]
                         if (firstValue && firstValue._id && (firstValue.username || firstValue.name)) {
-                            assigneeFieldId = cf.fieldId
+                            assigneeFieldId.push(cf.fieldId)
                             break
                         }
                     }
                 }
-                if (assigneeFieldId) break
+                if (assigneeFieldId.length > 0) break
             }
         }
 
-        if (!assigneeFieldId) {
-            assigneeFieldId = 'no_assignee_field'
-        }
-
-        // PARSE ITEMS WITH ASSIGNEES
-        let assignees = []
-
-        // Try to find assignees using dynamic field ID first
-        if (assigneeFieldId) {
-            const assigneeField = customFields.find((cf) => cf.fieldId === assigneeFieldId)
-            if (assigneeField && Array.isArray(assigneeField.value)) {
-                assignees = assigneeField.value.map((user: any) => ({
-                    _id: user._id || '',
-                    username: user.username || user.name || '',
-                    name: user.name || user.username || ''
-                }))
-            }
-        } else {
-            // Fallback: Try known field IDs for backward compatibility
-            const marketingAssignees = customFields.find((cf) => cf.fieldId === 'marketing_campaign_assignees_field')
-            const recruitmentInterviewer = customFields.find((cf) => cf.fieldId === 'personnel_recruitment_interviewer_field')
-
-            if (marketingAssignees && Array.isArray(marketingAssignees.value)) {
-                assignees = marketingAssignees.value.map((user: any) => ({
-                    _id: user._id || '',
-                    username: user.username || user.name || '',
-                    name: user.name || user.username || ''
-                }))
-            } else if (recruitmentInterviewer && Array.isArray(recruitmentInterviewer.value)) {
-                assignees = recruitmentInterviewer.value.map((user: any) => ({
-                    _id: user._id || '',
-                    username: user.username || user.name || '',
-                    name: user.name || user.username || ''
-                }))
-            }
-        }
-
-        return {
-            assigneeFieldId,
-            assignees,
-            assigneeCount: assignees.length,
-            isAssigned: assignees.length > 0
-        }
+        return assigneeFieldId
     }
 
-    private async handleMembersInfoDataField(listInfo: any, baseUrl: string, apiKey: string) {
-        if (!listInfo?.list?.roomId) return []
+    private async handleMembersInfoDataField(baseUrl: string, apiKey: string, roomId?: string) {
+        if (!roomId) return []
 
         try {
             const membersRes = await secureAxiosRequest({
-                url: `${baseUrl}${PRIVOS_ENDPOINTS.ROOM_MEMBERS}?roomId=${encodeURIComponent(listInfo.list.roomId)}`,
+                url: `${baseUrl}${PRIVOS_ENDPOINTS.ROOM_MEMBERS}?roomId=${encodeURIComponent(roomId)}`,
                 headers: { 'X-API-KEY': apiKey }
             })
 
-            const membersInfo = (membersRes.data?.users || []).map((m: any) => ({
-                userid: m?._id ?? null,
-                username: m?.username ?? null,
-                name: m?.name ?? null,
-                position: m?.position?.name ?? null,
-                skills: Array.isArray(m?.skills) ? m.skills.map((s: any) => s?.name).filter(Boolean) : []
+            const membersInfo = (membersRes.data?.users || []).map((u: any) => ({
+                userid: u._id,
+                username: u.username || null,
+                name: u.name || null,
+                position: u.position?.name || null,
+                skills: Array.isArray(u.skills) ? u.skills.map((s: any) => s?.name) : []
             }))
 
             return membersInfo
@@ -336,6 +258,37 @@ class GetItemInfo_Privos implements INode {
             return []
         }
     }
+
+    private async handleItemsInfoDataField(items: any[], assigneeFieldIds: string[], roomId?: string): Promise<any[]> {
+        if (!roomId) return []
+
+        try {
+            return (items || []).map((item: any) => {
+                const customFields = item?.customFields || []
+
+                const assignees = Array.isArray(assigneeFieldIds)
+                    ? customFields
+                          .filter((field: any) => assigneeFieldIds.includes(field?.fieldId))
+                          .flatMap((field: any) => (Array.isArray(field?.value) ? field.value : []))
+                          .map((user: any) => ({
+                              username: user?.username || '',
+                              name: user?.name || ''
+                          }))
+                    : []
+
+                return {
+                    itemId: item?._id ?? null,
+                    name: item?.name ?? '',
+                    description: item?.description ?? '',
+                    stageId: item?.stageId ?? null,
+                    assignees
+                }
+            })
+        } catch (error) {
+            console.error('Error fetching items info:', error?.message)
+            return []
+        }
+    }
 }
 
-module.exports = { nodeClass: GetItemInfo_Privos }
+module.exports = { nodeClass: GetListInfo_Privos }

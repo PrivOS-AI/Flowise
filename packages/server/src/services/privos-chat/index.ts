@@ -5,13 +5,15 @@ import { DEFAULT_PRIVOS_API_BASE_URL, PRIVOS_ENDPOINTS } from 'flowise-component
 import logger from '../../utils/logger'
 
 const getRoomsByUserId = async (userId: string, query: Record<string, any>) => {
-    const { page, limit, keyword } = query
+    const { offset, count, search } = query
+    const types = ['p', 'c']
     try {
         const url = new URL(`${DEFAULT_PRIVOS_API_BASE_URL}${PRIVOS_ENDPOINTS.ROOM_BY_USER_ID}`)
         url.searchParams.append('userId', userId)
-        url.searchParams.append('offset', page)
-        url.searchParams.append('count', limit)
-        url.searchParams.append('keyword', keyword)
+        url.searchParams.append('offset', offset)
+        url.searchParams.append('count', count)
+        if (search) url.searchParams.append('search', search)
+        types.forEach((type) => url.searchParams.append('types', type))
 
         const response = await fetch(url.toString(), {
             headers: {
