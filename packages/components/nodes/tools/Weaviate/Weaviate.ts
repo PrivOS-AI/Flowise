@@ -2,7 +2,7 @@ import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Inter
 import { getCredentialData, getCredentialParam } from '../../../src/utils'
 import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
-import weaviate from 'weaviate-client'
+import weaviate, { WeaviateClient, ApiKey } from 'weaviate-ts-client'
 
 // Helper to check if in development mode
 const isDev = process.env.NODE_ENV === 'development'
@@ -56,26 +56,6 @@ class Weaviate_Tools implements INode {
                 name: 'weaviateHost',
                 type: 'string',
                 placeholder: 'localhost:8080',
-                acceptVariable: true
-            },
-            {
-                label: 'gRPC Port',
-                name: 'grpcPort',
-                type: 'number',
-                description: 'gRPC port (default: 50051 for http, 443 for https)',
-                placeholder: '50051',
-                optional: true,
-                additionalParams: true,
-                acceptVariable: true
-            },
-            {
-                label: 'Query Timeout (seconds)',
-                name: 'queryTimeout',
-                type: 'number',
-                description: 'Query timeout in seconds (default: 60)',
-                placeholder: '60',
-                optional: true,
-                additionalParams: true,
                 acceptVariable: true
             },
             {
@@ -190,62 +170,32 @@ class Weaviate_Tools implements INode {
         const toolDescription = nodeData.inputs?.toolDescription as string
         const searchMethod = nodeData.inputs?.searchMethod as string
         const hybridAlpha = nodeData.inputs?.hybridAlpha as string
-        const grpcPort = nodeData.inputs?.grpcPort as number
-        const queryTimeout = nodeData.inputs?.queryTimeout as number
         const additionalHeaders = nodeData.inputs?.additionalHeaders
         let weaviateFilter = nodeData.inputs?.weaviateFilter
 
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
         const weaviateApiKey = getCredentialParam('weaviateApiKey', credentialData, nodeData)
 
-        // Connect to Weaviate using v3 client
-        // Parse host to extract hostname if it includes port
-        let httpHost = weaviateHost
-        let httpPort = weaviateScheme === 'https' ? 443 : 8080
-        // Use user-provided gRPC port or default
-        let defaultGrpcPort = weaviateScheme === 'https' ? 443 : 50051
-        let finalGrpcPort = grpcPort || defaultGrpcPort
-
-        // Handle host:port format
-        if (weaviateHost.includes(':')) {
-            const parts = weaviateHost.split(':')
-            httpHost = parts[0]
-            httpPort = parseInt(parts[1]) || httpPort
+        const clientConfig: any = {
+            scheme: weaviateScheme,
+            host: weaviateHost
         }
 
-        const connectionConfig: any = {
-            httpHost: httpHost,
-            httpPort: httpPort,
-            httpSecure: weaviateScheme === 'https',
-            grpcHost: httpHost, // Use same host for gRPC
-            grpcPort: finalGrpcPort,
-            grpcSecure: weaviateScheme === 'https',
-            skipInitChecks: true, // Skip gRPC health check for servers without gRPC enabled
-            timeout: {
-                init: 30, // 30 seconds for initialization
-                query: queryTimeout || 60, // Use user-provided timeout or default 60s
-                insert: 120 // 120 seconds for insertions
-            }
-        }
+        if (weaviateApiKey) clientConfig.apiKey = new ApiKey(weaviateApiKey)
 
-        if (weaviateApiKey) {
-            connectionConfig.authCredentials = new weaviate.ApiKey(weaviateApiKey)
-        }
-
-        // Add additional headers (e.g., X-OpenAI-Api-Key for collection vectorizer)
         if (additionalHeaders) {
             try {
                 if (typeof additionalHeaders === 'string') {
-                    connectionConfig.headers = JSON.parse(additionalHeaders)
+                    clientConfig.headers = JSON.parse(additionalHeaders)
                 } else {
-                    connectionConfig.headers = additionalHeaders
+                    clientConfig.headers = additionalHeaders
                 }
             } catch (e) {
                 if (isDev) console.error('[Weaviate Tool] Failed to parse additionalHeaders:', e)
             }
         }
 
-        const client = await weaviate.connectToCustom(connectionConfig)
+        const client: WeaviateClient = weaviate.client(clientConfig)
 
         let filter: any
         if (weaviateFilter) {
@@ -297,7 +247,6 @@ class Weaviate_Tools implements INode {
                     const executeSearch = async (singleQuery: string) => {
                         // Clean collection name - remove wildcards and special chars
                         const cleanIndex = weaviateIndex.replace(/^\*+|\*+$/g, '').replace(/^\/+|\/+$/g, '')
-                        const collection = client.collections.get(cleanIndex)
 
                         // Helper function to clean field names
                         const cleanFieldName = (fieldName: string): string => {
@@ -324,66 +273,55 @@ class Weaviate_Tools implements INode {
                         }
 
                         // Always return metadata (id, score, distance)
-                        const returnMetadata = ['id', 'score', 'distance']
+                        // In v3: _additional { id certainty distance }
+                        // For compatibility, we'll request them in the _additional block usually,
+                        // but weaviate-ts-client (v2) builder handles fields separately.
+                        // We will construct the fields string for GraphQL
 
-                        let results
+                        let builder = client.graphql.get().withClassName(cleanIndex)
+
+                        if (returnFields.length > 0) {
+                            builder = builder.withFields(returnFields.join(' ') + ' _additional { id distance certainty }')
+                        } else {
+                            // If no fields specified, at least ask for _additional
+                            builder = builder.withFields('_additional { id distance certainty }')
+                        }
 
                         if (searchMethod === 'Hybrid') {
                             const alpha = hybridAlpha ? parseFloat(hybridAlpha) : 0.5
-
-                            if (additionalHeaders) {
-                                // Use collection's vectorizer via headers (e.g., X-OpenAI-Api-Key)
-                                results = await collection.query.hybrid(singleQuery, {
-                                    limit: parseInt(topK) || 5,
-                                    alpha: alpha,
-                                    returnMetadata: returnMetadata as any,
-                                    returnProperties: returnFields.length > 0 ? returnFields : undefined
-                                })
-                            } else {
-                                // BM25 only (no vectorizer)
-                                results = await collection.query.hybrid(singleQuery, {
-                                    limit: parseInt(topK) || 5,
-                                    alpha: alpha,
-                                    returnMetadata: returnMetadata as any,
-                                    returnProperties: returnFields.length > 0 ? returnFields : undefined
-                                })
-                            }
+                            builder = builder.withHybrid({
+                                query: singleQuery,
+                                alpha: alpha
+                            })
                         } else {
-                            // Similarity Search
-                            if (additionalHeaders) {
-                                // Use collection's vectorizer via headers (e.g., X-OpenAI-Api-Key)
-                                results = await collection.query.nearText(singleQuery, {
-                                    limit: parseInt(topK) || 5,
-                                    returnMetadata: returnMetadata as any,
-                                    returnProperties: returnFields.length > 0 ? returnFields : undefined
-                                })
-                            } else {
-                                // BM25 keyword search only
-                                results = await collection.query.bm25(singleQuery, {
-                                    limit: parseInt(topK) || 5,
-                                    returnMetadata: returnMetadata as any,
-                                    returnProperties: returnFields.length > 0 ? returnFields : undefined
-                                })
-                            }
+                            // Similarity (NearText)
+                            builder = builder.withNearText({
+                                concepts: [singleQuery]
+                            })
                         }
 
-                        // Apply filter if provided
-                        if (filter && results) {
-                            // Note: In v3, filters are applied within the query method
-                            // This is a simplified approach - you may need to adjust based on actual filter structure
-                            console.warn('[Weaviate Tool] Filter in v3 client should be applied within query method')
+                        // Apply limit
+                        const limit = parseInt(topK) || 5
+                        builder = builder.withLimit(limit)
+
+                        // Apply filter
+                        if (filter) {
+                            builder = builder.withWhere(filter)
                         }
 
-                        // Format results
-                        if (!results || !results.objects) {
-                            return []
-                        }
+                        const result = await builder.do()
 
-                        return results.objects.map((obj: any) => {
+                        // Parse result
+                        const objects = result.data?.Get?.[cleanIndex]
+
+                        if (!objects) return []
+
+                        return objects.map((obj: any) => {
+                            const { _additional, ...rest } = obj
                             return {
-                                id: obj.uuid,
-                                properties: obj.properties,
-                                score: obj.metadata?.score ?? obj.metadata?.distance ?? null
+                                id: _additional?.id,
+                                properties: rest,
+                                score: _additional?.certainty ?? _additional?.distance // Normalize score/distance
                             }
                         })
                     }
