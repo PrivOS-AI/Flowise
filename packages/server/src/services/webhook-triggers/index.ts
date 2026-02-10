@@ -11,16 +11,6 @@ import { Trigger } from '../../database/entities/Trigger'
 // Types & Interfaces
 // ============================================================================
 
-export enum PrivosEvent {
-    MESSAGE_NEW = 'message.new',
-    MESSAGE_EDITED = 'message.edited',
-    MESSAGE_DELETED = 'message.deleted',
-    ROOM_JOINED = 'room.joined',
-    ROOM_LEFT = 'room.left',
-    USER_JOINED = 'user.joined',
-    USER_LEFT = 'user.left'
-}
-
 export interface IBot {
     id: string
     username: string

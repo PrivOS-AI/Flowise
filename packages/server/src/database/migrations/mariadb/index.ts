@@ -121,6 +121,6 @@ export const mariadbMigrations = [
     AddSubAgentEnabledToChatFlow1760200000000,
     AddAgentflowFolder1770300000000,
     AddParentIdToFolder1770400000000,
-    AddTriggerEntityAndSlug1737625150000
+    AddTriggerEntityAndSlug1737625150000,
     AddClaudeWSEntities1770500000000
 ]
