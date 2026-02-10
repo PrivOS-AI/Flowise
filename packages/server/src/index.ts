@@ -202,11 +202,7 @@ export class App {
     async config() {
         // Proxy for ClaudeWS using http-proxy (Supports both HTTP and WS via upgrade)
         this.app.use('/claudews-socket', (req, res) => {
-            const urlObj = new URL(req.url || '', 'http://dummy.com')
-            const target = (req.query.claudews_target as string) || 'http://localhost:8556'
-            // Use web proxy (path is already stripped by app.use if mounted, but we want to be safe)
-            // But http-proxy expects req.url to be the target path. 
-            // Express middleware on /claudews-socket sets req.url to /socket.io...
+            const target = (req.query.claudews_target as string) || 'http://localhost:8052'
             this.claudewsProxy.web(req, res, { target })
         })
 
@@ -456,7 +452,7 @@ export async function start(): Promise<void> {
     server.on('upgrade', (req, socket, head) => {
         if (req.url && req.url.startsWith('/claudews-socket')) {
             const urlObj = new URL(req.url, 'http://dummy.com')
-            const target = urlObj.searchParams.get('claudews_target') || 'http://localhost:8556'
+            const target = urlObj.searchParams.get('claudews_target') || 'http://localhost:8052'
 
             // Rewrite path: /claudews-socket/socket.io -> /socket.io
             // We must preserve query params (like EIO, transport)

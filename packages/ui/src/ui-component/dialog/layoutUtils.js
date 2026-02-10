@@ -10,7 +10,7 @@
  */
 export const autoLayout = (nodes, edges, options = {}) => {
     const direction = options.direction || 'LR' // LR = Left-to-Right, TB = Top-to-Bottom
-    const rankSep = options.rankSep || (direction === 'LR' ? 350 : 200)
+    const rankSep = options.rankSep || (direction === 'LR' ? 200 : 200)
     const nodeSep = options.nodeSep || (direction === 'LR' ? 100 : 250)
 
     // 1. Build Adjacency List & Calculate In-Degrees
@@ -97,7 +97,9 @@ export const autoLayout = (nodes, edges, options = {}) => {
             // or just stack them. Let's stack them centered.
             const totalHeight = (levelSize - 1) * nodeSep
             const startY = -totalHeight / 2
-            y = startY + indexInLevel * nodeSep
+            const hasMultipleInLevel = levelSize > 1
+            const alternatingOffset = (level % 2 !== 0 && !hasMultipleInLevel) ? -200 : 0
+            y = startY + indexInLevel * nodeSep + alternatingOffset
         } else {
             y = level * rankSep
             const totalWidth = (levelSize - 1) * nodeSep

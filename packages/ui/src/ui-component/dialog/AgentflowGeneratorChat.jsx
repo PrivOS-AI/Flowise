@@ -14,7 +14,7 @@ import { nanoid } from 'nanoid'
 import claudewsApi from '@/api/claudews'
 
 import nodesApi from '@/api/nodes'
-import { inflateFlow, generateTypeMap } from './AgentflowSimplifier'
+import { inflateFlow, generateTypeMap, deflateFlow } from './AgentflowSimplifier'
 
 import useApi from '@/hooks/useApi'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -309,9 +309,9 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                 })
                 setComponentNodes(nodeMap)
                 // Generate Type Map for Simplifier
-                const { typeMap, menuString } = generateTypeMap(nodeMap)
-                // console.log('[AgentflowGenerator] Generated Menu:', menuString)
-                setSimplifierTypeMap(typeMap)
+                const typeMapResult = generateTypeMap(nodeMap)
+                // console.log('[AgentflowGenerator] Generated Menu:', typeMapResult.menuString)
+                setSimplifierTypeMap(typeMapResult)
             }
         }).catch(err => console.error('Failed to fetch nodes:', err))
     }, [])
@@ -337,21 +337,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     const handleManualRender = () => {
         try {
             console.log('[Debug] Manual Render Triggered')
-            let flowData = JSON.parse(debugJson)
-
-            // INFLATION CHECK
-            // Check if it's a minified flow (has typeId OR name, but not a full flow with data property details usually)
-            // A full flow node usually has 'data' and 'position'. A minified node usually has 'typeId' or just 'name' and 'inputs'.
-            const isMinified = flowData.nodes[0].typeId || (flowData.nodes[0].name && !flowData.nodes[0].data)
-
-            if (flowData && flowData.nodes && flowData.nodes.length > 0 && isMinified) {
-                console.log('[Debug] Inflating Minified Flow...')
-                const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
-                // console.log('[Debug] Inflated Result:', inflated)
-                console.log(JSON.stringify(inflated, null, 2))
-                setDebugJson(JSON.stringify(inflated, null, 2)) // Update UI with inflated JSON
-                flowData = inflated
-            }
+            const flowData = JSON.parse(debugJson)
 
             if (flowData && flowData.nodes && Array.isArray(flowData.nodes) && flowData.nodes.length > 0) {
                 if (reactFlowInstance) {
@@ -545,7 +531,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                         if (flowData && flowData.nodes && flowData.nodes.length > 0 && flowData.nodes[0].typeId) {
                             console.log('[AgentflowGenerator] Detected Simplified Flow. Inflating...')
                             console.log(JSON.stringify(flowData, null, 2))
-                            const inflated = inflateFlow(flowData, simplifierTypeMap, componentNodes)
+                            const inflated = inflateFlow(flowData, simplifierTypeMap.typeMap, componentNodes)
                             console.log('[AgentflowGenerator] Inflated Result:', inflated)
                             flowData = inflated
                         }
@@ -656,7 +642,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     useEffect(() => {
         if (open && activeServer && !socketRef.current) {
             // Calculate target URL based on activeServer config
-            let targetUrl = 'http://localhost:8556'
+            let targetUrl = 'http://localhost:8052'
             if (activeServer.endpointUrl) {
                 targetUrl = activeServer.endpointUrl
             } else if (activeServer.host) {
@@ -745,7 +731,24 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
         setInput('')
         setIsStreaming(true)
 
-
+        // Capture Current Flow Context (Client-side Injection)
+        let flowContextStr = ''
+        if (reactFlowInstance && simplifierTypeMap) {
+            const nodes = reactFlowInstance.getNodes()
+            const edges = reactFlowInstance.getEdges()
+            if (nodes.length > 0) {
+                try {
+                    const { typeMap, reverseMap } = simplifierTypeMap
+                    console.log('[AgentflowGeneratorChat] Deflating current flow for context...')
+                    const deflated = deflateFlow(nodes, edges, typeMap, reverseMap)
+                    if (deflated) {
+                        flowContextStr = `\n\n=== CURRENT FLOW CONTEXT (JSON) ===\n${JSON.stringify(deflated, null, 2)}\n==================================`
+                    }
+                } catch (error) {
+                    console.error('[AgentflowGeneratorChat] Failed to deflate flow:', error)
+                }
+            }
+        }
 
         // Emit attempt:start to trigger the agent
         let taskId = currentTaskId
@@ -765,12 +768,10 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
         // Format instructions (System Prompt is handled by Skill)
         const combinedSchema = `${JSON.stringify(jsonStructure, null, 2)}`
 
-
-
         // Create explicit instructions for the simplified schema
         const payload = {
             taskId: taskId,
-            prompt: `/flow ${userMessage}`,
+            prompt: `/flow ${userMessage}${flowContextStr}`,
             // We still use 'custom' but we rely on the prompt to enforce the schema for now
             outputFormat: 'custom',
             outputSchema: combinedSchema,
@@ -1008,7 +1009,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                             Agent Generator
                                         </Typography>
                                     </Box>
-                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                         {/* DEBUG BUTTON - HIDDEN IN HEADER (Moved to FAB) */}
                                         {/* 
                                         {process.env.NODE_ENV !== 'production' && (
@@ -1022,7 +1023,37 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
 
                                         {activeServer && (
                                             <Tooltip title={isConnected ? `Connected to ${activeServer.name}` : `Connecting to ${activeServer.name}...`}>
-                                                <IconPlugConnected size={18} color={isConnected ? '#4caf50' : alpha('#fff', 0.5)} />
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5,
+                                                        bgcolor: isConnected ? '#00e676' : alpha('#fff', 0.2),
+                                                        color: isConnected ? '#000' : alpha('#fff', 0.8),
+                                                        borderRadius: '16px',
+                                                        px: 1,
+                                                        py: 0.5,
+                                                        height: 24,
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {isConnected ? (
+                                                        <IconCheck size={14} stroke={3} />
+                                                    ) : (
+                                                        <CircularProgress size={12} color="inherit" />
+                                                    )}
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            lineHeight: 1,
+                                                            fontSize: '0.75rem',
+                                                            color: isConnected ? '#000' : 'inherit'
+                                                        }}
+                                                    >
+                                                        {isConnected ? 'Active' : 'Connecting'}
+                                                    </Typography>
+                                                </Box>
                                             </Tooltip>
                                         )}
                                         <IconButton size="small" onClick={() => setOpen(false)} sx={{ color: 'white', '&:hover': { bgcolor: alpha('#fff', 0.1) } }}>
@@ -1117,7 +1148,15 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                                 bgcolor: input.trim() ? theme.palette.primary.main : 'transparent',
                                                 color: input.trim() ? '#fff' : 'inherit',
                                                 flexShrink: 0,
-                                                mb: 0.5, // Align with text field bottom
+                                                width: 40,
+                                                height: 40,
+                                                minWidth: 40, // Prevent shrinking
+                                                minHeight: 40,
+                                                borderRadius: '50%',
+                                                mb: 0, // Align center vertically if single line, or bottom if multiline
+                                                // If we want alignment with multiline text field bottom:
+                                                alignSelf: 'flex-end',
+                                                marginBottom: '2px', // Slight optical adjustment
                                                 '&:hover': {
                                                     bgcolor: theme.palette.primary.dark
                                                 }

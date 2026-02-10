@@ -243,7 +243,9 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
             }
             const realId = `${nodeName}_${nodeCounters[nodeName]}`
             nodeCounters[nodeName]++
-            idMapping[simpleNode.id] = realId
+            // Support both "id" and "index" fields from LLM
+            const simpleId = simpleNode.id || simpleNode.index || (index + 1)
+            idMapping[simpleId] = realId
         })
     }
 
@@ -550,8 +552,9 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
 
 
             // Layout: Simple Horizontal Layout
-            // x = index * 350, y = 100
-            const position = { x: index * 350, y: 100 }
+            // x = index * 200, y = alternating 0 and -200
+            const alternatingY = index % 2 === 0 ? 0 : -200
+            const position = { x: index * 200, y: alternatingY }
 
             // VISIBILITY CHECK
             // Use core helper to ensure consistent behavior
@@ -611,5 +614,146 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
     return {
         nodes: inflatedNodes,
         edges: inflatedEdges
+    }
+}
+// ============================================================================
+// HELPER: Deflate Variables (Reverse of expandVariables)
+// Converts HTML variable spans back to shorthand syntax
+// ============================================================================
+const deflateVariables = (text, reverseIdMapping) => {
+    if (typeof text !== 'string') return text
+
+    // Regex to match variable spans: <p><span ... data-id="..." ...>{{ ... }}</span> </p>
+    // We only care about the data-id or the inner text, but data-id is most reliable
+    const variableRegex = /<p><span class="variable" data-type="mention" data-id="([^"]+)"[^>]*>.*?<\/span> <\/p>/g
+
+    return text.replace(variableRegex, (match, id) => {
+        // 1. $question
+        if (id === 'question') return '$question'
+
+        // 2. $output
+        if (id === 'output') return '$output'
+
+        // 3. $form.variable
+        if (id.startsWith('$form.')) return id // Already in correct format
+
+        // 4. $flow.state.variable
+        if (id.startsWith('$flow.state.')) return id // Already in correct format
+
+        // 5. Node IDs -> $1, $2
+        // We need reverse mapping from Real ID to Simple ID
+        if (reverseIdMapping && reverseIdMapping[id]) {
+            return `$${reverseIdMapping[id]}`
+        }
+
+        // Fallback: keep original ID if no mapping (though this shouldn't happen in valid flows)
+        return `$${id}`
+    })
+}
+
+// ============================================================================
+// HELPER: Deflate Flow
+// Converts full Flowise { nodes, edges } -> simplified { nodes, edges }
+// ============================================================================
+export const deflateFlow = (nodes, edges, typeMap, reverseTypeMap) => {
+    const minifiedNodes = []
+    const minifiedEdges = []
+    const reverseIdMapping = {} // Map Real ID (agentAgentflow_0) -> Simple ID (1, 2...)
+
+
+    nodes.forEach((node, index) => {
+        const simpleId = index + 1
+        reverseIdMapping[node.id] = simpleId
+    })
+
+    // 2. Deflate Nodes
+    nodes.forEach((node) => {
+        const typeId = reverseTypeMap[node.data.name]
+        if (!typeId) return // Skip unknown nodes
+
+        const simpleId = reverseIdMapping[node.id]
+
+        const simpleNode = {
+            id: simpleId,
+            typeId: parseInt(typeId), // Type ID from map
+            label: node.data.label,
+            inputs: {}
+        }
+
+        // Deflate Inputs
+        if (node.data.inputs) {
+            Object.keys(node.data.inputs).forEach((key) => {
+                let value = node.data.inputs[key]
+
+                // Skip internal/system fields
+                if (key === 'inputParams' || key === 'outputAnchors' || key === 'id') return
+                if (value === undefined || value === null || value === '') return
+
+                // Deflate Variables in Strings
+                if (typeof value === 'string') {
+                    value = deflateVariables(value, reverseIdMapping)
+                }
+
+                // Deflate Array/Object Variables
+                if (Array.isArray(value)) {
+                    value = value.map(item => {
+                        if (typeof item === 'string') return deflateVariables(item, reverseIdMapping)
+                        if (typeof item === 'object' && item !== null) {
+                            const newItem = { ...item }
+                            Object.keys(newItem).forEach(subKey => {
+                                if (typeof newItem[subKey] === 'string') {
+                                    newItem[subKey] = deflateVariables(newItem[subKey], reverseIdMapping)
+                                }
+                            })
+                            // Special Case: agentMessages (role/content)
+                            // If role is system, we might map back to agentSystemPrompt?
+                            // But usually we just keep it as agentMessages structure in simplified flow too,
+                            // UNLESS we want to strictly map back to 'agentSystemPrompt' for UX.
+                            // For now, allow raw inputs.
+                            return newItem
+                        }
+                        return item
+                    })
+                }
+
+                simpleNode.inputs[key] = value
+            })
+        }
+
+        // Special backward compatibility: Extract system prompt
+        if (simpleNode.inputs.agentMessages) {
+            const systemMsgIndex = simpleNode.inputs.agentMessages.findIndex(m => m.role === 'system')
+            if (systemMsgIndex >= 0) {
+                const systemMsg = simpleNode.inputs.agentMessages[systemMsgIndex]
+                simpleNode.inputs.agentSystemPrompt = systemMsg.content // Already deflated above
+                // Remove from messages array to avoid duplication?
+                // The simplifier re-adds it. So yes, remove it to keep it clean.
+                simpleNode.inputs.agentMessages.splice(systemMsgIndex, 1)
+                if (simpleNode.inputs.agentMessages.length === 0) {
+                    delete simpleNode.inputs.agentMessages
+                }
+            }
+        }
+
+        // Remove startInputType inferred default
+        if (simpleNode.inputs.startInputType === 'formInput' && simpleNode.inputs.formInputTypes) {
+            // Optional: clean it up if implicit
+        }
+
+        minifiedNodes.push(simpleNode)
+    })
+
+    // 3. Deflate Edges
+    edges.forEach((edge) => {
+        const sourceSimple = reverseIdMapping[edge.source]
+        const targetSimple = reverseIdMapping[edge.target]
+        if (sourceSimple && targetSimple) {
+            minifiedEdges.push(`${sourceSimple}-${targetSimple}`)
+        }
+    })
+
+    return {
+        nodes: minifiedNodes,
+        edges: minifiedEdges
     }
 }
