@@ -20,6 +20,7 @@ import useApi from '@/hooks/useApi'
 import { AnimatePresence, motion } from 'framer-motion'
 import { RunningDots } from './RunningDots'
 import { autoLayout } from './layoutUtils'
+import QuestionPrompt from './QuestionPrompt'
 
 // Icons mapping for ToolUseBlock
 import {
@@ -298,6 +299,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     const [open, setOpen] = useState(false)
     const [componentNodes, setComponentNodes] = useState({})
     const [simplifierTypeMap, setSimplifierTypeMap] = useState(null)
+    const [activeQuestion, setActiveQuestion] = useState(null)
 
     // Fetch component nodes on mount for hydration
     useEffect(() => {
@@ -458,7 +460,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
         if (!userScrollingRef.current) {
             scrollToBottom()
         }
-    }, [messages, isStreaming])
+    }, [messages, isStreaming, activeQuestion])
 
 
     // Fetch Servers and V3 Prompt on Open
@@ -696,6 +698,14 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
             socket.on('attempt:started', (data) => {
                 console.log('Attempt started:', data)
                 setIsStreaming(true)
+            })
+
+            // Listen for AskUserQuestion
+            socket.on('question:ask', (data) => {
+                console.log('[AgentflowGeneratorChat] Received question:ask', data)
+                setActiveQuestion(data)
+                // Optionally open the chat if closed
+                if (!open) setOpen(true)
             })
 
             // Listen for attempt finished (Safety net to ensure loading stops)
@@ -946,24 +956,12 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     return (
         <>
             {/* DEBUG FAB - Bottom Left */}
+            {/* DEBUG FAB - Bottom Left (REMOVED) */}
+            {/* 
             <Box sx={{ position: 'fixed', bottom: 30, left: 30, zIndex: theme.zIndex.appBar + 1 }}>
-                <Tooltip title="Debug Flow" placement="right">
-                    <Fab
-                        size="medium"
-                        color="secondary"
-                        aria-label="debug"
-                        onClick={() => {
-                            setOpen(true)
-                            setShowDebug(true)
-                        }}
-                        sx={{
-                            background: 'linear-gradient(45deg, #FF6B6B 30%, #FF8E53 90%)',
-                        }}
-                    >
-                        <IconSparkles size={24} />
-                    </Fab>
-                </Tooltip>
+                ...
             </Box>
+            */}
 
             {/* MAIN CHAT FAB - Bottom Right (Original Position) */}
             <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: theme.zIndex.appBar + 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -1112,6 +1110,41 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                         </Box>
                                     )}
 
+
+                                    {activeQuestion && (
+                                        <Box sx={{ px: 2, pb: 2 }}>
+                                            <QuestionPrompt
+                                                questions={activeQuestion.questions}
+                                                onAnswer={(answers) => {
+                                                    const socket = socketRef.current
+                                                    if (socket && activeQuestion) {
+                                                        console.log('[AgentflowGeneratorChat] Sending answer:', answers)
+                                                        socket.emit('question:answer', {
+                                                            attemptId: activeQuestion.attemptId,
+                                                            questions: activeQuestion.questions,
+                                                            answers
+                                                        })
+                                                        // Add a user message to show what was answered
+                                                        const answerText = Object.entries(answers)
+                                                            .map(([q, a]) => `${q}: **${a}**`)
+                                                            .join('\n')
+                                                        addMessage('user', `Answered:\n${answerText}`)
+
+                                                        setActiveQuestion(null)
+                                                        setIsStreaming(true)
+                                                    }
+                                                }}
+                                                onCancel={() => {
+                                                    const socket = socketRef.current
+                                                    if (socket && activeQuestion) {
+                                                        socket.emit('question:cancel', { attemptId: activeQuestion.attemptId })
+                                                        setActiveQuestion(null)
+                                                    }
+                                                }}
+                                            />
+                                        </Box>
+                                    )}
+
                                     <div ref={messagesEndRef} />
                                 </Box>
 
@@ -1130,7 +1163,7 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                                     handleSendMessage()
                                                 }
                                             }}
-                                            disabled={!isConnected || isStreaming || !activeServer}
+                                            disabled={!isConnected || isStreaming || !activeServer || !!activeQuestion}
                                             multiline
                                             maxRows={4}
                                             sx={{
