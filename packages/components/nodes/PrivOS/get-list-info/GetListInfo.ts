@@ -17,7 +17,8 @@ import { PrivosErrorHandler } from '../utils'
 const ALL_FIELDS = [
     { label: 'Stages', name: 'stages', description: 'Stages info' },
     { label: 'Members Info', name: 'membersInfo', description: 'Information about members' },
-    { label: 'Assignee', name: 'assignee', description: 'Assignee information' }
+    { label: 'Assignee', name: 'assignee', description: 'Assignee information' },
+    { label: 'Items Info', name: 'itemsInfo', description: 'Information about items in the list' }
 ]
 
 class GetListInfo_Privos implements INode {
@@ -159,6 +160,13 @@ class GetListInfo_Privos implements INode {
                 }),
                 ...(selectedFields?.has('membersInfo') && {
                     membersInfo: await this.handleMembersInfoDataField(baseUrl, apiKey, listInfo?.list?.roomId)
+                }),
+                ...(selectedFields?.has('itemsInfo') && {
+                    itemsInfo: await this.handleItemsInfoDataField(
+                        listInfo?.items,
+                        this.handleAssignFieldId(listInfo),
+                        listInfo?.list?.roomId
+                    )
                 })
             }
 
@@ -194,51 +202,35 @@ class GetListInfo_Privos implements INode {
     }
 
     private handleAssignFieldId(listInfo: any) {
-        let assigneeFieldId = null
+        let assigneeFieldId = []
         const fieldDefinitions = listInfo?.list?.fieldDefinitions || []
 
         // Method 1: Find USER type field in fieldDefinitions
         if (Array.isArray(fieldDefinitions) && fieldDefinitions.length > 0) {
-            // First try to find field named "Persons" with type USER
-            let userField = fieldDefinitions.find((field) => {
-                const fieldName = (field.name || '').toLowerCase()
-                const fieldType = (field.type || '').toUpperCase()
-                return fieldName === 'persons' && fieldType === 'USER'
-            })
+            const userFields = fieldDefinitions
+                .filter((f) => f?.type === 'USER')
+                .map((f) => f?._id)
+                .filter(Boolean)
 
-            // If not found, find ANY field with type USER
-            if (!userField) {
-                userField = fieldDefinitions.find((field) => {
-                    const fieldType = (field.type || '').toUpperCase()
-                    return fieldType === 'USER' || fieldType === 'ASSIGNEE'
-                })
-            }
-
-            if (userField && userField._id) {
-                assigneeFieldId = userField._id
-            }
+            assigneeFieldId.push(...userFields)
         }
 
         // Method 2: If fieldDefinitions empty, detect from items' customFields
-        if (!assigneeFieldId && listInfo?.items && listInfo.items.length > 0) {
-            // Find a field that has array of user objects (with _id and username)
+        if (assigneeFieldId.length === 0 && listInfo?.items && listInfo.items.length > 0) {
             for (const item of listInfo.items) {
                 const customFields = item?.customFields || []
                 for (const cf of customFields) {
                     if (Array.isArray(cf.value) && cf.value.length > 0) {
-                        // Check if it looks like user array
                         const firstValue = cf.value[0]
                         if (firstValue && firstValue._id && (firstValue.username || firstValue.name)) {
-                            assigneeFieldId = cf.fieldId
+                            assigneeFieldId.push(cf.fieldId)
                             break
                         }
                     }
                 }
-                if (assigneeFieldId) break
+                if (assigneeFieldId.length > 0) break
             }
         }
-
-        if (!assigneeFieldId) return 'no_assignee_field'
 
         return assigneeFieldId
     }
@@ -263,6 +255,37 @@ class GetListInfo_Privos implements INode {
             return membersInfo
         } catch (error) {
             console.error('Error fetching members info:', error?.message)
+            return []
+        }
+    }
+
+    private async handleItemsInfoDataField(items: any[], assigneeFieldIds: string[], roomId?: string): Promise<any[]> {
+        if (!roomId) return []
+
+        try {
+            return (items || []).map((item: any) => {
+                const customFields = item?.customFields || []
+
+                const assignees = Array.isArray(assigneeFieldIds)
+                    ? customFields
+                          .filter((field: any) => assigneeFieldIds.includes(field?.fieldId))
+                          .flatMap((field: any) => (Array.isArray(field?.value) ? field.value : []))
+                          .map((user: any) => ({
+                              username: user?.username || '',
+                              name: user?.name || ''
+                          }))
+                    : []
+
+                return {
+                    itemId: item?._id ?? null,
+                    name: item?.name ?? '',
+                    description: item?.description ?? '',
+                    stageId: item?.stageId ?? null,
+                    assignees
+                }
+            })
+        } catch (error) {
+            console.error('Error fetching items info:', error?.message)
             return []
         }
     }

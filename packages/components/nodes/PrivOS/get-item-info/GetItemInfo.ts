@@ -189,9 +189,7 @@ class GetItemInfo_Privos implements INode {
                 result['isAssigned'] = isAssigned
             }
             if (selectedFields?.has('membersInfo')) {
-                const roomType = await this.handleRoomTypeDataField(listInfo, baseUrl, apiKey)
-                result['membersInfo'] = await this.handleMembersInfoDataField(listInfo, roomType, baseUrl, apiKey)
-                result['roomType'] = roomType
+                result['membersInfo'] = await this.handleMembersInfoDataField(listInfo, baseUrl, apiKey)
             }
 
             const finalOutput = outputStructure === 'object' ? result : [result]
@@ -315,50 +313,23 @@ class GetItemInfo_Privos implements INode {
         }
     }
 
-    private async handleRoomTypeDataField(listInfo: any, baseUrl: string, apiKey: string) {
-        if (!listInfo?.list?.roomId) return 'c'
-
-        try {
-            const res = await secureAxiosRequest({
-                url: `${baseUrl}${PRIVOS_ENDPOINTS.ROOMS}`,
-                headers: { 'X-API-KEY': apiKey }
-            })
-
-            const room = (res.data?.update || []).find((r: any) => r._id === listInfo.list.roomId)
-            return room?.t || 'c'
-        } catch (error) {
-            console.error('Error fetching room type:', error?.message)
-            return 'c'
-        }
-    }
-
-    private async handleMembersInfoDataField(listInfo: any, roomType: string, baseUrl: string, apiKey: string) {
+    private async handleMembersInfoDataField(listInfo: any, baseUrl: string, apiKey: string) {
         if (!listInfo?.list?.roomId) return []
-
-        const urlByRoomType: Record<string, string> = {
-            p: PRIVOS_ENDPOINTS.GROUPS_MEMBERS,
-            d: PRIVOS_ENDPOINTS.IM_MEMBERS,
-            c: PRIVOS_ENDPOINTS.CHANNELS_MEMBERS
-        }
-        const membersEndpoint = urlByRoomType[roomType] || PRIVOS_ENDPOINTS.CHANNELS_MEMBERS
 
         try {
             const membersRes = await secureAxiosRequest({
-                url: `${baseUrl}${membersEndpoint}?roomId=${encodeURIComponent(listInfo.list.roomId)}&count=200`,
+                url: `${baseUrl}${PRIVOS_ENDPOINTS.ROOM_MEMBERS}?roomId=${encodeURIComponent(listInfo.list.roomId)}`,
                 headers: { 'X-API-KEY': apiKey }
             })
-            // const membersRes = await axios({
-            //     method: 'GET',
-            //     headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
-            //     url: `${baseUrl}${membersEndpoint}`
-            // })
 
-            const membersInfo = (membersRes.data?.members || []).map((m: any) => ({
-                _id: m._id,
-                username: m.username || m.name || m._id,
-                name: m.name || m.username || '',
-                roles: m.roles || []
+            const membersInfo = (membersRes.data?.users || []).map((m: any) => ({
+                userid: m?._id ?? null,
+                username: m?.username ?? null,
+                name: m?.name ?? null,
+                position: m?.position?.name ?? null,
+                skills: Array.isArray(m?.skills) ? m.skills.map((s: any) => s?.name).filter(Boolean) : []
             }))
+
             return membersInfo
         } catch (error) {
             console.error('Error fetching members info:', error?.message)

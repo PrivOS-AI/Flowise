@@ -9,9 +9,15 @@ import { getErrorMessage } from '../../errors/utils'
 import { getWorkspaceSearchOptions } from '../../enterprise/utils/ControllerServiceUtils'
 import { WorkspaceShared } from '../../enterprise/database/entities/EnterpriseEntities'
 import { WorkspaceService } from '../../enterprise/services/workspace.service'
+import { DEFAULT_PRIVOS_API_BASE_URL, PRIVOS_ENDPOINTS } from 'flowise-components'
 
 const createCredential = async (requestBody: any) => {
     try {
+        // get botId
+        if (requestBody.credentialName === 'botPrivosCredential') {
+            requestBody.plainDataObj.botId = await getBotIdFromToken(requestBody?.plainDataObj?.authToken)
+        }
+
         const appServer = getRunningExpressApp()
         const newCredential = await transformToCredentialEntity(requestBody)
 
@@ -64,9 +70,9 @@ const getAllCredentials = async (paramCredentialName: any, workspaceId?: string,
                 qb.andWhere('credential.workspaceId = :workspaceId', { workspaceId })
             }
 
-            // Room isolation: Root admin sees all, room users see their room + global resources
+            // Room isolation: Root admin sees all, room users see their room
             if (!isRootAdmin && roomId) {
-                qb.andWhere('(credential.roomId = :roomId OR credential.roomId IS NULL)', { roomId })
+                qb.andWhere('(credential.roomId = :roomId)', { roomId })
             }
 
             return qb
@@ -189,6 +195,10 @@ const updateCredential = async (credentialId: string, requestBody: any): Promise
         }
         const decryptedCredentialData = await decryptCredentialData(credential.encryptedData)
         requestBody.plainDataObj = { ...decryptedCredentialData, ...requestBody.plainDataObj }
+        // update botId
+        if (requestBody.credentialName === 'botPrivosCredential' && requestBody?.plainDataObj?.authToken) {
+            requestBody.plainDataObj.botId = await getBotIdFromToken(requestBody.plainDataObj.authToken)
+        }
         const updateCredential = await transformToCredentialEntity(requestBody)
         await appServer.AppDataSource.getRepository(Credential).merge(credential, updateCredential)
         const dbResponse = await appServer.AppDataSource.getRepository(Credential).save(credential)
@@ -198,6 +208,22 @@ const updateCredential = async (credentialId: string, requestBody: any): Promise
             StatusCodes.INTERNAL_SERVER_ERROR,
             `Error: credentialsService.updateCredential - ${getErrorMessage(error)}`
         )
+    }
+}
+
+const getBotIdFromToken = async (authToken?: string): Promise<string> => {
+    if (!authToken) return ''
+
+    try {
+        const res = await fetch(
+            `${DEFAULT_PRIVOS_API_BASE_URL}${PRIVOS_ENDPOINTS.BOTS}/getWebhookInfo`,
+            { headers: {Authorization: `Bearer ${authToken}`} }
+        )
+
+        const data = await res.json()
+        return data?.botId || ''
+    } catch (e) {
+        return ''
     }
 }
 

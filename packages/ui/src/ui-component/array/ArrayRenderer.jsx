@@ -131,6 +131,9 @@ export const ArrayRenderer = ({ inputParam, data, disabled, isDocStore = false }
 
     // Handler for adding new array items
     const handleAddItem = () => {
+        // Prevent adding more than 1 item for Execution Time
+        if (inputParam?.label === 'Execution Time' && arrayItems.length >= 1) return
+
         // Initialize new item with default values
         let newItem = {}
 
@@ -260,16 +263,18 @@ export const ArrayRenderer = ({ inputParam, data, disabled, isDocStore = false }
             })}
 
             {/* Add new item button */}
-            <Button
-                fullWidth
-                size='small'
-                variant='outlined'
-                sx={{ borderRadius: '16px', mt: 2 }}
-                startIcon={<IconPlus />}
-                onClick={handleAddItem}
-            >
-                Add {inputParam.label}
-            </Button>
+            {!(inputParam?.label === 'Execution Time' && arrayItems.length >= 1) && (
+                <Button
+                    fullWidth
+                    size='small'
+                    variant='outlined'
+                    sx={{ borderRadius: '16px', mt: 2 }}
+                    startIcon={<IconPlus />}
+                    onClick={handleAddItem}
+                >
+                    Add {inputParam.label}
+                </Button>
+            )}
         </>
     )
 }

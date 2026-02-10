@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { store } from '@/store'
 import { loginSuccess } from '@/store/reducers/authSlice'
@@ -9,9 +9,16 @@ const ExternalSSOSuccess = () => {
     const navigate = useNavigate()
     const [status, setStatus] = useState('Initializing...')
     const [error, setError] = useState(null)
+    const hasCalledApi = useRef(false)
 
     useEffect(() => {
         const run = async () => {
+            // Prevent double API call in React Strict Mode
+            if (hasCalledApi.current) {
+                return
+            }
+            hasCalledApi.current = true
+
             try {
                 setStatus('Extracting token from URL...')
                 const queryParams = new URLSearchParams(location.search)
@@ -20,7 +27,7 @@ const ExternalSSOSuccess = () => {
                 if (!token) {
                     setError('No authentication token found in URL')
                     setStatus('Authentication failed')
-                    setTimeout(() => navigate('/login'), 3000)
+                    setTimeout(() => navigate('/login'), 2000)
                     return
                 }
 
@@ -30,16 +37,25 @@ const ExternalSSOSuccess = () => {
                 if (response && response.data) {
                     setStatus('Authentication successful! Redirecting...')
                     store.dispatch(loginSuccess(response.data))
-                    navigate('/chatflows')
+                    // Wait for roomWorkspaceId to be set, then navigate
+                    // The WorkspaceContext will handle the redirect with roomWorkspaceId in URL
+                    setTimeout(() => {
+                        const roomWorkspaceId = localStorage.getItem('roomWorkspaceId')
+                        if (roomWorkspaceId) {
+                            navigate(`/${roomWorkspaceId}/chatflows`)
+                        } else {
+                            navigate('/chatflows')
+                        }
+                    }, 300)
                 } else {
                     setError('Invalid server response')
                     setStatus('Authentication failed')
-                    setTimeout(() => navigate('/login'), 3000)
+                    setTimeout(() => navigate('/login'), 2000)
                 }
             } catch (error) {
                 setError(error?.response?.data?.message || error?.message || 'Unknown error')
                 setStatus('Authentication failed')
-                setTimeout(() => navigate('/login'), 3000)
+                setTimeout(() => navigate('/login'), 2000)
             }
         }
         run()

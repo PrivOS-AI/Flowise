@@ -12,6 +12,7 @@ import LogoSection from '../LogoSection'
 import ProfileSection from './ProfileSection'
 import WorkspaceSwitcher from '@/layout/MainLayout/Header/WorkspaceSwitcher'
 import OrgWorkspaceBreadcrumbs from '@/layout/MainLayout/Header/OrgWorkspaceBreadcrumbs'
+import RoomWorkspaceSwitcher from '@/layout/MainLayout/Header/RoomWorkspaceSwitcher'
 import PricingDialog from '@/ui-component/subscription/PricingDialog'
 
 // assets
@@ -215,6 +216,7 @@ const Header = ({ handleLeftDrawerToggle }) => {
                     }}
                 />
             )}
+            <RoomWorkspaceSwitcher />
             <MaterialUISwitch checked={isDark} onChange={changeDarkMode} />
             <Box sx={{ ml: 2 }}></Box>
             <ProfileSection handleLogout={signOutClicked} />

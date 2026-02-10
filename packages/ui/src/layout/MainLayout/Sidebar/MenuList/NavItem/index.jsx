@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types'
 import { forwardRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 
 // material-ui
@@ -21,6 +21,7 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
     const dispatch = useDispatch()
     const customization = useSelector((state) => state.customization)
     const matchesSM = useMediaQuery(theme.breakpoints.down('lg'))
+    const { roomWorkspaceId } = useParams()
 
     const Icon = item.icon
     const itemIcon = item?.icon ? (
@@ -40,9 +41,17 @@ const NavItem = ({ item, level, navType, onClick, onUploadFile }) => {
         itemTarget = '_blank'
     }
 
+    // Build URL with roomWorkspaceId if present
+    const buildUrl = (url) => {
+        if (roomWorkspaceId) {
+            return `${config.basename}/${roomWorkspaceId}${url}`
+        }
+        return `${config.basename}${url}`
+    }
+
     let listItemProps = {
         component: forwardRef(function ListItemPropsComponent(props, ref) {
-            return <Link ref={ref} {...props} to={`${config.basename}${item.url}`} target={itemTarget} />
+            return <Link ref={ref} {...props} to={buildUrl(item.url)} target={itemTarget} />
         })
     }
     if (item?.external) {

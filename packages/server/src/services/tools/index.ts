@@ -43,7 +43,7 @@ const deleteTool = async (toolId: string): Promise<any> => {
     }
 }
 
-const getAllTools = async (workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllTools = async (isRootAdmin?: boolean, roomId?: string, workspaceId?: string, page: number = -1, limit: number = -1) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(Tool).createQueryBuilder('tool').orderBy('tool.updatedDate', 'DESC')
@@ -53,6 +53,10 @@ const getAllTools = async (workspaceId?: string, page: number = -1, limit: numbe
             queryBuilder.take(limit)
         }
         if (workspaceId) queryBuilder.andWhere('tool.workspaceId = :workspaceId', { workspaceId })
+        // Room isolation: Root admin sees all, room users see their room + global resources
+        if (!isRootAdmin && roomId) {
+            queryBuilder.andWhere('(tool.roomId = :roomId OR tool.roomId IS NULL)', { roomId })
+        }
         const [data, total] = await queryBuilder.getManyAndCount()
 
         if (page > 0 && limit > 0) {

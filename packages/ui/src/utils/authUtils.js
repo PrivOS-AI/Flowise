@@ -23,6 +23,7 @@ const _removeFromStorage = () => {
     localStorage.removeItem('permissions')
     localStorage.removeItem('features')
     localStorage.removeItem('isSSO')
+    localStorage.removeItem('roomWorkspaceId')
 }
 
 const clearAllCookies = () => {
@@ -70,6 +71,16 @@ const updateStateAndLocalStorage = (state, payload) => {
     localStorage.setItem('user', JSON.stringify(user))
     localStorage.setItem('permissions', JSON.stringify(payload.permissions))
     localStorage.setItem('features', JSON.stringify(payload.features))
+
+    // Set roomWorkspaceId from user's activeRoomId or roomId if available
+    const roomId = user.activeRoomId || user.roomId
+    if (roomId) {
+        localStorage.setItem('roomWorkspaceId', roomId)
+        // Dispatch event to notify WorkspaceContext to update UI
+        import('@/store/context/RoomWorkspaceContext').then((module) => {
+            module.dispatchRoomWorkspaceIdChanged(roomId)
+        })
+    }
 }
 
 const AuthUtils = {
