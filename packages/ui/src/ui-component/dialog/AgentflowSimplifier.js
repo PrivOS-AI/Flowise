@@ -358,6 +358,11 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
                 if (nodeName === 'agentAgentflow') {
                     let modelName = simpleNode.inputs.agentModel
 
+                    // Handle case where agentModel is an object (LLM hallucination or complex structure)
+                    if (modelName && typeof modelName === 'object') {
+                        modelName = modelName.modelName || modelName.name || modelName.label || 'gpt-4o-mini'
+                    }
+
                     // Default Model if missing
                     if (!modelName) {
                         modelName = 'gpt-4o-mini'
@@ -365,8 +370,8 @@ export const inflateFlow = (minifiedFlow, typeMap, componentNodes) => {
                         // We also need to set the config default later if needed
                     }
 
-                    // Map specific model names to Providers (e.g. "gpt-4" -> "chatOpenAI")
-                    if (modelName) {
+                    // Ensure modelName is a string before checking startsWith
+                    if (typeof modelName === 'string') {
                         if (modelName.startsWith('gpt')) {
                             nodeData.inputs.agentModel = 'chatOpenAI'
                             if (!nodeData.inputs.agentModelConfig) nodeData.inputs.agentModelConfig = {}

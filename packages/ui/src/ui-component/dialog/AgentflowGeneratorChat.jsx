@@ -835,7 +835,8 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     // Prepare maps for rendering
     const toolResultsMap = buildToolResultsMap(messages)
     const lastToolUseId = findLastToolUseId(messages)
-    const showLoadingDots = isStreaming && !hasVisibleContent(messages)
+    // Always show loading dots if streaming, even if partial content exists, to indicate activity
+    const showLoadingDots = isStreaming
 
     const renderContentBlock = (block, index, msgIsStreaming) => {
         if (block.type === 'text' && block.text) {
