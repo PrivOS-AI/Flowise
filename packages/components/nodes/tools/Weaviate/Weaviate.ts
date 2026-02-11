@@ -87,7 +87,9 @@ class Weaviate_Tools implements INode {
             {
                 label: 'Weaviate Search Filter',
                 name: 'weaviateFilter',
-                type: 'json',
+                type: 'string',
+                rows: 4,
+                description: 'JSON string of the filter, e.g. {"operator": "Equal", "path": ["category"], "valueString": "fiction"}',
                 additionalParams: true,
                 optional: true,
                 acceptVariable: true
@@ -201,6 +203,9 @@ class Weaviate_Tools implements INode {
             } else {
                 filter = weaviateFilter
             }
+            if (filter && typeof filter === 'object' && 'X-OpenAI-Api-Key' in filter) {
+                delete filter['X-OpenAI-Api-Key']
+            }
         }
 
         // Combine default description with user's custom description
@@ -298,7 +303,7 @@ class Weaviate_Tools implements INode {
                         builder = builder.withLimit(limit)
 
                         // Apply filter
-                        if (filter) {
+                        if (filter && Object.keys(filter).length > 0 && filter.operator) {
                             builder = builder.withWhere(filter)
                         }
 
