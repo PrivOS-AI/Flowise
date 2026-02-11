@@ -130,19 +130,18 @@ class Weaviate_Tools implements INode {
                 label: 'Alpha (Hybrid)',
                 name: 'hybridAlpha',
                 type: 'number',
-                description: 'Weighting for hybrid search (0 = pure keyword, 1 = pure vector). Default 0.5',
-                default: 0.5,
+                description: 'Weighting for hybrid search (0 = pure keyword, 1 = pure vector). Default 0.8',
+                default: 0.8,
                 optional: true,
                 additionalParams: true,
                 acceptVariable: true
             },
             {
-                label: 'Additional Headers',
-                name: 'additionalHeaders',
-                type: 'json',
-                description:
-                    'Additional HTTP headers (e.g., {"X-OpenAI-Api-Key": "sk-..."}). Weaviate will use collection\'s configured vectorizer.',
-                additionalParams: true,
+                label: 'OpenAI API Key',
+                name: 'openaiApiKey',
+                type: 'string',
+                description: 'OpenAI API Key for vectorizer (if collection uses OpenAI embeddings)',
+                placeholder: 'sk-...',
                 optional: true,
                 acceptVariable: true
             },
@@ -170,7 +169,7 @@ class Weaviate_Tools implements INode {
         const toolDescription = nodeData.inputs?.toolDescription as string
         const searchMethod = nodeData.inputs?.searchMethod as string
         const hybridAlpha = nodeData.inputs?.hybridAlpha as string
-        const additionalHeaders = nodeData.inputs?.additionalHeaders
+        const openaiApiKey = nodeData.inputs?.openaiApiKey as string
         let weaviateFilter = nodeData.inputs?.weaviateFilter
 
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
@@ -183,15 +182,9 @@ class Weaviate_Tools implements INode {
 
         if (weaviateApiKey) clientConfig.apiKey = new ApiKey(weaviateApiKey)
 
-        if (additionalHeaders) {
-            try {
-                if (typeof additionalHeaders === 'string') {
-                    clientConfig.headers = JSON.parse(additionalHeaders)
-                } else {
-                    clientConfig.headers = additionalHeaders
-                }
-            } catch (e) {
-                if (isDev) console.error('[Weaviate Tool] Failed to parse additionalHeaders:', e)
+        if (openaiApiKey) {
+            clientConfig.headers = {
+                'X-OpenAI-Api-Key': openaiApiKey
             }
         }
 
