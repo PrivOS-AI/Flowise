@@ -13,10 +13,10 @@ export class Trigger implements ITrigger {
     @Column({ type: 'varchar', length: 50, nullable: true })
     botId: string
 
-    @Column({ type: 'jsonb', nullable: true })
+    @Column({ type: 'text', nullable: true })
     config?: any
 
-    @Column({ type: 'jsonb', default: [] })
+    @Column({ type: 'text', default: '[]' })
     events: any
 
     @Column({ type: 'boolean', default: true })
