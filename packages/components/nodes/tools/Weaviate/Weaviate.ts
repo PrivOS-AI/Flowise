@@ -87,69 +87,12 @@ class Weaviate_Tools implements INode {
             {
                 label: 'Weaviate Search Filter',
                 name: 'weaviateFilter',
-                type: 'json',
-                additionalParams: true,
-                optional: true,
-                acceptVariable: true
-            },
-            {
-                label: 'Weaviate Filter Property',
-                name: 'weaviateFilterProperty',
                 type: 'string',
-                description: 'The property name to filter by (e.g. "category")',
-                placeholder: 'category',
-                optional: true,
+                rows: 4,
+                description: 'JSON string of the filter, e.g. {"operator": "Equal", "path": ["category"], "valueString": "fiction"}',
                 additionalParams: true,
+                optional: true,
                 acceptVariable: true
-            },
-            {
-                label: 'Weaviate Filter Value',
-                name: 'weaviateFilterValue',
-                type: 'string',
-                description: 'The value to filter by (e.g. "fiction")',
-                placeholder: 'fiction',
-                optional: true,
-                additionalParams: true,
-                acceptVariable: true
-            },
-            {
-                label: 'Weaviate Filter Operator',
-                name: 'weaviateFilterOperator',
-                type: 'options',
-                description: 'The operator to use for filtering',
-                optional: true,
-                additionalParams: true,
-                options: [
-                    {
-                        label: 'Equal',
-                        name: 'Equal'
-                    },
-                    {
-                        label: 'NotEqual',
-                        name: 'NotEqual'
-                    },
-                    {
-                        label: 'GreaterThan',
-                        name: 'GreaterThan'
-                    },
-                    {
-                        label: 'GreaterThanEqual',
-                        name: 'GreaterThanEqual'
-                    },
-                    {
-                        label: 'LessThan',
-                        name: 'LessThan'
-                    },
-                    {
-                        label: 'LessThanEqual',
-                        name: 'LessThanEqual'
-                    },
-                    {
-                        label: 'Like',
-                        name: 'Like'
-                    }
-                ],
-                default: 'Equal'
             },
             {
                 label: 'Output Fields',
@@ -229,9 +172,6 @@ class Weaviate_Tools implements INode {
         const searchMethod = nodeData.inputs?.searchMethod as string
         const hybridAlpha = nodeData.inputs?.hybridAlpha as string
         const openaiApiKey = nodeData.inputs?.openaiApiKey as string
-        const weaviateFilterProperty = nodeData.inputs?.weaviateFilterProperty as string
-        const weaviateFilterValue = nodeData.inputs?.weaviateFilterValue as string
-        const weaviateFilterOperator = nodeData.inputs?.weaviateFilterOperator as string
         let weaviateFilter = nodeData.inputs?.weaviateFilter
 
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
@@ -263,28 +203,8 @@ class Weaviate_Tools implements INode {
             } else {
                 filter = weaviateFilter
             }
-            // Fix for "unrecognized key 'X-OpenAI-Api-Key'" error
             if (filter && typeof filter === 'object' && 'X-OpenAI-Api-Key' in filter) {
                 delete filter['X-OpenAI-Api-Key']
-            }
-        } else if (weaviateFilterProperty && weaviateFilterValue && weaviateFilterOperator) {
-            filter = {
-                operator: weaviateFilterOperator,
-                path: [weaviateFilterProperty]
-            }
-
-            // Determine value type
-            const numberValue = parseFloat(weaviateFilterValue)
-            const booleanValue = weaviateFilterValue === 'true' ? true : weaviateFilterValue === 'false' ? false : null
-
-            if (!isNaN(numberValue)) {
-                filter.valueNumber = numberValue
-            } else if (booleanValue !== null) {
-                filter.valueBoolean = booleanValue
-            } else if (weaviateFilterOperator === 'Like') {
-                filter.valueText = weaviateFilterValue
-            } else {
-                filter.valueString = weaviateFilterValue
             }
         }
 
