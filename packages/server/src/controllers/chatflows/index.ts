@@ -494,7 +494,7 @@ const getSinglePublicChatflow = async (req: Request, res: Response, next: NextFu
                 `Error: chatflowsController.getSinglePublicChatflow - id not provided!`
             )
         }
-        const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        const chatflow = await chatflowsService.getChatflowById(req.params.id, true)
         if (!chatflow) return res.status(StatusCodes.NOT_FOUND).json({ message: 'Chatflow not found' })
         if (chatflow.isPublic) return res.status(StatusCodes.OK).json(chatflow)
         if (!req.user) return res.status(StatusCodes.UNAUTHORIZED).json({ message: GeneralErrorMessage.UNAUTHORIZED })

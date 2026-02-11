@@ -54,6 +54,11 @@ export enum UserPlan {
 /**
  * Databases
  */
+export interface ICommandClaudeWs{
+    name: string
+    description: string
+}
+
 export interface IChatFlow {
     id: string
     name: string
@@ -76,7 +81,8 @@ export interface IChatFlow {
     scheduleConfig?: string
     scheduleEnabled?: boolean
     folderId?: string
-    slug?: string
+    slug?: string,
+    commands?: ICommandClaudeWs[]
 }
 
 export interface IAgentflowFolder {
