@@ -201,6 +201,10 @@ class Weaviate_Tools implements INode {
             } else {
                 filter = weaviateFilter
             }
+            // Fix for "unrecognized key 'X-OpenAI-Api-Key'" error
+            if (filter && typeof filter === 'object' && 'X-OpenAI-Api-Key' in filter) {
+                delete filter['X-OpenAI-Api-Key']
+            }
         }
 
         // Combine default description with user's custom description
