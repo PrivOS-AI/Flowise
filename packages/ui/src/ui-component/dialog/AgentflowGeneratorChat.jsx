@@ -18,7 +18,7 @@ import { inflateFlow, generateTypeMap, deflateFlow } from './AgentflowSimplifier
 
 import useApi from '@/hooks/useApi'
 import { AnimatePresence, motion } from 'framer-motion'
-import { RunningDots } from './RunningDots'
+import { RunningDots, useRandomStatusVerb } from './RunningDots'
 import { autoLayout } from './layoutUtils'
 import QuestionPrompt from './QuestionPrompt'
 
@@ -119,6 +119,7 @@ MessageBlock.propTypes = {
 const ThinkingBlock = ({ content }) => {
     const [expanded, setExpanded] = useState(true)
     const theme = useTheme()
+    const statusVerb = useRandomStatusVerb()
 
     return (
         <Box sx={{ mb: 1 }}>
@@ -136,7 +137,7 @@ const ThinkingBlock = ({ content }) => {
                 {expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                 <RunningDots />
                 <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
-                    Thinking...
+                    {statusVerb}...
                 </Typography>
             </Box>
             <AnimatePresence>
@@ -441,23 +442,27 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
         if (!container) return
 
         const handleScroll = () => {
-            userScrollingRef.current = true
-            if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current)
+            // Only detect manual scroll if NOT streaming
+            // If streaming, we want to force scroll to bottom regardless (per user request)
+            if (!isStreaming) {
+                userScrollingRef.current = true
+                if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current)
 
-            userScrollTimeoutRef.current = setTimeout(() => {
-                if (isNearBottom()) {
-                    userScrollingRef.current = false
-                }
-            }, 150)
+                userScrollTimeoutRef.current = setTimeout(() => {
+                    if (isNearBottom()) {
+                        userScrollingRef.current = false
+                    }
+                }, 150)
+            }
         }
 
         container.addEventListener('scroll', handleScroll, { passive: true })
         return () => container.removeEventListener('scroll', handleScroll)
-    }, [open])
+    }, [open, isStreaming])
 
-    // Auto-scroll on messages change if not manually scrolling
+    // Auto-scroll on messages change if not manually scrolling or if streaming
     useEffect(() => {
-        if (!userScrollingRef.current) {
+        if (isStreaming || !userScrollingRef.current) {
             scrollToBottom()
         }
     }, [messages, isStreaming, activeQuestion])
