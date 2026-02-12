@@ -294,6 +294,20 @@ ToolUseBlock.propTypes = {
 }
 // ==============================|| AGENTFLOW GENERATOR CHAT ||============================== //
 
+const StreamingStatus = () => {
+    const statusVerb = useRandomStatusVerb()
+    const theme = useTheme()
+
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary, pl: 2, py: 1 }}>
+            <RunningDots />
+            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
+                {statusVerb}...
+            </Typography>
+        </Box>
+    )
+}
+
 const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     const theme = useTheme()
     const dispatch = useDispatch()
@@ -1107,13 +1121,10 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
 
                                     {messages.map((msg, index) => renderMessage(msg, index))}
 
+
+
                                     {showLoadingDots && (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: theme.palette.text.secondary, pl: 2, py: 1 }}>
-                                            <RunningDots />
-                                            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b9664a' }}>
-                                                Thinking...
-                                            </Typography>
-                                        </Box>
+                                        <StreamingStatus />
                                     )}
 
 
