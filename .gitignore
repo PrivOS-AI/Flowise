@@ -121,4 +121,4 @@ packages/server/check-schedules.js
 packages/server/clear-redis-schedules.js
 nul
 plans/
-ecosystem.config.js
+ecosystem.config.jsnodes/
