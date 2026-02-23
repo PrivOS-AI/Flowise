@@ -7,7 +7,7 @@
 **/package-lock.json
 **/yarn.lock
 test/
-nodes/
+/nodes/
 ## logs
 **/logs
 **/*.log
@@ -121,5 +121,4 @@ packages/server/check-schedules.js
 packages/server/clear-redis-schedules.js
 nul
 plans/
-ecosystem.config.jsnodes/
-test/
+ecosystem.config.js
