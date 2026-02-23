@@ -56,10 +56,11 @@ const fetchList = async ({ name, nodeData, previousNodes, currentNode }) => {
             config
         )
         .then(async function (response) {
-            return response.data
+            return response.data || []
         })
         .catch(function (error) {
             console.error(error)
+            return []
         })
     return lists
 }

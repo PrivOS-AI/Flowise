@@ -109,6 +109,7 @@ const getSingleNodeAsyncOptions = async (nodeName: string, requestBody: any): Pr
 
                 return dbResponse
             } catch (error) {
+                logger.error(`[NodesService] Inner error in loadMethod ${nodeData?.loadMethod}:`, error)
                 return []
             }
         } else {
@@ -116,6 +117,8 @@ const getSingleNodeAsyncOptions = async (nodeName: string, requestBody: any): Pr
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Node ${nodeName} not found`)
         }
     } catch (error) {
+        logger.error(`[NodesService] Outer error in getSingleNodeAsyncOptions:`, error)
+        if (error instanceof InternalFlowiseError) throw error;
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
             `Error: nodesService.getSingleNodeAsyncOptions - ${getErrorMessage(error)}`
