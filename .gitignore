@@ -122,3 +122,4 @@ packages/server/clear-redis-schedules.js
 nul
 plans/
 ecosystem.config.jsnodes/
+test/
