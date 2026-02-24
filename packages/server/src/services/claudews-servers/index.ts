@@ -1,4 +1,5 @@
 import { StatusCodes } from 'http-status-codes'
+import { IsNull } from 'typeorm'
 import axios, { AxiosInstance } from 'axios'
 import { ClaudeWSServer } from '../../database/entities/ClaudeWSServer'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
@@ -150,6 +151,7 @@ const updateServer = async (id: string, data: any, userId: string, isRootAdmin?:
                 data.apiKey = await encryptCredentialData({ apiKey: data.apiKey })
             }
         }
+
 
         const updateData = new ClaudeWSServer()
         Object.assign(updateData, data)

@@ -125,10 +125,23 @@ class CustomFunction_Agentflow implements INode {
     //@ts-ignore
     loadMethods = {
         async listRuntimeStateKeys(_: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
-            const previousNodes = options.previousNodes as ICommonObject[]
-            const startAgentflowNode = previousNodes.find((node) => node.name === 'startAgentflow')
-            const state = startAgentflowNode?.inputs?.startState as ICommonObject[]
-            return state.map((item) => ({ label: item.key, name: item.key }))
+            const returnData: INodeOptionsValue[] = []
+            const previousNodes = options.previousNodes as any[]
+
+            if (previousNodes && previousNodes.length > 0) {
+                const startNode = previousNodes.find((node) => node.name === 'startAgentflow')
+                if (startNode && startNode.inputs && startNode.inputs.startState) {
+                    const startState = startNode.inputs.startState
+                    for (const item of startState) {
+                        returnData.push({
+                            label: item.key,
+                            name: item.key
+                        })
+                    }
+                }
+            }
+
+            return returnData
         }
     }
 
@@ -167,9 +180,9 @@ class CustomFunction_Agentflow implements INode {
         // Setup streaming function if needed
         const streamOutput = isStreamable
             ? (output: string) => {
-                  const sseStreamer: IServerSideEventStreamer = options.sseStreamer
-                  sseStreamer.streamTokenEvent(chatId, output)
-              }
+                const sseStreamer: IServerSideEventStreamer = options.sseStreamer
+                sseStreamer.streamTokenEvent(chatId, output)
+            }
             : undefined
 
         try {
@@ -209,6 +222,7 @@ class CustomFunction_Agentflow implements INode {
             throw new Error(e)
         }
     }
+
 }
 
 module.exports = { nodeClass: CustomFunction_Agentflow }

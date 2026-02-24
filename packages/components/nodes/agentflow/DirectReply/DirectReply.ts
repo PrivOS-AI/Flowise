@@ -25,7 +25,7 @@ class DirectReply_Agentflow implements INode {
         this.description = 'Directly reply to the user with a message'
         this.baseClasses = [this.type]
         this.color = '#4DDBBB'
-        this.hideOutput = true
+        this.hideOutput = false
         this.inputs = [
             {
                 label: 'Message',

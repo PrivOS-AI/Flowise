@@ -46,28 +46,13 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
 
         console.log('[ClaudeWS] Request config:', requestConfig)
 
-        try {
-            const response = await client.get(url)
-            console.log('[ClaudeWS] Response status:', response.status)
-            console.log('[ClaudeWS] Response data:', JSON.stringify(response.data).substring(0, 200))
+        const response = await client.get(url)
+        console.log('[ClaudeWS] Response status:', response.status)
+        console.log('[ClaudeWS] Response data:', JSON.stringify(response.data).substring(0, 200))
 
-            // Return plugins with debug info
-            const plugins = response.data?.plugins || []
-            return plugins as any
-        } catch (requestError: any) {
-            // Add detailed error info
-            throw new Error(
-                JSON.stringify({
-                    message: requestError.message,
-                    request: requestConfig,
-                    response: {
-                        status: requestError.response?.status,
-                        statusText: requestError.response?.statusText,
-                        data: requestError.response?.data
-                    }
-                })
-            )
-        }
+        // Return plugins with debug info
+        const plugins = response.data?.plugins || []
+        return plugins as any
     } catch (error: any) {
         // Build detailed error info
         const errorInfo = {
@@ -84,6 +69,12 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
         console.error('[ClaudeWS] Error in listPlugins:', errorInfo)
 
         if (error instanceof InternalFlowiseError) throw error
+
+        // Handle connection errors specifically - return empty list to prevent UI crash
+        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+            console.warn(`[ClaudeWS] Connection failed: ${error.message}. Returning empty list to avoid UI blocking.`)
+            return []
+        }
 
         // Include debug info in error message
         throw new InternalFlowiseError(

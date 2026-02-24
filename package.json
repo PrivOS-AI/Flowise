@@ -131,6 +131,7 @@
     },
     "dependencies": {
         "better-sqlite3": "^12.6.2",
+        "socket.io-client": "^4.8.3",
         "sqlite3": "^5.1.7"
     },
     "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"

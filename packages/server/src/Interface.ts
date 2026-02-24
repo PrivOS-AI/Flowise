@@ -54,7 +54,7 @@ export enum UserPlan {
 /**
  * Databases
  */
-export interface ICommandClaudeWs{
+export interface ICommandClaudeWs {
     name: string
     description: string
 }

@@ -790,7 +790,7 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
             aria-describedby='alert-dialog-description'
         >
             <DialogTitle
-                sx={{ fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: 'column', alignItems: 'flex-start' }}
+                sx={{ fontSize: '1rem', display: 'flex', justifyContent: 'space-between', flexDirection: 'column', alignItems: 'flex-start' }}
                 id='alert-dialog-title'
             >
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -1007,8 +1007,8 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
                                                                     columns={
                                                                         nodeOverrides[nodeLabel].length > 0
                                                                             ? Object.keys(nodeOverrides[nodeLabel][0]).filter(
-                                                                                  (key) => key !== 'schema'
-                                                                              )
+                                                                                (key) => key !== 'schema'
+                                                                            )
                                                                             : []
                                                                     }
                                                                 />
@@ -1032,8 +1032,8 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
                                                         ? getConfigCodeWithFormDataWithAuth(codeLang, getConfigApi.data)
                                                         : getConfigCodeWithAuthorization(codeLang, getConfigApi.data)
                                                     : dialogProps.isFormDataRequired
-                                                    ? getConfigCodeWithFormData(codeLang, getConfigApi.data)
-                                                    : getConfigCode(codeLang, getConfigApi.data)
+                                                        ? getConfigCodeWithFormData(codeLang, getConfigApi.data)
+                                                        : getConfigCode(codeLang, getConfigApi.data)
                                             }
                                             language={getLang(codeLang)}
                                             showLineNumbers={false}
@@ -1090,7 +1090,7 @@ formData.append("openAIApiKey[openAIEmbeddings_0]", "sk-my-openai-2nd-key")`
                             </>
                         )}
                         {codeLang === 'Share Chatbot' && !chatflowApiKeyId && (
-                            <ShareChatbot isSessionMemory={dialogProps.isSessionMemory} isAgentCanvas={dialogProps.isAgentCanvas} getChatflowIdentifier={getChatflowIdentifier}/>
+                            <ShareChatbot isSessionMemory={dialogProps.isSessionMemory} isAgentCanvas={dialogProps.isAgentCanvas} getChatflowIdentifier={getChatflowIdentifier} />
                         )}
                     </TabPanel>
                 ))}

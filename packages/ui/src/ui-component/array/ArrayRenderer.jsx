@@ -56,7 +56,10 @@ export const ArrayRenderer = ({ inputParam, data, disabled, isDocStore = false }
 
     // Initialize array items and parameters when component mounts or data changes
     useEffect(() => {
-        const initialArrayItems = data.inputs[inputParam.name] || []
+        let initialArrayItems = data.inputs[inputParam.name] || []
+        if (!Array.isArray(initialArrayItems)) {
+            initialArrayItems = []
+        }
         setArrayItems(initialArrayItems)
 
         // Calculate initial display parameters for each array item
