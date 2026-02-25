@@ -70,9 +70,17 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
 
         if (error instanceof InternalFlowiseError) throw error
 
-        // Handle connection errors specifically - return empty list to prevent UI crash
+        // Handle connection errors (server unreachable)
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
-            console.warn(`[ClaudeWS] Connection failed: ${error.message}. Returning empty list to avoid UI blocking.`)
+            console.warn(`[ClaudeWS] Connection failed (${error.code}): returning empty list.`)
+            return []
+        }
+
+        // Handle HTTP errors from reverse proxy / ngrok when upstream server is offline
+        // (e.g. ngrok returns 404/502/503 when the target is down)
+        if (error.response?.status) {
+            const status = error.response.status
+            console.warn(`[ClaudeWS] Server returned HTTP ${status} — server may be offline. Returning empty list.`)
             return []
         }
 
