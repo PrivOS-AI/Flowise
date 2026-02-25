@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types'
 import { useState, useEffect, useRef, useContext } from 'react'
 import { useDispatch } from 'react-redux'
-import { Box, TextField, Paper, Typography, IconButton, Fab, useTheme, Tooltip, CircularProgress, alpha } from '@mui/material'
+import { Box, TextField, Paper, Typography, IconButton, Fab, useTheme, Tooltip, CircularProgress, alpha, Menu, MenuItem } from '@mui/material'
 
 import { io } from 'socket.io-client'
 import ReactMarkdown from 'react-markdown'
@@ -342,6 +342,8 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     const scrollContainerRef = useRef(null)
 
     const [activeServer, setActiveServer] = useState(null)
+    const [servers, setServers] = useState([])
+    const [serverMenuAnchor, setServerMenuAnchor] = useState(null)
     const [currentTaskId, setCurrentTaskId] = useState(null)
     const [isLoadingServer, setIsLoadingServer] = useState(false)
     const userScrollingRef = useRef(false)
@@ -494,16 +496,17 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
     useEffect(() => {
         if (getAllServersApi.data) {
             setIsLoadingServer(false)
-            // Find active or first server
-            const servers = getAllServersApi.data
-            console.log('Fetched Servers:', servers)
-            const active = servers.find(s => s.isActive) || servers[0]
-            if (active) {
-                console.log('Active Server Found:', active)
-                setActiveServer(active)
-            } else {
-                console.warn('No active server found')
-            }
+            const fetchedServers = getAllServersApi.data
+            console.log('Fetched Servers:', fetchedServers)
+            setServers(fetchedServers)
+            // Only auto-select if no server is currently selected
+            setActiveServer(prev => {
+                if (prev) return prev // Keep current selection
+                const active = fetchedServers.find(s => s.isActive) || fetchedServers[0]
+                if (active) console.log('Auto-selected Server:', active)
+                else console.warn('No active server found')
+                return active || null
+            })
         } else if (getAllServersApi.error) {
             console.error('Failed to fetch servers:', getAllServersApi.error)
             setIsLoadingServer(false)
@@ -659,6 +662,21 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
         }
     }
 
+    // Handle server switch: disconnect old socket so a new one can be created
+    const handleServerChange = (serverId) => {
+        const selected = servers.find(s => s.id === serverId)
+        if (!selected || selected.id === activeServer?.id) return
+
+        // Tear down existing socket
+        if (socketRef.current) {
+            socketRef.current.disconnect()
+            socketRef.current = null
+        }
+        setIsConnected(false)
+        setCurrentTaskId(null)
+        setActiveServer(selected)
+    }
+
     // Initialize Socket
     useEffect(() => {
         if (open && activeServer && !socketRef.current) {
@@ -745,6 +763,12 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
 
 
         return () => {
+            // Cleanup: disconnect socket when server changes or dialog closes
+            if (socketRef.current) {
+                console.log('[AgentflowGeneratorChat] Cleaning up socket for', activeServer?.name)
+                socketRef.current.disconnect()
+                socketRef.current = null
+            }
         }
     }, [open, activeServer, simplifierTypeMap])
 
@@ -1028,17 +1052,79 @@ const AgentflowGeneratorChat = ({ onFlowGenerated }) => {
                                         </Typography>
                                     </Box>
                                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                        {/* DEBUG BUTTON - HIDDEN IN HEADER (Moved to FAB) */}
-                                        {/* 
-                                        {process.env.NODE_ENV !== 'production' && (
-                                            <Tooltip title="Debug: Manual Render">
-                                                <IconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: 'white', '&:hover': { bgcolor: alpha('#fff', 0.1) } }}>
-                                                    <IconSparkles size={18} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )} 
-                                        */}
 
+                                        {/* Server Selector Pill */}
+                                        {servers.length > 1 && (
+                                            <>
+                                                <Tooltip title="Switch server">
+                                                    <Box
+                                                        onClick={(e) => setServerMenuAnchor(e.currentTarget)}
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 0.5,
+                                                            bgcolor: alpha('#fff', 0.9),
+                                                            color: '#000',
+                                                            borderRadius: '16px',
+                                                            px: 1.2,
+                                                            py: 0.5,
+                                                            height: 24,
+                                                            cursor: 'pointer',
+                                                            transition: 'background 0.2s',
+                                                            '&:hover': { bgcolor: alpha('#fff', 0.28) },
+                                                            maxWidth: 130,
+                                                            overflow: 'hidden'
+                                                        }}
+                                                    >
+                                                        <IconChevronDown size={12} />
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                                fontSize: '0.72rem',
+                                                                lineHeight: 1,
+                                                                whiteSpace: 'nowrap',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis'
+                                                            }}
+                                                        >
+                                                            {activeServer?.name || 'Select server'}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
+                                                <Menu
+                                                    anchorEl={serverMenuAnchor}
+                                                    open={Boolean(serverMenuAnchor)}
+                                                    onClose={() => setServerMenuAnchor(null)}
+                                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                                                    PaperProps={{
+                                                        sx: {
+                                                            mt: 0.5,
+                                                            minWidth: 160,
+                                                            borderRadius: 2,
+                                                            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+                                                        }
+                                                    }}
+                                                >
+                                                    {servers.map(s => (
+                                                        <MenuItem
+                                                            key={s.id}
+                                                            selected={s.id === activeServer?.id}
+                                                            onClick={() => {
+                                                                handleServerChange(s.id)
+                                                                setServerMenuAnchor(null)
+                                                            }}
+                                                            sx={{ fontSize: '0.82rem', borderRadius: 1, mx: 0.5, my: 0.25, px: 1.5 }}
+                                                        >
+                                                            {s.name || s.endpointUrl}
+                                                        </MenuItem>
+                                                    ))}
+                                                </Menu>
+                                            </>
+                                        )}
+
+                                        {/* Connection Status Badge */}
                                         {activeServer && (
                                             <Tooltip title={isConnected ? `Connected to ${activeServer.name}` : `Connecting to ${activeServer.name}...`}>
                                                 <Box
