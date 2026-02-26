@@ -1,7 +1,7 @@
 import { ICommonObject, removeFolderFromStorage } from 'flowise-components'
 import { StatusCodes } from 'http-status-codes'
 import { In } from 'typeorm'
-import { ChatflowType, IReactFlowObject } from '../../Interface'
+import { ChatflowType, IChatFlow, IReactFlowObject } from '../../Interface'
 import { FLOWISE_COUNTER_STATUS, FLOWISE_METRIC_COUNTERS } from '../../Interface.Metrics'
 import { UsageCacheManager } from '../../UsageCacheManager'
 import { ChatFlow, EnumChatflowType } from '../../database/entities/ChatFlow'
@@ -14,12 +14,21 @@ import { isInvalidUUID } from '../../enterprise/utils/validation.util'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
 import documentStoreService from '../../services/documentstore'
-import { constructGraphs, getAppVersion, getEndingNodes, getTelemetryFlowObj, isFlowValidForStream } from '../../utils'
+import {
+    constructGraphs,
+    decryptCredentialData,
+    getAppVersion,
+    getEndingNodes,
+    getTelemetryFlowObj,
+    isFlowValidForStream
+} from '../../utils'
 import { containsBase64File, updateFlowDataWithFilePaths } from '../../utils/fileRepository'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { utilGetUploadsConfig } from '../../utils/getUploadsConfig'
 import logger from '../../utils/logger'
 import { updateStorageUsage } from '../../utils/quotaUsage'
+import { validate as isUUID } from 'uuid'
+import { ClaudeWSServer } from '../../database/entities/ClaudeWSServer'
 
 export const enum ChatflowErrorMessage {
     INVALID_CHATFLOW_TYPE = 'Invalid Chatflow Type'
@@ -35,9 +44,9 @@ const checkIfChatflowIsValidForStreaming = async (chatflowId: string): Promise<a
     try {
         const appServer = getRunningExpressApp()
         //**
-        const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-            id: chatflowId
-        })
+        const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+            isUUID(chatflowId) ? { id: chatflowId } : { slug: chatflowId?.toLowerCase()?.trim() }
+        )
         if (!chatflow) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found`)
         }
@@ -258,15 +267,107 @@ const getChatflowByApiKey = async (apiKeyId: string, keyonly?: unknown): Promise
     }
 }
 
-const getChatflowById = async (chatflowId: string): Promise<any> => {
+/**
+ * Helper function to attach Claude commands to chatflows
+ * @param chatFlows - Array of chatflows to attach commands to
+ * @returns Array of chatflows with commands property attached
+ */
+const attachClaudeCommandsToChatflows = async (chatFlows: IChatFlow[]): Promise<IChatFlow[]> => {
+    const appServer = getRunningExpressApp()
+
+    if (chatFlows.length === 0) return chatFlows
+
+    // Extract unique Claude WebSocket server IDs from chatflows
+    const flowDataMap = new Map<string, any>()
+    const uniqueClaudeWsIds = [
+        ...new Set(
+            chatFlows
+                .map((flow) => {
+                    const flowData = JSON.parse(flow.flowData)
+                    flowDataMap.set(flow.id, flowData) // Cache parsed data
+                    const claudeNode = flowData.nodes.find((node: any) => node.data?.inputs?.claudewsServer)
+                    return claudeNode?.data?.inputs?.claudewsServer
+                })
+                .filter((credId): credId is string => credId && isUUID(credId))
+        )
+    ]
+
+    if (uniqueClaudeWsIds.length === 0) {
+        chatFlows.forEach((flow: any) => (flow.commands = []))
+        return chatFlows
+    }
+
+    // Fetch Claude WebSocket server configurations
+    const claudeWsConfigs = await appServer.AppDataSource.getRepository(ClaudeWSServer).find({
+        where: { id: In(uniqueClaudeWsIds) },
+        select: ['id', 'endpointUrl', 'apiKey']
+    })
+
+    // Decode claudeWs apiKeys
+    const decryptedConfigs = await Promise.all(
+        claudeWsConfigs.map(async (config) => {
+            try {
+                const decryptedApiKey = config.apiKey ? await decryptCredentialData(config.apiKey) : {}
+                return { ...config, apiKey: decryptedApiKey?.apiKey }
+            } catch (error) {
+                logger.warn(`Failed to decrypt API key for Claude WS ${config.id}: ${getErrorMessage(error)}`)
+                return config
+            }
+        })
+    )
+
+    // Fetch commands from all Claude WebSocket servers in parallel
+    const commandsMap = new Map<string, any>()
+    try {
+        const commandPromises = decryptedConfigs.map(async (config) => {
+            try {
+                const response = await fetch(`${config.endpointUrl}/api/commands`, {
+                    headers: { 'X-Api-Key': config.apiKey || '' }
+                })
+                if (!response.ok) throw new Error(`HTTP ${response.status}`)
+                const commands = await response.json()
+                return { id: config.id, commands }
+            } catch (error) {
+                logger.error(`Failed to fetch commands from Claude WS ${config.id}: ${getErrorMessage(error)}`)
+                return { id: config.id, commands: [] }
+            }
+        })
+
+        const results = await Promise.all(commandPromises)
+        results.forEach(({ id, commands }) => commandsMap.set(id, commands))
+    } catch (error) {
+        logger.error(`Error fetching Claude WS commands: ${getErrorMessage(error)}`)
+    }
+
+    // Attach commands to chatflows using cached flow data
+    return chatFlows.map((flow: IChatFlow) => {
+        const flowData = flowDataMap.get(flow.id)
+        const claudeNode = flowData?.nodes.find((node: any) => node.data?.inputs?.claudewsServer)
+        const credId = claudeNode?.data?.inputs?.claudewsServer
+
+        return {
+            ...flow,
+            commands: credId && commandsMap.has(credId) ? commandsMap.get(credId) : []
+        }
+    })
+}
+
+const getChatflowById = async (chatflowId: string, isCommand: boolean = false): Promise<any> => {
     try {
         const appServer = getRunningExpressApp()
-        const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-            id: chatflowId
-        })
+        const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+            isUUID(chatflowId) ? { id: chatflowId } : { slug: chatflowId?.toLowerCase()?.trim() }
+        )
         if (!dbResponse) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowId} not found in the database!`)
         }
+
+        // If isCommand is true, attach Claude commands
+        if (isCommand) {
+            const chatflowsWithCommands = await attachClaudeCommandsToChatflows([dbResponse])
+            return chatflowsWithCommands[0]
+        }
+
         return dbResponse
     } catch (error) {
         throw new InternalFlowiseError(
@@ -453,10 +554,11 @@ const getAllBotEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
 const getAllSubAgentEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> => {
     try {
         const appServer = getRunningExpressApp()
-        return await appServer.AppDataSource.getRepository(ChatFlow).find({
+        const chatFlows = await appServer.AppDataSource.getRepository(ChatFlow).find({
             where: { subAgentEnabled: true },
             select: [
                 'id',
+                'flowData',
                 'name',
                 'type',
                 'botEnabled',
@@ -471,6 +573,17 @@ const getAllSubAgentEnabledChatflows = async (): Promise<Partial<ChatFlow>[]> =>
                 'isPublic',
                 'category'
             ]
+        })
+
+        if (chatFlows.length === 0) return chatFlows
+
+        // Use helper function to attach commands
+        const chatflowsWithCommands = await attachClaudeCommandsToChatflows(chatFlows)
+
+        // Remove flowData from response
+        return chatflowsWithCommands.map((flow: IChatFlow) => {
+            const { flowData: _, ...flowWithoutData } = flow
+            return flowWithoutData
         })
     } catch (error) {
         throw new InternalFlowiseError(
@@ -523,6 +636,21 @@ const updateChatflowFolder = async (chatflowId: string, folderId: string | null)
     }
 }
 
+const checkDuplicateSlug = async (slug: string, workspaceId: string): Promise<any> => {
+    const appServer = getRunningExpressApp()
+    const dbResponse = await appServer.AppDataSource.getRepository(ChatFlow)
+        .createQueryBuilder('chatflow')
+        .select('chatflow.id')
+        .where('LOWER(chatflow.slug) = :slug', { slug: slug.toLowerCase().trim() })
+        .andWhere('chatflow.workspaceId = :workspaceId', { workspaceId })
+        .getOne()
+    if (dbResponse) {
+        throw new InternalFlowiseError(StatusCodes.CONFLICT, `Slug already exists. Please choose another.`)
+    }
+
+    return dbResponse
+}
+
 export default {
     checkIfChatflowIsValidForStreaming,
     checkIfChatflowIsValidForUploads,
@@ -538,5 +666,6 @@ export default {
     getAllChatflowsCountByOrganization,
     getAllBotEnabledChatflows,
     getAllSubAgentEnabledChatflows,
-    updateChatflowFolder
+    updateChatflowFolder,
+    checkDuplicateSlug
 }

@@ -7,6 +7,7 @@ import {
     INodeData as INodeDataFromComponent,
     INodeExecutionData,
     INodeParams,
+    ITriggerConfig,
     IServerSideEventStreamer
 } from 'flowise-components'
 import { DataSource } from 'typeorm'
@@ -53,6 +54,11 @@ export enum UserPlan {
 /**
  * Databases
  */
+export interface ICommandClaudeWs {
+    name: string
+    description: string
+}
+
 export interface IChatFlow {
     id: string
     name: string
@@ -75,6 +81,8 @@ export interface IChatFlow {
     scheduleConfig?: string
     scheduleEnabled?: boolean
     folderId?: string
+    slug?: string,
+    commands?: ICommandClaudeWs[]
 }
 
 export interface IAgentflowFolder {
@@ -199,6 +207,48 @@ export interface IExecution {
     workspaceId?: string
 }
 
+export interface ITrigger {
+    id: string
+    flowId: string
+    botId: string
+    slug?: string
+    type: string
+    isEnabled: boolean
+    events: string[]
+    config?: any
+    description?: string
+    updatedDate: Date
+    createdDate: Date
+    workspaceId?: string
+}
+
+export interface IClaudeWSServer {
+    id: string
+    name: string
+    description: string
+    endpointUrl: string
+    apiKey: string
+    isActive: boolean
+    createdDate: Date
+    updatedDate: Date
+    workspaceId?: string
+    roomId?: string
+}
+
+export interface IClaudeWSPlugin {
+    id: string
+    serverId: string
+    pluginId: string
+    type: string
+    name: string
+    description: string
+    sourcePath?: string
+    storageType: string
+    metadata?: string
+    createdDate: Date
+    updatedDate: Date
+}
+
 export interface IComponentNodes {
     [key: string]: INode
 }
@@ -315,6 +365,7 @@ export interface IncomingInput {
     history?: IMessage[]
     action?: IAction
     streaming?: boolean
+    triggerData?: ITriggerData
 }
 
 export interface IncomingAgentflowInput extends Omit<IncomingInput, 'question'> {
@@ -354,6 +405,7 @@ export interface ICredentialReqBody {
     credentialName: string
     plainDataObj: ICredentialDataDecrypted
     workspaceId?: string
+    roomId?: string
 }
 
 // Decrypted credential object sent back to client
@@ -410,6 +462,15 @@ export interface IPredictionQueueAppServer {
     usageCacheManager: UsageCacheManager
 }
 
+export interface ITriggerData {
+    botCredentialId?: string
+    roomId?: string
+    messageId?: string
+    eventType?: string
+    config?: ITriggerConfig
+    triggerId?: string
+}
+
 export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     incomingInput: IncomingInput
     chatflow: IChatFlow
@@ -431,6 +492,8 @@ export interface IExecuteFlowParams extends IPredictionQueueAppServer {
     parentExecutionId?: string
     iterationContext?: ICommonObject
     isTool?: boolean
+    triggerData?: ITriggerData
+    roomId?: string
 }
 
 export interface INodeOverrides {

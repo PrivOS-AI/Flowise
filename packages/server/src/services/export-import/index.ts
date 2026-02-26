@@ -90,7 +90,7 @@ const convertExportInput = (body: any): ExportInput => {
 }
 
 const FileDefaultName = 'ExportData.json'
-const exportData = async (exportInput: ExportInput, activeWorkspaceId?: string): Promise<{ FileDefaultName: string } & ExportData> => {
+const exportData = async (exportInput: ExportInput, activeWorkspaceId?: string, isRootAdmin?: boolean, roomId?: string): Promise<{ FileDefaultName: string } & ExportData> => {
     try {
         let AgentFlow: ChatFlow[] | { data: ChatFlow[]; total: number } =
             exportInput.agentflow === true ? await chatflowService.getAllChatflows('MULTIAGENT', activeWorkspaceId) : []
@@ -134,7 +134,7 @@ const exportData = async (exportInput: ExportInput, activeWorkspaceId?: string):
             exportInput.custom_template === true ? await marketplacesService.getAllCustomTemplates(activeWorkspaceId) : []
 
         let DocumentStore: DocumentStore[] | { data: DocumentStore[]; total: number } =
-            exportInput.document_store === true ? await documenStoreService.getAllDocumentStores(activeWorkspaceId) : []
+            exportInput.document_store === true ? await documenStoreService.getAllDocumentStores(isRootAdmin, roomId, activeWorkspaceId) : []
         DocumentStore = 'data' in DocumentStore ? DocumentStore.data : DocumentStore
 
         const documentStoreIds = DocumentStore.map((documentStore) => documentStore.id)
@@ -149,11 +149,11 @@ const exportData = async (exportInput: ExportInput, activeWorkspaceId?: string):
         let Execution: Execution[] = exportInput.execution === true ? totalExecutions : []
 
         let Tool: Tool[] | { data: Tool[]; total: number } =
-            exportInput.tool === true ? await toolsService.getAllTools(activeWorkspaceId) : []
+            exportInput.tool === true ? await toolsService.getAllTools(isRootAdmin, roomId, activeWorkspaceId) : []
         Tool = 'data' in Tool ? Tool.data : Tool
 
         let Variable: Variable[] | { data: Variable[]; total: number } =
-            exportInput.variable === true ? await variableService.getAllVariables(activeWorkspaceId) : []
+            exportInput.variable === true ? await variableService.getAllVariables(isRootAdmin, roomId, activeWorkspaceId) : []
         Variable = 'data' in Variable ? Variable.data : Variable
 
         return {

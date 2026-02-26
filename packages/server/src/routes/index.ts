@@ -56,8 +56,11 @@ import nvidiaNimRouter from './nvidia-nim'
 import executionsRouter from './executions'
 import validationRouter from './validation'
 import agentflowv2GeneratorRouter from './agentflowv2-generator'
+import agentflowv3GeneratorRouter from './agentflowv3-generator'
 import textToSpeechRouter from './text-to-speech'
 import externalSsoRouter from './external-sso'
+import claudewsServersRouter from './claudews-servers'
+import claudewsRouter from './claudews'
 
 import authRouter from '../enterprise/routes/auth'
 import auditRouter from '../enterprise/routes/audit'
@@ -69,6 +72,7 @@ import workspaceRouter from '../enterprise/routes/workspace.route'
 import workspaceUserRouter from '../enterprise/routes/workspace-user.route'
 import accountRouter from '../enterprise/routes/account.route'
 import loginMethodRouter from '../enterprise/routes/login-method.route'
+import privosChatRouter from './privos-chat'
 import { IdentityManager } from '../IdentityManager'
 
 const router = express.Router()
@@ -128,8 +132,11 @@ router.use('/nvidia-nim', nvidiaNimRouter)
 router.use('/executions', executionsRouter)
 router.use('/validation', validationRouter)
 router.use('/agentflowv2-generator', agentflowv2GeneratorRouter)
+router.use('/agentflowv3-generator', agentflowv3GeneratorRouter)
 router.use('/text-to-speech', textToSpeechRouter)
 router.use('/external-sso', externalSsoRouter)
+router.use('/claudews-servers', claudewsServersRouter)
+router.use('/claudews', claudewsRouter)
 
 router.use('/auth', authRouter)
 router.use('/audit', IdentityManager.checkFeatureByPlan('feat:login-activity'), auditRouter)
@@ -143,5 +150,7 @@ router.use('/account', accountRouter)
 router.use('/loginmethod', loginMethodRouter)
 router.use('/logs', IdentityManager.checkFeatureByPlan('feat:logs'), logsRouter)
 router.use('/files', IdentityManager.checkFeatureByPlan('feat:files'), filesRouter)
+router.use('/privos-chat', privosChatRouter)
+
 
 export default router

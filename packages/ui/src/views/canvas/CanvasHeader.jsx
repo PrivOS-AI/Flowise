@@ -500,6 +500,7 @@ const CanvasHeader = ({ chatflow, isAgentCanvas, isAgentflowV2, handleSaveFlow, 
                 onCancel={() => setChatflowConfigurationDialogOpen(false)}
                 isAgentCanvas={isAgentCanvas}
             />
+
         </>
     )
 }

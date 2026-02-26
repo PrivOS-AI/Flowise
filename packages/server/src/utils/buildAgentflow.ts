@@ -29,7 +29,8 @@ import {
     IComponentNodes,
     INodeOverrides,
     IVariableOverride,
-    INodeDirectedGraph
+    INodeDirectedGraph,
+    ITriggerData
 } from '../Interface'
 import {
     RUNTIME_MESSAGES_LENGTH_VAR_PREFIX,
@@ -88,6 +89,8 @@ interface IProcessNodeOutputsParams {
     abortController?: AbortController
     sseStreamer?: IServerSideEventStreamer
     chatId: string
+    triggerData?: ITriggerData
+    reachableNodes?: Set<string>
 }
 
 interface IAgentFlowRuntime {
@@ -139,6 +142,10 @@ interface IExecuteNodeParams {
     workspaceId: string
     subscriptionId: string
     productId: string
+    triggerData?: {
+        botCredentialId?: string
+        roomId?: string
+    }
 }
 
 interface IExecuteAgentFlowParams extends Omit<IExecuteFlowParams, 'incomingInput'> {
@@ -160,7 +167,8 @@ const addExecution = async (
     agentflowId: string,
     agentFlowExecutedData: IAgentflowExecutedData[],
     sessionId: string,
-    workspaceId: string
+    workspaceId: string,
+    roomId?: string
 ) => {
     const newExecution = new Execution()
     const bodyExecution = {
@@ -168,6 +176,7 @@ const addExecution = async (
         state: 'INPROGRESS',
         sessionId,
         workspaceId,
+        roomId,
         executionData: JSON.stringify(agentFlowExecutedData)
     }
     Object.assign(newExecution, bodyExecution)
@@ -585,7 +594,13 @@ function getNodeInputConnections(edges: IReactFlowEdge[], nodeId: string): IReac
 /**
  * Analyzes node dependencies and sets up expected inputs
  */
-function setupNodeDependencies(nodeId: string, edges: IReactFlowEdge[], nodes: IReactFlowNode[]): IWaitingNode {
+function setupNodeDependencies(
+    nodeId: string,
+    edges: IReactFlowEdge[],
+    nodes: IReactFlowNode[],
+    triggerData?: ITriggerData,
+    reachableNodes?: Set<string>
+): IWaitingNode {
     logger.debug(`\n🔍 Analyzing dependencies for node: ${nodeId}`)
     const inputConnections = getNodeInputConnections(edges, nodeId)
     const waitingNode: IWaitingNode = {
@@ -595,13 +610,48 @@ function setupNodeDependencies(nodeId: string, edges: IReactFlowEdge[], nodes: I
         isConditional: false,
         conditionalGroups: new Map()
     }
+    const isTrigger = !!triggerData?.eventType
 
     // Group inputs by their parent condition nodes
     const inputsByCondition = new Map<string | null, string[]>()
 
     for (const connection of inputConnections) {
-        const sourceNode = nodes.find((n) => n.id === connection.source)
+        const sourceNode = nodes.find((n) => n.id === connection.source) as any
         if (!sourceNode) continue
+
+        // If trigger node is not in reachableNodes, skip
+        if (isTrigger === true && reachableNodes && !reachableNodes.has(connection.source)) {
+            logger.debug(`  ⏭️  Skipping unreachable node: ${connection.source}`)
+            continue
+        }
+
+        // Check if this is a start/trigger node
+        const isTriggerNode = sourceNode.data.name === 'startAgentflow' || sourceNode.data.type === 'triggerProcessor'
+        const isScheduleTrigger = triggerData?.eventType === 'schedule'
+        if (isTriggerNode) {
+            if (isTrigger === true && sourceNode.data.name === 'startAgentflow') {
+                logger.debug(`  ⏭️  Skipping startAgentflow node: ${connection.source}`)
+                continue
+            }
+
+            if (isTrigger === true && sourceNode.data.type === 'triggerProcessor') {
+                const isMatched = isScheduleTrigger
+                    ? sourceNode.data?.trigger?.webhookId === triggerData?.triggerId
+                    : !JSON.parse(sourceNode.data?.inputs?.events || '[]').includes(triggerData?.eventType)
+                if (isMatched) {
+                    logger.debug(`  ⏭️  Skipping other trigger type: ${connection.source}`)
+                    continue
+                }
+                logger.debug(`  ✅ Found active trigger source: ${connection.source}`)
+                waitingNode.expectedInputs.add(connection.source)
+                continue
+            }
+
+            if (isTrigger === false && sourceNode.data.type === 'triggerProcessor') {
+                logger.debug(`  ⏭️  Skipping trigger node in normal mode: ${connection.source}`)
+                continue
+            }
+        }
 
         // Find if this input comes from a conditional branch
         const conditionParent = findConditionParent(connection.source, edges, nodes)
@@ -764,7 +814,9 @@ async function processNodeOutputs({
     waitingNodes,
     loopCounts,
     sseStreamer,
-    chatId
+    chatId,
+    triggerData,
+    reachableNodes
 }: IProcessNodeOutputsParams): Promise<{ humanInput?: IHumanInput }> {
     logger.debug(`\n🔄 Processing outputs from node: ${nodeId}`)
 
@@ -794,7 +846,7 @@ async function processNodeOutputs({
 
         if (!waitingNode) {
             logger.debug(`    🆕 First time seeing node ${childId} - analyzing dependencies`)
-            waitingNode = setupNodeDependencies(childId, edges, nodes)
+            waitingNode = setupNodeDependencies(childId, edges, nodes, triggerData, reachableNodes)
             waitingNodes.set(childId, waitingNode)
         }
 
@@ -998,7 +1050,8 @@ const executeNode = async ({
     orgId,
     workspaceId,
     subscriptionId,
-    productId
+    productId,
+    triggerData
 }: IExecuteNodeParams): Promise<{
     result: any
     shouldStop?: boolean
@@ -1146,7 +1199,8 @@ const executeNode = async ({
             parentTraceIds,
             humanInputAction,
             iterationContext,
-            evaluationRunId
+            evaluationRunId,
+            triggerData
         }
 
         // Execute node
@@ -1458,7 +1512,9 @@ export const executeAgentFlow = async ({
     orgId,
     workspaceId,
     subscriptionId,
-    productId
+    productId,
+    triggerData,
+    roomId
 }: IExecuteAgentFlowParams) => {
     logger.debug('\n🚀 Starting flow execution')
 
@@ -1488,7 +1544,47 @@ export const executeAgentFlow = async ({
     const parsedFlowData: IReactFlowObject = JSON.parse(flowData)
     const nodes = (parsedFlowData.nodes || []).filter((node) => node.data.name !== 'stickyNoteAgentflow')
     const edges = parsedFlowData.edges
-    const { graph, nodeDependencies } = constructGraphs(nodes, edges)
+    const { graph, nodeDependencies: rawNodeDeps } = constructGraphs(nodes, edges)
+    let nodeDependencies = rawNodeDeps
+    let reachableNodesFromTrigger: Set<string> | undefined
+    if (triggerData?.eventType) {
+        const isSchedule = triggerData.eventType === 'schedule'
+
+        const triggerNode = nodes.find((n: any) =>
+            isSchedule
+                ? n.data?.trigger?.webhookId === triggerData?.triggerId
+                : JSON.parse(n.data?.inputs?.events || '[]').includes(triggerData?.eventType)
+        )
+        if (triggerNode) {
+            // build graph from trigger node to reachable nodes
+            const reachableNodesMap = new Map<string, number>([[triggerNode.id, 0]]) // nodeId -> depth
+            const queue = [triggerNode.id]
+
+            while (queue.length > 0) {
+                const currentNodeId = queue.shift()!
+                const currentDepth = reachableNodesMap.get(currentNodeId)!
+                const childNodes = graph[currentNodeId] || []
+
+                for (const childId of childNodes) {
+                    if (!reachableNodesMap.has(childId)) {
+                        reachableNodesMap.set(childId, currentDepth + 1) // cal depth from trigger
+                        queue.push(childId)
+                    }
+                }
+            }
+
+            reachableNodesFromTrigger = new Set(reachableNodesMap.keys())
+
+            nodeDependencies = Object.fromEntries(reachableNodesMap.entries())
+        }
+    } else {
+        nodeDependencies = Object.fromEntries(
+            Object.entries(rawNodeDeps).filter(([key, _]) => {
+                const node = nodes.find((n) => n.id === key)
+                return node?.data.type !== 'triggerProcessor'
+            })
+        )
+    }
     const { graph: reversedGraph } = constructGraphs(nodes, edges, { isReversed: true })
     const startInputType = nodes.find((node) => node.data.name === 'startAgentflow')?.data.inputs?.startInputType as
         | 'chatInput'
@@ -1735,7 +1831,7 @@ export const executeAgentFlow = async ({
             newExecution = parentExecution
         } else {
             console.warn(`   ⚠️ Parent execution ID ${parentExecutionId} not found, will create new execution`)
-            newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId)
+            newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId, roomId)
             parentExecutionId = newExecution.id
         }
     } else {
@@ -1744,7 +1840,7 @@ export const executeAgentFlow = async ({
         checkForMultipleStartNodes(startingNodeIds, isRecursive, nodes)
 
         // Only create a new execution if this is not a recursive call
-        newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId)
+        newExecution = await addExecution(appDataSource, chatflowid, agentFlowExecutedData, sessionId, workspaceId, roomId)
         parentExecutionId = newExecution.id
     }
 
@@ -1927,7 +2023,8 @@ export const executeAgentFlow = async ({
                 orgId,
                 workspaceId,
                 subscriptionId,
-                productId
+                productId,
+                triggerData
             })
 
             if (executionResult.agentFlowExecutedData) {
@@ -1995,7 +2092,9 @@ export const executeAgentFlow = async ({
                 waitingNodes,
                 loopCounts,
                 sseStreamer,
-                chatId
+                chatId,
+                triggerData,
+                reachableNodes: reachableNodesFromTrigger
             })
 
             // Update humanInput if it was changed
@@ -2050,8 +2149,6 @@ export const executeAgentFlow = async ({
 
             throw new Error(errorMessage)
         }
-
-        logger.debug(`/////////////////////////////////////////////////////////////////////////////`)
     }
 
     // check if there is any status stopped from agentFlowExecutedData
@@ -2179,7 +2276,7 @@ export const executeAgentFlow = async ({
             chatflowid,
             appDataSource,
             databaseEntities
-        })
+        }) as any
         if (followUpPrompts?.questions) {
             apiMessage.followUpPrompts = JSON.stringify(followUpPrompts.questions)
         }

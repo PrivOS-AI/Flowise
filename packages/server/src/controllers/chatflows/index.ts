@@ -2,17 +2,24 @@ import { NextFunction, Request, Response } from 'express'
 import { StatusCodes } from 'http-status-codes'
 import { ChatFlow } from '../../database/entities/ChatFlow'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
-import { ChatflowType } from '../../Interface'
+import { ChatflowType, MODE } from '../../Interface'
 import apiKeyService from '../../services/apikey'
 import chatflowsService from '../../services/chatflows'
+import triggerService from '../../services/triggers'
 import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
 import { checkUsageLimit } from '../../utils/quotaUsage'
 import { RateLimiterManager } from '../../utils/rateLimit'
 import { getPageAndLimitParams } from '../../utils/pagination'
 import { WorkspaceUserErrorMessage, WorkspaceUserService } from '../../enterprise/services/workspace-user.service'
-import { QueryRunner } from 'typeorm'
-import { GeneralErrorMessage } from '../../utils/constants'
+import { QueryRunner, In, Not } from 'typeorm'
+import { GeneralErrorMessage, OMIT_QUEUE_JOB_DATA } from '../../utils/constants'
 import { ScheduleManager } from '../../services/schedule-manager'
+import { Trigger } from '../../database/entities/Trigger'
+import { Credential } from '../../database/entities/Credential'
+import { decryptCredentialData } from '../../utils'
+import { getBullMQJobOptions, ITriggerConfig, parseConfig, convertToBullMQConfig } from 'flowise-components'
+import { omit } from 'lodash'
+import logger from '../../utils/logger'
 
 const checkIfChatflowIsValidForStreaming = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -79,6 +86,14 @@ const deleteChatflow = async (req: Request, res: Response, next: NextFunction) =
             )
         }
         const apiResponse = await chatflowsService.deleteChatflow(req.params.id, orgId, workspaceId)
+
+        const appServer = getRunningExpressApp()
+        const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+        const existingTriggers = await triggerRepo.findBy({ flowId: req.params.id })
+        for (const trigger of existingTriggers) {
+            await removeJobSchedule(orgId, req.params.id, trigger)
+        }
+        await triggerService.deleteManyTrigger({ flowId: req.params.id })
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -157,6 +172,9 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
         const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
         const body = req.body
 
+        // validate bot credential for trigger
+        const collectTriggerData = await validateCredentialBot(body.flowData, '', workspaceId)
+
         const existingChatflowCount = await chatflowsService.getAllChatflowsCountByOrganization(body.type, orgId)
         const newChatflowCount = 1
         await checkUsageLimit('flows', subscriptionId, getRunningExpressApp().usageCacheManager, existingChatflowCount + newChatflowCount)
@@ -178,6 +196,11 @@ const saveChatflow = async (req: Request, res: Response, next: NextFunction) => 
             getRunningExpressApp().usageCacheManager
         )
 
+        // Update triggers, minimal -> don't batch
+        if (collectTriggerData.length > 0) {
+            await handleTriggerData(collectTriggerData, apiResponse?.id, workspaceId, orgId)
+        }
+
         return res.json(apiResponse)
     } catch (error) {
         next(error)
@@ -190,6 +213,7 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
             throw new InternalFlowiseError(StatusCodes.PRECONDITION_FAILED, `Error: chatflowsController.updateChatflow - id not provided!`)
         }
         const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        const currentFlow = chatflow?.flowData || ''
         if (!chatflow) {
             return res.status(404).send(`Chatflow ${req.params.id} not found`)
         }
@@ -215,6 +239,12 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         }
         const subscriptionId = req.user?.activeOrganizationSubscriptionId || ''
         const body = req.body
+        // validate bot credential for trigger
+        const collectTriggerData = await validateCredentialBot(body.flowData, chatflow.id, workspaceId)
+
+        // check duplicate slug
+        await validateSlug(chatflow, workspaceId, body.slug)
+
         const updateChatFlow = new ChatFlow()
         Object.assign(updateChatFlow, body)
 
@@ -223,9 +253,235 @@ const updateChatflow = async (req: Request, res: Response, next: NextFunction) =
         await rateLimiterManager.updateRateLimiter(updateChatFlow)
 
         const apiResponse = await chatflowsService.updateChatflow(chatflow, updateChatFlow, orgId, workspaceId, subscriptionId)
+
+        // Update triggers, minimal -> don't batch
+        if (collectTriggerData.length > 0) {
+            await handleTriggerData(collectTriggerData, chatflow.id, workspaceId, orgId, currentFlow)
+        }
+
         return res.json(apiResponse)
     } catch (error) {
         next(error)
+    }
+}
+
+const handleTriggerData = async (triggerData: any[], flowId: string, workspaceId: string, orgId: string, currentFlow?: string) => {
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+
+    // Get triggers data
+    const ids = triggerData.map((t) => t.id).filter(Boolean)
+    const existingTriggers = await triggerRepo.findBy({ id: In(ids) })
+
+    const triggerMap = new Map(existingTriggers.map((t: any) => [t.id, t]))
+
+    const toUpdate: Trigger[] = []
+    const toInsert: Trigger[] = []
+
+    for (const { id, ...rest } of triggerData) {
+        const existing = id ? triggerMap.get(id) : null
+        const finalData = { ...rest, flowId, workspaceId }
+        if (existing) {
+            triggerRepo.merge(existing, finalData)
+            toUpdate.push(existing as any)
+        } else {
+            toInsert.push({ id, ...finalData } as any)
+        }
+    }
+
+    toUpdate.length > 0 && (await triggerRepo.save(toUpdate))
+    toInsert.length > 0 && (await triggerRepo.insert(toInsert))
+
+    // schedule triggers
+    const toInsertSchedule = toInsert.filter((t) => t.type === 'schedule')
+    const toUpdateSchedule = toUpdate.filter((t) => t.type === 'schedule')
+
+    for (const trigger of toInsertSchedule) {
+        await handleJobSchedule(orgId, flowId, trigger)
+    }
+    for (const trigger of toUpdateSchedule) {
+        await handleJobSchedule(orgId, flowId, trigger, true)
+    }
+
+    // compare to trigger nodes in currentFlow and delete removed triggers
+    if (currentFlow) {
+        const flowData = JSON.parse(currentFlow)
+        const nodes = flowData.nodes ?? []
+        const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor')
+        const currentWebhookIds = triggerNodes.map((node: any) => node.data.trigger?.webhookId).filter(Boolean)
+        const newWebhookIds = toUpdate.map((t) => t.id).filter(Boolean)
+        const webhookIdsToDelete = currentWebhookIds.filter((webhookId: string) => !newWebhookIds.includes(webhookId))
+
+        if (webhookIdsToDelete.length > 0) {
+            const triggersToDelete = await triggerRepo.findBy({ id: In(webhookIdsToDelete) })
+            for (const trigger of triggersToDelete) {
+                await removeJobSchedule(orgId, flowId, trigger)
+            }
+
+            await triggerRepo.remove(triggersToDelete)
+        }
+    }
+}
+
+const validateCredentialBot = async (data: any, flowId: string, workspaceId: string) => {
+    if (!data) return []
+
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+    const credentialRepo = appServer.AppDataSource.getRepository(Credential)
+    const collectTriggerData = []
+    const flowData = JSON.parse(data)
+    const nodes = flowData.nodes ?? []
+    const triggerNodes = nodes.filter((node: any) => node.data.type === 'triggerProcessor')
+    const credentialEventMap = new Map<string, { events: Set<string>; labels: Map<string, string> }>()
+    // Check duplicate credential in the same flow
+    for (const node of triggerNodes) {
+        const { credential, label, inputs } = node.data
+        const events: string[] = JSON.parse(inputs?.events || '[]')
+        if (events.length === 0) continue
+
+        if (!credential || typeof credential !== 'string') {
+            throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Trigger '${label}' must have a valid credential.`)
+        }
+
+        if (!credentialEventMap.has(credential)) {
+            credentialEventMap.set(credential, { events: new Set(), labels: new Map() })
+        }
+
+        const meta = credentialEventMap.get(credential)!
+
+        for (const event of events) {
+            if (meta.events.has(event)) {
+                throw new InternalFlowiseError(
+                    StatusCodes.CONFLICT,
+                    `Duplicate event for credential in trigger '${label}'. Each event must be unique per credential.`
+                )
+            }
+            meta.events.add(event)
+            meta.labels.set(event, label)
+        }
+    }
+    // decrypt to get botId
+    const credentialIds = Array.from(credentialEventMap.keys())
+    const existingCredentials = await credentialRepo.findBy({ id: In(credentialIds) })
+    const decryptedCredentials = await Promise.all(
+        existingCredentials.map(async (credential: any) => {
+            const decrypted = await decryptCredentialData(credential?.encryptedData)
+            return {
+                credentialId: credential.id,
+                botId: decrypted?.botId
+            }
+        })
+    )
+    const botIds = decryptedCredentials.filter((c: any) => c.botId).map((c: any) => c.botId)
+    const credentialBotMap = new Map<string, string>(
+        decryptedCredentials.filter((c: any) => c.botId).map((c: any) => [c.botId, c.credentialId])
+    )
+    const reverseCredentialBotMap = new Map<string, string>(
+        decryptedCredentials.filter((c: any) => c.credentialId).map((c: any) => [c.credentialId, c.botId])
+    )
+
+    // Check credential used in other flows, optimize using table (later)
+    const existingTriggers = await triggerRepo.find({
+        where: {
+            botId: In(botIds),
+            ...(flowId && { flowId: Not(flowId) }),
+            workspaceId
+        }
+    })
+    for (const trigger of existingTriggers) {
+        const credential = credentialBotMap.get(trigger.botId)
+        const meta = credentialEventMap.get(credential!)
+        if (!meta) continue
+
+        for (const event of trigger.events ?? []) {
+            if (meta.events.has(event)) {
+                throw new InternalFlowiseError(
+                    StatusCodes.CONFLICT,
+                    `Credential for '${meta.labels.get(event)}' is already in use in another flow`
+                )
+            }
+        }
+    }
+
+    // Collect trigger data
+    for (const node of triggerNodes) {
+        const {
+            trigger,
+            inputs: { isEnabled, events, description, updateFLowState, retryOnFail, credential, ...config },
+            triggerType
+        } = node.data
+        if (!trigger?.webhookId) continue
+
+        let finalConfig: ITriggerConfig = {
+            isEnabled: Boolean(retryOnFail || false), // on/off
+            ...config // other config first, then override to prevent error type
+        }
+        if (retryOnFail) {
+            finalConfig.retry = {
+                attempts: Number(config.attempts || '3'),
+                backoff: {
+                    delay: Number(config.backoff || '3000'),
+                    type: config.type || 'fixed'
+                }
+            }
+        }
+        if (triggerType === 'schedule') {
+            const config = parseConfig(node.data)
+            const repeatOptions = convertToBullMQConfig(config)
+            const jobOptions = getBullMQJobOptions(config, repeatOptions)
+            finalConfig.schedule = jobOptions
+        }
+
+        collectTriggerData.push({
+            id: trigger?.webhookId,
+            type: node.data?.triggerType || 'privos',
+            slug: trigger?.slug || null,
+            isEnabled: isEnabled || false,
+            events: triggerType === 'schedule' ? ['schedule'] : JSON.parse(events || '[]'),
+            description: description || '',
+            botId: reverseCredentialBotMap.get(credential) || null,
+            config: finalConfig
+        })
+    }
+
+    return collectTriggerData
+}
+
+const validateSlug = async (chatflow: any, workspaceId: string, slug?: string) => {
+    if (!slug) return
+    const isNeedCheck = !chatflow.slug || chatflow.slug?.toLowerCase() !== slug.toLowerCase().trim()
+    isNeedCheck && (await chatflowsService.checkDuplicateSlug(slug, workspaceId))
+}
+
+const handleJobSchedule = async (orgId: any, flowId: string, data: any, isRemove: boolean = false) => {
+    const appServer = getRunningExpressApp()
+    const triggerRepo = appServer.AppDataSource.getRepository(Trigger)
+    const { config, ...jobData } = data
+
+    if (process.env.MODE === MODE.QUEUE) {
+        const scheduleQueue = appServer.queueManager.getQueue('schedule')
+        if (isRemove) await removeJobSchedule(orgId, flowId, data)
+
+        if (jobData?.isEnabled) {
+            const job = await scheduleQueue.addJob(
+                omit({ chatFlowId: flowId, triggerId: data?.id }, OMIT_QUEUE_JOB_DATA),
+                config?.schedule || {}
+            )
+            logger.debug(`[server]: [${orgId}/${flowId}/schedule]: Job added to queue: ${job.id}`)
+            await triggerRepo.update(jobData.id, { jobKey: job.repeatJobKey })
+        }
+    }
+}
+
+const removeJobSchedule = async (orgId: any, flowId: string, data: any) => {
+    const appServer = getRunningExpressApp()
+
+    if (process.env.MODE === MODE.QUEUE) {
+        const scheduleQueue = appServer.queueManager.getQueue('schedule')
+        const queue = scheduleQueue.getQueue()
+        data?.jobKey && (await queue.removeJobScheduler(data?.jobKey))
+        logger.debug(`[server]: [${orgId}/${flowId}/schedule]: Removed old job with id: ${data?.jobKey}`)
     }
 }
 
@@ -238,7 +494,7 @@ const getSinglePublicChatflow = async (req: Request, res: Response, next: NextFu
                 `Error: chatflowsController.getSinglePublicChatflow - id not provided!`
             )
         }
-        const chatflow = await chatflowsService.getChatflowById(req.params.id)
+        const chatflow = await chatflowsService.getChatflowById(req.params.id, true)
         if (!chatflow) return res.status(StatusCodes.NOT_FOUND).json({ message: 'Chatflow not found' })
         if (chatflow.isPublic) return res.status(StatusCodes.OK).json(chatflow)
         if (!req.user) return res.status(StatusCodes.UNAUTHORIZED).json({ message: GeneralErrorMessage.UNAUTHORIZED })

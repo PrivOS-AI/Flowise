@@ -613,7 +613,8 @@ export const getAvailableNodesForVariable = (nodes, edges, target, targetHandle,
     const parentNodes = []
 
     const targetNode = nodes.find((nd) => nd.id === target)
-    const isAgentFlowV2 = targetNode?.data?.category === 'Agent Flows' || targetNode?.data?.category === 'PrivOS'
+    const isAgentFlowV2 =
+        targetNode?.data?.category === 'Agent Flows' || targetNode?.data?.category === 'PrivOS' || targetNode?.data?.category === 'Trigger'
 
     const isSeqAgent = nodes.find((nd) => nd.id === target)?.data?.category === 'Sequential Agents'
 
@@ -638,7 +639,7 @@ export const getAvailableNodesForVariable = (nodes, edges, target, targetHandle,
         })
     }
     function collectAgentFlowV2ParentNodes(targetNodeId, nodes, edges) {
-        const inputEdges = edges.filter((edg) => edg.target === targetNodeId && edg.targetHandle === targetNodeId)
+        const inputEdges = edges.filter((edg) => edg.target === targetNodeId)
 
         // Traverse each edge found
         inputEdges.forEach((edge) => {
@@ -842,6 +843,7 @@ export const isValidURL = (url) => {
 export const formatDataGridRows = (rows) => {
     try {
         const parsedRows = typeof rows === 'string' ? JSON.parse(rows) : rows
+        if (!Array.isArray(parsedRows)) return []
         return parsedRows.map((sch, index) => {
             return {
                 ...sch,
@@ -926,8 +928,8 @@ export const getConfigExamplesForJS = (configData, bodyType, isMultiple, stopNod
             finalStr += !isMultiple
                 ? ``
                 : stopNodeId
-                ? `formData.append("stopNodeId", "${stopNodeId}")\n`
-                : `formData.append("question", "Hey, how are you?")\n`
+                    ? `formData.append("stopNodeId", "${stopNodeId}")\n`
+                    : `formData.append("question", "Hey, how are you?")\n`
     }
     return finalStr
 }
@@ -949,8 +951,8 @@ export const getConfigExamplesForPython = (configData, bodyType, isMultiple, sto
             finalStr += !isMultiple
                 ? `\n`
                 : stopNodeId
-                ? `\n    "stopNodeId": "${stopNodeId}"\n`
-                : `\n    "question": "Hey, how are you?"\n`
+                    ? `\n    "stopNodeId": "${stopNodeId}"\n`
+                    : `\n    "question": "Hey, how are you?"\n`
     }
     return finalStr
 }
@@ -974,10 +976,10 @@ export const getConfigExamplesForCurl = (configData, bodyType, isMultiple, stopN
                 bodyType === 'json'
                     ? ` }`
                     : !isMultiple
-                    ? ``
-                    : stopNodeId
-                    ? ` \\\n     -F "stopNodeId=${stopNodeId}"`
-                    : ` \\\n     -F "question=Hey, how are you?"`
+                        ? ``
+                        : stopNodeId
+                            ? ` \\\n     -F "stopNodeId=${stopNodeId}"`
+                            : ` \\\n     -F "question=Hey, how are you?"`
         else finalStr += bodyType === 'json' ? `, ` : ` \\`
     }
     return finalStr

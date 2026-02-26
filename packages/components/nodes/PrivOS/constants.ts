@@ -54,7 +54,10 @@ export const PRIVOS_ENDPOINTS = {
     LISTS_TEMPLATE_DK: '/internal/lists.byTemplateListKey',
     ROOMS: '/internal/rooms.get',
     USERS: '/internal/users.list',
-    ROOM_MEMBERS: '/internal/rooms.members'
+    ROOM_MEMBERS: '/internal/rooms.members',
+    BOTS: '/bot',
+    ROOM_BY_USER_ID: '/internal/rooms.byUserId',
+    ROOM_EXISTS: '/internal/rooms.exists'
 } as const
 
 // ============================================================================
@@ -209,3 +212,13 @@ export const REQUEST_CONFIG = {
     MAX_RETRIES: 3,
     TIMEOUT: 30000 // 30 seconds
 } as const
+
+export enum PrivosEvent {
+    MESSAGE_NEW = 'message.new',
+    MESSAGE_EDITED = 'message.edited',
+    MESSAGE_DELETED = 'message.deleted',
+    ROOM_JOINED = 'room.joined',
+    ROOM_LEFT = 'room.left',
+    USER_JOINED = 'user.joined',
+    USER_LEFT = 'user.left'
+}

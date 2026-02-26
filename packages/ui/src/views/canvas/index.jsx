@@ -26,6 +26,7 @@ import AddNodes from './AddNodes'
 import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
 import ChatPopUp from '@/views/chatmessage/ChatPopUp'
 import VectorStorePopUp from '@/views/vectorstore/VectorStorePopUp'
+import AgentflowGeneratorChat from '@/ui-component/dialog/AgentflowGeneratorChat'
 import { flowContext } from '@/store/context/ReactFlowContext'
 
 // API
@@ -666,6 +667,7 @@ const Canvas = () => {
                     </div>
                 </Box>
                 <ConfirmDialog />
+                {isAgentCanvas && <AgentflowGeneratorChat />}
             </Box>
         </>
     )

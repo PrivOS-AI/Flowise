@@ -14,6 +14,11 @@ export default defineConfig(async ({ mode }) => {
                 '^/api(/|$).*': {
                     target: `http://${serverHost}:${serverPort}`,
                     changeOrigin: true
+                },
+                '^/claudews-socket': {
+                    target: `http://${serverHost}:${serverPort}`,
+                    changeOrigin: true,
+                    ws: true
                 }
             }
         }
@@ -34,7 +39,8 @@ export default defineConfig(async ({ mode }) => {
                 '@uiw/codemirror-theme-vscode': resolve(__dirname, '../../node_modules/@uiw/codemirror-theme-vscode'),
                 '@uiw/codemirror-theme-sublime': resolve(__dirname, '../../node_modules/@uiw/codemirror-theme-sublime'),
                 '@lezer/common': resolve(__dirname, '../../node_modules/@lezer/common'),
-                '@lezer/highlight': resolve(__dirname, '../../node_modules/@lezer/highlight')
+                '@lezer/highlight': resolve(__dirname, '../../node_modules/@lezer/highlight'),
+                'socket.io-client': resolve(__dirname, '../../node_modules/.pnpm/socket.io-client@4.8.3_bufferutil@4.0.8_utf-8-validate@6.0.4/node_modules/socket.io-client/build/esm/index.js')
             }
         },
         root: resolve(__dirname),
@@ -42,10 +48,29 @@ export default defineConfig(async ({ mode }) => {
             outDir: './build'
         },
         server: {
-            open: true,
+            open: false,
             proxy,
             port: process.env.VITE_PORT ?? 8080,
-            host: process.env.VITE_HOST
+            host: process.env.VITE_HOST,
+            watch: {
+                ignored: [
+                    '**/node_modules/**',
+                    '**/dist/**',
+                    '**/.git/**',
+                    '**/build/**',
+                    '**/.turbo/**'
+                ],
+                usePolling: false,
+                depth: 15
+            },
+            hmr: {
+                clientPort: process.env.VITE_HMR_CLIENT_PORT ? parseInt(process.env.VITE_HMR_CLIENT_PORT) : undefined,
+                protocol: process.env.VITE_HMR_PROTOCOL ?? 'ws'
+            }
+        },
+        optimizeDeps: {
+            include: ['react', 'react-dom', 'react-redux', 'socket.io-client'],
+            exclude: ['flowise-components']
         }
     }
 })

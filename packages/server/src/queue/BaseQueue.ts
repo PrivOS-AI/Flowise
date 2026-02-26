@@ -1,4 +1,4 @@
-import { Queue, Worker, Job, QueueEvents, RedisOptions, KeepJobs } from 'bullmq'
+import { Queue, Worker, Job, QueueEvents, RedisOptions, KeepJobs, JobsOptions } from 'bullmq'
 import { v4 as uuidv4 } from 'uuid'
 import logger from '../utils/logger'
 
@@ -34,7 +34,7 @@ export abstract class BaseQueue {
         return this.worker
     }
 
-    public async addJob(jobData: any): Promise<Job> {
+    public async addJob(jobData: any, options?: JobsOptions): Promise<Job> {
         const jobId = jobData.id || uuidv4()
 
         let removeOnFail: number | boolean | KeepJobs | undefined = true
@@ -53,7 +53,7 @@ export abstract class BaseQueue {
             removeOnComplete = keepJobObj
         }
 
-        return await this.queue.add(jobId, jobData, { removeOnFail, removeOnComplete })
+        return await this.queue.add(jobId, jobData, { removeOnFail, removeOnComplete, ...options })
     }
 
     public createWorker(concurrency: number = WORKER_CONCURRENCY): Worker {

@@ -45,7 +45,7 @@ const deleteVariable = async (variableId: string): Promise<any> => {
     }
 }
 
-const getAllVariables = async (workspaceId?: string, page: number = -1, limit: number = -1) => {
+const getAllVariables = async (isRootAdmin?: boolean, roomId?: string,workspaceId?: string, page: number = -1, limit: number = -1) => {
     try {
         const appServer = getRunningExpressApp()
         const queryBuilder = appServer.AppDataSource.getRepository(Variable)
@@ -57,6 +57,11 @@ const getAllVariables = async (workspaceId?: string, page: number = -1, limit: n
             queryBuilder.take(limit)
         }
         if (workspaceId) queryBuilder.andWhere('variable.workspaceId = :workspaceId', { workspaceId })
+
+        // Room isolation: Root admin sees all, room users see their room
+        if (!isRootAdmin && roomId) {
+            queryBuilder.andWhere('(variable.roomId = :roomId)', { roomId })
+        }
 
         if (appServer.identityManager.getPlatformType() === Platform.CLOUD) {
             queryBuilder.andWhere('variable.type != :type', { type: 'runtime' })

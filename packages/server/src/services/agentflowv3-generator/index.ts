@@ -226,6 +226,31 @@ const generateAgentflowv3 = async (question: string, selectedChatModel: Record<s
     }
 }
 
+const validateAgentflowV3 = (response: any) => {
+    try {
+        if (typeof response === 'string') {
+            const parsedResponse = JSON.parse(response)
+            const validatedResponse = AgentFlowV3Type.parse(parsedResponse)
+            logger.info('[validateAgentflowV3] Successfully validated workflow')
+            return validatedResponse
+        } else if (typeof response === 'object') {
+            // Check for error in response
+            if ('error' in response) {
+                logger.error('[validateAgentflowV3] Error in response:', (response as any).error)
+                throw new Error((response as any).error)
+            }
+            const validatedResponse = AgentFlowV3Type.parse(response)
+            logger.info('[validateAgentflowV3] Successfully validated workflow')
+            return validatedResponse
+        } else {
+            throw new Error(`Unexpected response type: ${typeof response}`)
+        }
+    } catch (parseError) {
+        logger.error('[validateAgentflowV3] Failed to validate response:', parseError)
+        throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, `Validation Error: ${getErrorMessage(parseError)}`)
+    }
+}
+
 // ============================================================================
 // ENHANCED SYSTEM PROMPT BUILDER
 // ============================================================================
@@ -287,6 +312,32 @@ NODE USAGE GUIDE:
 RETURN ONLY VALID JSON. No markdown, no code blocks, no explanation text.`
 }
 
+// ============================================================================
+// BUILD PROMPT FOR EXTERNAL USE (API ENDPOINT)
+// ============================================================================
+
+const buildAgentflowV3Prompt = async () => {
+    try {
+        logger.info('[buildAgentflowV3Prompt] Building V3 system prompt')
+
+        // Get available nodes and examples
+        const agentFlowNodes = await getAllAgentFlowNodes()
+        const toolNodes = await getAllToolNodes()
+        const marketplaceExamples = await getAllAgentflowMarketplaces()
+
+        // Build and return the system prompt
+        const prompt = buildSystemPrompt(agentFlowNodes, toolNodes, marketplaceExamples)
+
+        logger.info('[buildAgentflowV3Prompt] Successfully built V3 prompt')
+        return prompt
+    } catch (error) {
+        logger.error('[buildAgentflowV3Prompt] Error:', error)
+        throw new InternalFlowiseError(StatusCodes.INTERNAL_SERVER_ERROR, `Error: buildAgentflowV3Prompt - ${getErrorMessage(error)}`)
+    }
+}
+
 export default {
-    generateAgentflowv3
+    generateAgentflowv3,
+    buildAgentflowV3Prompt,
+    validateAgentflowV3
 }

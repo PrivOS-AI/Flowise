@@ -20,6 +20,7 @@ const APIKey = Loadable(lazy(() => import('@/views/apikey')))
 
 // tools routing
 const Tools = Loadable(lazy(() => import('@/views/tools')))
+const ClaudeWS = Loadable(lazy(() => import('@/views/claudews')))
 
 // assistants routing
 const Assistants = Loadable(lazy(() => import('@/views/assistants')))
@@ -73,10 +74,194 @@ const ExternalSSOSuccess = Loadable(lazy(() => import('@/views/auth/externalSsoS
 
 // ==============================|| MAIN ROUTING ||============================== //
 
+// Helper function to create roomWorkspace-scoped routes
+const createRoomWorkspaceRoute = (path, element) => ({
+    path: `:roomWorkspaceId/${path}`,
+    element
+})
+
 const MainRoutes = {
     path: '/',
     element: <MainLayout />,
     children: [
+        // RoomWorkspace-scoped routes (with :roomWorkspaceId prefix)
+        createRoomWorkspaceRoute('', (
+            <RequireAuth permission={'chatflows:view'}>
+                <Chatflows />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('chatflows', (
+            <RequireAuth permission={'chatflows:view'}>
+                <Chatflows />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('agentflows', (
+            <RequireAuth permission={'agentflows:view'}>
+                <Agentflows />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('agentflows/:folderId', (
+            <RequireAuth permission={'agentflows:view'}>
+                <Agentflows />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('executions', (
+            <RequireAuth permission={'executions:view'}>
+                <Executions />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('marketplaces', (
+            <RequireAuth permission={'templates:marketplace,templates:custom'}>
+                <Marketplaces />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('apikey', (
+            <RequireAuth permission={'apikeys:view'}>
+                <APIKey />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('tools', (
+            <RequireAuth permission={'tools:view'}>
+                <Tools />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('assistants', (
+            <RequireAuth permission={'assistants:view'}>
+                <Assistants />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('assistants/custom', (
+            <RequireAuth permission={'assistants:view'}>
+                <CustomAssistantLayout />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('assistants/custom/:id', (
+            <RequireAuth permission={'assistants:view'}>
+                <CustomAssistantConfigurePreview />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('assistants/openai', (
+            <RequireAuth permission={'assistants:view'}>
+                <OpenAIAssistantLayout />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('credentials', (
+            <RequireAuth permission={'credentials:view'}>
+                <Credentials />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('variables', (
+            <RequireAuth permission={'variables:view'}>
+                <Variables />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores', (
+            <RequireAuth permission={'documentStores:view'}>
+                <Documents />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/:storeId', (
+            <RequireAuth permission={'documentStores:view'}>
+                <DocumentStoreDetail />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/chunks/:storeId/:fileId', (
+            <RequireAuth permission={'documentStores:view'}>
+                <ShowStoredChunks />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/:storeId/:name', (
+            <RequireAuth permission={'documentStores:view'}>
+                <LoaderConfigPreviewChunks />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/vector/:storeId', (
+            <RequireAuth permission={'documentStores:view'}>
+                <VectorStoreConfigure />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/vector/:storeId/:docId', (
+            <RequireAuth permission={'documentStores:view'}>
+                <VectorStoreConfigure />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('document-stores/query/:storeId', (
+            <RequireAuth permission={'documentStores:view'}>
+                <VectorStoreQuery />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('datasets', (
+            <RequireAuth permission={'datasets:view'} display={'feat:datasets'}>
+                <EvalDatasets />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('dataset_rows/:id', (
+            <RequireAuth permission={'datasets:view'} display={'feat:datasets'}>
+                <EvalDatasetRows />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('evaluations', (
+            <RequireAuth permission={'evaluations:view'} display={'feat:evaluations'}>
+                <EvalEvaluation />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('evaluation_results/:id', (
+            <RequireAuth permission={'evaluations:view'} display={'feat:evaluations'}>
+                <EvaluationResult />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('evaluators', (
+            <RequireAuth permission={'evaluators:view'} display={'feat:evaluators'}>
+                <Evaluators />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('logs', (
+            <RequireAuth permission={'logs:view'} display={'feat:logs'}>
+                <Logs />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('files', (
+            <RequireAuth display={'feat:files'}>
+                <Files />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('account', (
+            <RequireAuth display={'feat:account'}>
+                <Account />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('users', (
+            <RequireAuth permission={'users:manage'} display={'feat:users'}>
+                <UsersPage />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('roles', (
+            <RequireAuth permission={'roles:manage'} display={'feat:roles'}>
+                <RolesPage />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('login-activity', (
+            <RequireAuth permission={'loginActivity:view'} display={'feat:login-activity'}>
+                <LoginActivityPage />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('workspaces', (
+            <RequireAuth permission={'workspace:view'} display={'feat:workspaces'}>
+                <Workspaces />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('workspace-users/:id', (
+            <RequireAuth permission={'workspace:view'} display={'feat:workspaces'}>
+                <WorkspaceDetails />
+            </RequireAuth>
+        )),
+        createRoomWorkspaceRoute('sso-config', (
+            <RequireAuth permission={'sso:manage'} display={'feat:sso-config'}>
+                <SSOConfig />
+            </RequireAuth>
+        )),
+
+        // Non-roomWorkspace routes (no :roomWorkspace prefix)
         {
             path: '/',
             element: (
@@ -138,6 +323,14 @@ const MainRoutes = {
             element: (
                 <RequireAuth permission={'tools:view'}>
                     <Tools />
+                </RequireAuth>
+            )
+        },
+        {
+            path: '/tools/claudews',
+            element: (
+                <RequireAuth permission={'tools:view'}>
+                    <ClaudeWS />
                 </RequireAuth>
             )
         },
@@ -364,10 +557,6 @@ const MainRoutes = {
         {
             path: '/sso-success',
             element: <SSOSuccess />
-        },
-        {
-            path: '/external-sso-success',
-            element: <ExternalSSOSuccess />
         }
     ]
 }

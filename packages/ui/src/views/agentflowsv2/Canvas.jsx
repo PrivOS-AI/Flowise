@@ -31,6 +31,8 @@ import ConfirmDialog from '@/ui-component/dialog/ConfirmDialog'
 import EditNodeDialog from '@/views/agentflowsv2/EditNodeDialog'
 import ChatPopUp from '@/views/chatmessage/ChatPopUp'
 import ValidationPopUp from '@/views/chatmessage/ValidationPopUp'
+
+import AgentflowGeneratorChat from '@/ui-component/dialog/AgentflowGeneratorChat'
 import { flowContext } from '@/store/context/ReactFlowContext'
 
 // API
@@ -117,6 +119,11 @@ const AgentflowCanvas = () => {
 
     const onConnect = (params) => {
         if (!isValidConnectionAgentflowV2(params, reactFlowInstance)) {
+            return
+        }
+
+        // Check for null handles before split
+        if (!params.sourceHandle || !params.targetHandle) {
             return
         }
 
@@ -807,6 +814,7 @@ const AgentflowCanvas = () => {
                     </div>
                 </Box>
                 <ConfirmDialog />
+                <AgentflowGeneratorChat onFlowGenerated={triggerConfetti} />
             </Box>
         </>
     )

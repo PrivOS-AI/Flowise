@@ -184,7 +184,7 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
             const filteredResult = {}
             for (const category in result) {
                 if (isAgentCanvasV2) {
-                    if (category !== 'Agent Flows' && category !== 'PrivOS') {
+                    if (category !== 'Agent Flows' && category !== 'PrivOS' && category !== 'Trigger') {
                         continue
                     }
                 } else {
@@ -328,8 +328,8 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
                     cursor: disabled ? 'not-allowed' : 'pointer',
                     '&:hover': disabled
                         ? {
-                              backgroundColor: theme.palette.grey[400]
-                          }
+                            backgroundColor: theme.palette.grey[400]
+                        }
                         : {}
                 }}
                 ref={anchorRef}
@@ -342,7 +342,7 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
             >
                 {open ? <IconMinus /> : <IconPlus />}
             </StyledFab>
-            {isAgentflowv2 && (
+            {/* {isAgentflowv2 && (
                 <StyledFab
                     sx={{
                         left: 40,
@@ -360,14 +360,14 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
                 >
                     <IconSparkles />
                 </StyledFab>
-            )}
+            )} */}
 
-            <AgentflowGeneratorDialog
+            {/* <AgentflowGeneratorDialog
                 show={openDialog}
                 dialogProps={dialogProps}
                 onCancel={handleCloseDialog}
                 onConfirm={handleConfirmDialog}
-            />
+            /> */}
 
             <Popper
                 placement='bottom-end'
@@ -628,9 +628,9 @@ const AddNodes = ({ nodesData, node, isAgentCanvas, isAgentflowv2, onFlowGenerat
                                                                                                             background:
                                                                                                                 node.badge === 'DEPRECATING'
                                                                                                                     ? theme.palette.warning
-                                                                                                                          .main
+                                                                                                                        .main
                                                                                                                     : theme.palette.teal
-                                                                                                                          .main,
+                                                                                                                        .main,
                                                                                                             color:
                                                                                                                 node.badge !== 'DEPRECATING'
                                                                                                                     ? 'white'

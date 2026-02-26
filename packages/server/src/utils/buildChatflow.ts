@@ -1,7 +1,7 @@
 import { Request } from 'express'
 import * as path from 'path'
 import { DataSource } from 'typeorm'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4, validate as isUUID } from 'uuid'
 import { omit } from 'lodash'
 import {
     IFileUpload,
@@ -71,6 +71,7 @@ import { OMIT_QUEUE_JOB_DATA } from './constants'
 import { executeAgentFlow } from './buildAgentflow'
 import { Workspace } from '../enterprise/database/entities/workspace.entity'
 import { Organization } from '../enterprise/database/entities/organization.entity'
+import { JobsOptions } from 'bullmq'
 
 const shouldAutoPlayTTS = (textToSpeechConfig: string | undefined | null): boolean => {
     if (!textToSpeechConfig) return false
@@ -317,7 +318,9 @@ export const executeFlow = async ({
     orgId,
     workspaceId,
     subscriptionId,
-    productId
+    productId,
+    triggerData,
+    roomId
 }: IExecuteFlowParams) => {
     // Ensure incomingInput has all required properties with default values
     incomingInput = {
@@ -490,7 +493,9 @@ export const executeFlow = async ({
             orgId,
             workspaceId,
             subscriptionId,
-            productId
+            productId,
+            triggerData,
+            roomId
         })
     }
 
@@ -657,7 +662,7 @@ export const executeFlow = async ({
                     chatflowid: agentflow.id,
                     appDataSource,
                     databaseEntities
-                })
+                }) as any
                 if (generatedFollowUpPrompts?.questions) {
                     apiMessage.followUpPrompts = JSON.stringify(generatedFollowUpPrompts.questions)
                 }
@@ -862,7 +867,7 @@ export const executeFlow = async ({
                 chatflowid,
                 appDataSource,
                 databaseEntities
-            })
+            }) as any
             if (followUpPrompts?.questions) {
                 apiMessage.followUpPrompts = JSON.stringify(followUpPrompts.questions)
             }
@@ -975,25 +980,25 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
     const chatflowid = req.params.id
 
     // Check if chatflow exists
-    const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy({
-        id: chatflowid
-    })
+    const chatflow = await appServer.AppDataSource.getRepository(ChatFlow).findOneBy(
+        isUUID(chatflowid) ? { id: chatflowid } : { slug: chatflowid?.toLowerCase()?.trim() }
+    )
     if (!chatflow) {
         throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Chatflow ${chatflowid} not found`)
     }
 
     const isAgentFlow = chatflow.type === 'MULTIAGENT'
-    const httpProtocol = req.get('x-forwarded-proto') || req.protocol
-    const baseURL = `${httpProtocol}://${req.get('host')}`
+    const httpProtocol = typeof req.get === 'function' ? req.get('x-forwarded-proto') || req.protocol : req.protocol
+    const baseURL = typeof req.get === 'function' ? `${httpProtocol}://${req.get('host')}` : `${httpProtocol}://localhost`
     const incomingInput: IncomingInput = req.body || {} // Ensure incomingInput is never undefined
     const chatId = incomingInput.chatId ?? incomingInput.overrideConfig?.sessionId ?? uuidv4()
     const files = (req.files as Express.Multer.File[]) || []
     const abortControllerId = `${chatflow.id}_${chatId}`
-    const isTool = req.get('flowise-tool') === 'true'
-    const isEvaluation: boolean = req.headers['X-Flowise-Evaluation'] || req.body.evaluation
+    const isTool = typeof req.get === 'function' ? req.get('flowise-tool') === 'true' : false
+    const isEvaluation: boolean = req.headers && req.headers['X-Flowise-Evaluation'] || req.body?.evaluation
     let evaluationRunId = ''
-    evaluationRunId = req.body.evaluationRunId
-    if (isEvaluation && chatflow.type !== 'AGENTFLOW' && req.body.evaluationRunId) {
+    evaluationRunId = req.body?.evaluationRunId
+    if (isEvaluation && chatflow.type !== 'AGENTFLOW' && req.body?.evaluationRunId) {
         // this is needed for the collection of token metrics for non-agent flows,
         // for agentflows the execution trace has the info needed
         const newEval = {
@@ -1033,6 +1038,12 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Organization ${workspace.organizationId} not found`)
         }
 
+        // Room isolation: Root admin sees all, room users see their room
+        let roomId = undefined
+        if (!req.isRootAdmin && req.roomId) {
+            roomId = req.roomId
+        }
+
         const orgId = org.id
         organizationId = orgId
         const subscriptionId = org.subscriptionId as string
@@ -1061,12 +1072,15 @@ export const utilBuildChatflow = async (req: Request, isInternal: boolean = fals
             orgId,
             workspaceId,
             subscriptionId,
-            productId
+            productId,
+            triggerData: incomingInput.triggerData,
+            roomId
         }
 
-        if (process.env.MODE === MODE.QUEUE) {
+        if (process.env.MODE === MODE.QUEUE && incomingInput.triggerData?.eventType !== 'schedule') {
             const predictionQueue = appServer.queueManager.getQueue('prediction')
-            const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA))
+            const jobOptions: JobsOptions = incomingInput.triggerData?.config?.isEnabled ? incomingInput.triggerData?.config?.retry : {}
+            const job = await predictionQueue.addJob(omit(executeData, OMIT_QUEUE_JOB_DATA), jobOptions)
             logger.debug(`[server]: [${orgId}/${chatflow.id}/${chatId}]: Job added to queue: ${job.id}`)
 
             const queueEvents = predictionQueue.getQueueEvents()

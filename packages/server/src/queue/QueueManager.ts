@@ -12,10 +12,11 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { Express } from 'express'
 import { UsageCacheManager } from '../UsageCacheManager'
 import { ExpressAdapter } from '@bull-board/express'
+import { ScheduleQueue } from './ScheduleQueue'
 
 const QUEUE_NAME = process.env.QUEUE_NAME || 'flowise-queue'
 
-type QUEUE_TYPE = 'prediction' | 'upsert'
+type QUEUE_TYPE = 'prediction' | 'upsert' | 'schedule'
 
 export class QueueManager {
     private static instance: QueueManager
@@ -154,9 +155,19 @@ export class QueueManager {
         })
         this.registerQueue('upsert', upsertionQueue)
 
+        const scheduleQueueName = `${QUEUE_NAME}-schedule`
+        const scheduleQueue = new ScheduleQueue(scheduleQueueName, this.connection, {
+            componentNodes,
+            telemetry,
+            cachePool,
+            appDataSource,
+            usageCacheManager
+        })
+        this.registerQueue('schedule', scheduleQueue)
+
         if (serverAdapter) {
             createBullBoard({
-                queues: [new BullMQAdapter(predictionQueue.getQueue()), new BullMQAdapter(upsertionQueue.getQueue())],
+                queues: [new BullMQAdapter(predictionQueue.getQueue()), new BullMQAdapter(upsertionQueue.getQueue()), new BullMQAdapter(scheduleQueue.getQueue())],
                 serverAdapter: serverAdapter
             })
             this.bullBoardRouter = serverAdapter.getRouter()

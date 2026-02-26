@@ -3,6 +3,7 @@ import path from 'path'
 import cors from 'cors'
 import http from 'http'
 import cookieParser from 'cookie-parser'
+import httpProxy from 'http-proxy'
 import { DataSource, IsNull } from 'typeorm'
 import { MODE, Platform } from './Interface'
 import { getNodeModulesPackagePath, getEncryptionKey } from './utils'
@@ -16,6 +17,7 @@ import { RateLimiterManager } from './utils/rateLimit'
 import { getAllowedIframeOrigins, getCorsOptions, sanitizeMiddleware } from './utils/XSS'
 import { Telemetry } from './utils/telemetry'
 import flowiseApiV1Router from './routes'
+import webhookTriggersRouter from './routes/webhook-triggers'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
@@ -42,7 +44,7 @@ import { ExpressAdapter } from '@bull-board/express'
 
 declare global {
     namespace Express {
-        interface User extends LoggedInUser {}
+        interface User extends LoggedInUser { }
         interface Request {
             user?: LoggedInUser
         }
@@ -79,9 +81,19 @@ export class App {
     usageCacheManager: UsageCacheManager
     scheduleManager: ScheduleManager
     scheduleWorker: ScheduleWorker
+    claudewsProxy: any
 
     constructor() {
         this.app = express()
+        this.claudewsProxy = httpProxy.createProxyServer({ ws: true })
+        // Error handling for proxy to prevent server crash
+        this.claudewsProxy.on('error', (err: any, req: any, res: any) => {
+            logger.error('Proxy Error:', err)
+            if (res.writeHead && !res.headersSent) {
+                res.writeHead(500)
+                res.end('Proxy Error')
+            }
+        })
     }
 
     async initDatabase() {
@@ -171,6 +183,11 @@ export class App {
                 const predictionQueue = this.queueManager.getQueue('prediction')
                 predictionQueue.createWorker()
                 logger.info('🔄 [server]: Prediction Worker started in server process')
+
+                // Same process -> sholud be moved to separate process in production
+                const scheduleQueue = this.queueManager.getQueue('schedule')
+                scheduleQueue.createWorker()
+                logger.info('🔄 [server]: Schedule Worker started in server process')
             }
 
             // TODO: Remove this by end of 2025
@@ -183,6 +200,12 @@ export class App {
     }
 
     async config() {
+        // Proxy for ClaudeWS using http-proxy (Supports both HTTP and WS via upgrade)
+        this.app.use('/claudews-socket', (req, res) => {
+            const target = (req.query.claudews_target as string) || 'http://localhost:8052'
+            this.claudewsProxy.web(req, res, { target })
+        })
+
         // Limit is needed to allow sending/receiving base64 encoded string
         const flowise_file_size_limit = process.env.FLOWISE_FILE_SIZE_LIMIT || '50mb'
         this.app.use(express.json({ limit: flowise_file_size_limit }))
@@ -243,6 +266,9 @@ export class App {
         const URL_CASE_INSENSITIVE_REGEX: RegExp = /\/api\/v1\//i
         const URL_CASE_SENSITIVE_REGEX: RegExp = /\/api\/v1\//
 
+        // public route
+        this.app.use('/api/v1/webhook', webhookTriggersRouter)
+
         await initializeJwtCookieMiddleware(this.app, this.identityManager)
 
         this.app.use(async (req, res, next) => {
@@ -259,6 +285,10 @@ export class App {
                         verifyExternalAuth(req, res, next)
                     } else if (req.headers['x-request-from'] === 'internal') {
                         verifyToken(req, res, next)
+                    } else if (req.user) {
+                        // Session-based authentication (JWT cookie)
+                        // req.user is set by passport JWT cookie middleware
+                        next()
                     } else {
                         // Only check license validity for non-open-source platforms
                         if (this.identityManager.getPlatformType() !== Platform.OPEN_SOURCE) {
@@ -374,6 +404,14 @@ export class App {
         const uiBuildPath = path.join(packagePath, 'build')
         const uiHtmlPath = path.join(packagePath, 'build', 'index.html')
 
+        // Set correct Content-Type for manifest.json
+        this.app.use((req, res, next) => {
+            if (req.url === '/manifest.json') {
+                res.setHeader('Content-Type', 'application/manifest+json')
+            }
+            next()
+        })
+
         this.app.use('/', express.static(uiBuildPath))
 
         // All other requests not handled will return React app
@@ -409,6 +447,26 @@ export async function start(): Promise<void> {
     const host = process.env.HOST
     const port = parseInt(process.env.PORT || '', 10) || 3000
     const server = http.createServer(serverApp.app)
+
+    // Proxy WebSocket upgrades for ClaudeWS
+    server.on('upgrade', (req, socket, head) => {
+        if (req.url && req.url.startsWith('/claudews-socket')) {
+            const urlObj = new URL(req.url, 'http://dummy.com')
+            const target = urlObj.searchParams.get('claudews_target') || 'http://localhost:8052'
+
+            // Rewrite path: /claudews-socket/socket.io -> /socket.io
+            // We must preserve query params (like EIO, transport)
+            // req.url includes query string. 
+            // replace only the prefix.
+            req.url = req.url.replace('/claudews-socket', '')
+
+            serverApp?.claudewsProxy.ws(req, socket, head, {
+                target,
+                changeOrigin: true,
+                secure: false // Allow self-signed certs or avoid SNI issues
+            })
+        }
+    })
 
     // Set server timeout (default 2 minutes, increase for long-running API calls)
     const serverTimeout = 600000 // 10 minutes default

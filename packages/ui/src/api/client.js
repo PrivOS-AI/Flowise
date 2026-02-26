@@ -11,12 +11,31 @@ const apiClient = axios.create({
     withCredentials: true
 })
 
+// Request interceptor to add roomWorkspaceId as 'rid' query parameter
+apiClient.interceptors.request.use(
+    function (config) {
+        const roomWorkspaceId = localStorage.getItem('roomWorkspaceId')
+
+        if (roomWorkspaceId) {
+            config.params = {
+                ...config.params,
+                rid: roomWorkspaceId
+            }
+        }
+
+        return config
+    },
+    function (error) {
+        return Promise.reject(error)
+    }
+)
+
 apiClient.interceptors.response.use(
     function (response) {
         return response
     },
     async (error) => {
-        if (error.response.status === 401) {
+        if (error.response && error.response.status === 401) {
             // check if refresh is needed
             if (error.response.data.message === ErrorMessage.TOKEN_EXPIRED && error.response.data.retry === true) {
                 const originalRequest = error.config

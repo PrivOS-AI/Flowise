@@ -285,7 +285,7 @@ const App = () => {
 }`
 }
 
-const EmbedChat = ({ chatflowid }) => {
+const EmbedChat = ({ chatflowid, useSlug = false, chatflow }) => {
     const codes = ['Popup Html', 'Fullpage Html', 'Popup React', 'Fullpage React']
     const [value, setValue] = useState(0)
     const [embedChatCheckboxVal, setEmbedChatCheckbox] = useState(false)
@@ -298,16 +298,26 @@ const EmbedChat = ({ chatflowid }) => {
         setValue(newValue)
     }
 
+    // Get chatflow identifier (chatflowid or slug)
+    const getChatflowIdentifier = () => {
+        if (useSlug && chatflow?.slug) {
+            return chatflow.slug
+        }
+        return chatflowid
+    }
+
+    const identifier = getChatflowIdentifier()
+
     const getCode = (codeLang) => {
         switch (codeLang) {
             case 'Popup Html':
-                return embedPopupHtmlCode(chatflowid)
+                return embedPopupHtmlCode(identifier)
             case 'Fullpage Html':
-                return embedFullpageHtmlCode(chatflowid)
+                return embedFullpageHtmlCode(identifier)
             case 'Popup React':
-                return embedPopupReactCode(chatflowid)
+                return embedPopupReactCode(identifier)
             case 'Fullpage React':
-                return embedFullpageReactCode(chatflowid)
+                return embedFullpageReactCode(identifier)
             default:
                 return ''
         }
@@ -316,15 +326,15 @@ const EmbedChat = ({ chatflowid }) => {
     const getCodeCustomization = (codeLang) => {
         switch (codeLang) {
             case 'Popup Html':
-                return embedPopupHtmlCodeCustomization(chatflowid)
+                return embedPopupHtmlCodeCustomization(identifier)
             case 'Fullpage Html':
-                return embedFullpageHtmlCodeCustomization(chatflowid)
+                return embedFullpageHtmlCodeCustomization(identifier)
             case 'Popup React':
-                return embedPopupReactCodeCustomization(chatflowid)
+                return embedPopupReactCodeCustomization(identifier)
             case 'Fullpage React':
-                return embedFullpageReactCodeCustomization(chatflowid)
+                return embedFullpageReactCodeCustomization(identifier)
             default:
-                return embedPopupHtmlCodeCustomization(chatflowid)
+                return embedPopupHtmlCodeCustomization(identifier)
         }
     }
 
@@ -381,7 +391,9 @@ const EmbedChat = ({ chatflowid }) => {
 }
 
 EmbedChat.propTypes = {
-    chatflowid: PropTypes.string
+    chatflowid: PropTypes.string,
+    useSlug: PropTypes.bool,
+    chatflow: PropTypes.object
 }
 
 export default EmbedChat
