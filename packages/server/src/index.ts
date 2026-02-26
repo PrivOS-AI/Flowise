@@ -188,7 +188,7 @@ export class App {
                 const scheduleQueue = this.queueManager.getQueue('schedule')
                 scheduleQueue.createWorker()
                 logger.info('🔄 [server]: Schedule Worker started in server process')
-                }
+            }
 
             // TODO: Remove this by end of 2025
             await migrateApiKeysFromJsonToDb(this.AppDataSource, this.identityManager.getPlatformType())
@@ -460,7 +460,11 @@ export async function start(): Promise<void> {
             // replace only the prefix.
             req.url = req.url.replace('/claudews-socket', '')
 
-            serverApp?.claudewsProxy.ws(req, socket, head, { target })
+            serverApp?.claudewsProxy.ws(req, socket, head, {
+                target,
+                changeOrigin: true,
+                secure: false // Allow self-signed certs or avoid SNI issues
+            })
         }
     })
 

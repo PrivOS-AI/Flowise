@@ -117,7 +117,12 @@ export abstract class BaseCommand extends Command {
 
         // Prevent throw new Error from crashing the app
         // TODO: Get rid of this and send proper error message to ui
-        process.on('uncaughtException', (err) => {
+        process.on('uncaughtException', (err: any) => {
+            const nodeErr = err as NodeJS.ErrnoException
+            if (nodeErr.code === 'EPIPE' || nodeErr.syscall === 'write') {
+                logger.warn('Client disconnected unexpectedly (EPIPE)')
+                return
+            }
             logger.error('uncaughtException: ', err)
         })
 
