@@ -313,8 +313,21 @@ const createClient = async (server: ClaudeWSServer): Promise<AxiosInstance> => {
                 const decryptedStr = decrypted.toString(encUtf8)
 
                 if (decryptedStr && !decryptedStr.startsWith('U2FsdGVkX1')) {
-                    apiKey = decryptedStr
-                    console.log('[ClaudeWS Client] Second decryption successful, API key:', apiKey.substring(0, 10) + '...')
+                    // The decrypted result might be a JSON object string like {"apiKey":"demo-key"}
+                    // We need to extract the actual API key value
+                    try {
+                        const parsed = JSON.parse(decryptedStr)
+                        if (parsed && parsed.apiKey) {
+                            apiKey = parsed.apiKey
+                            console.log('[ClaudeWS Client] Second decryption successful (extracted from JSON), API key:', apiKey.substring(0, 10) + '...')
+                        } else {
+                            apiKey = decryptedStr
+                            console.log('[ClaudeWS Client] Second decryption successful (plain string), API key:', apiKey.substring(0, 10) + '...')
+                        }
+                    } catch {
+                        apiKey = decryptedStr
+                        console.log('[ClaudeWS Client] Second decryption successful, API key:', apiKey.substring(0, 10) + '...')
+                    }
                 } else {
                     console.log('[ClaudeWS Client] Second decryption did not help, API key may be invalid')
                 }
