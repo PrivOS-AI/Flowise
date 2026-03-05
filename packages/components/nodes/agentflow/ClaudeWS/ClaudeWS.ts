@@ -824,6 +824,15 @@ class ClaudeWS_Agentflow implements INode {
                                             streamer.streamTokenEvent(chatId, block.text)
                                         }
                                     } else if (block.type === ClaudeWSContentBlockTypes.TOOL_USE) {
+                                        // NEW: Stream tool_use event to client
+                                        if (shouldStream && streamer && chatId) {
+                                            streamer.streamToolUseEvent(chatId, {
+                                                toolId: block.id,
+                                                toolName: block.name,
+                                                input: block.input,
+                                                attemptId: attemptId!
+                                            })
+                                        }
                                         // Collect tool_use from assistant messages
                                         const filePath = block.input?.file_path || ''
                                         const toolLabel = filePath ? `${block.name} → ${filePath}` : block.name
@@ -847,7 +856,15 @@ class ClaudeWS_Agentflow implements INode {
                         break
 
                     case ClaudeWSOutputEventTypes.TOOL_USE:
-                        // Collect standalone tool_use events
+                        // NEW: Stream standalone tool_use events
+                        if (shouldStream && streamer && chatId) {
+                            streamer.streamToolUseEvent(chatId, {
+                                toolId: output.tool_name || 'unknown',
+                                toolName: output.tool_name || 'unknown',
+                                input: output.input || {},
+                                attemptId: attemptId!
+                            })
+                        }
                         usedTools.push({
                             tool: output.tool_name || '',
                             toolInput: output.input || {},
@@ -862,6 +879,15 @@ class ClaudeWS_Agentflow implements INode {
                             if (Array.isArray(content)) {
                                 for (const block of content) {
                                     if (block.type === ClaudeWSContentBlockTypes.TOOL_RESULT) {
+                                        // NEW: Stream tool_result event to client
+                                        if (shouldStream && streamer && chatId) {
+                                            streamer.streamToolResultEvent(chatId, {
+                                                toolUseId: block.tool_use_id,
+                                                result: block.content || 'Tool executed successfully',
+                                                isError: block.is_error || false,
+                                                attemptId: attemptId!
+                                            })
+                                        }
                                         // Find the corresponding tool and update its output
                                         const tool = usedTools.find((t) => t.toolInput?.toolUseId === block.tool_use_id)
                                         if (tool) {
@@ -872,12 +898,37 @@ class ClaudeWS_Agentflow implements INode {
                             }
                         }
                         break
+
+                    default:
+                        // NEW: Catch-all for unknown event types
+                        if (shouldStream && streamer && chatId) {
+                            streamer.streamClaudeWSEvent(chatId, {
+                                eventType: output.type,
+                                attemptId: attemptId!,
+                                payload: output
+                            })
+                        }
+                        break
                 }
             })
 
-            socket.on(SocketEventNames.ATTEMPT_FINISHED, (data: { attemptId: string }) => {
+            socket.on(SocketEventNames.ATTEMPT_FINISHED, (data: { attemptId: string; status?: string; code?: number }) => {
                 if (!attemptId || data.attemptId !== attemptId) return
                 if (resolved) return
+
+                console.log('[ClaudeWS] Attempt finished:', data)
+
+                // NEW: Stream completion event to client
+                if (shouldStream && streamer && chatId) {
+                    streamer.streamClaudeWSEvent(chatId, {
+                        eventType: 'attempt:finished',
+                        attemptId: attemptId!,
+                        payload: {
+                            status: data.status || 'completed',
+                            code: data.code || 0
+                        }
+                    })
+                }
 
                 // Clean up any pending questions for this attempt
                 claudewsQuestionStorage.cleanupAttempt(attemptId)
@@ -887,8 +938,23 @@ class ClaudeWS_Agentflow implements INode {
                 resolve({ text: fullResponse, usedTools })
             })
 
-            socket.on(SocketEventNames.ERROR, (data: { message: string }) => {
+            socket.on(SocketEventNames.ERROR, (data: { message: string; code?: number }) => {
                 if (resolved) return
+
+                console.error('[ClaudeWS] Socket error:', data)
+
+                // Stream error event to client
+                if (shouldStream && streamer && chatId) {
+                    streamer.streamClaudeWSEvent(chatId, {
+                        eventType: 'error',
+                        attemptId: attemptId || 'unknown',
+                        payload: {
+                            message: data.message,
+                            code: data.code
+                        }
+                    })
+                }
+
                 resolved = true
                 cleanup()
                 reject(new Error(data.message))

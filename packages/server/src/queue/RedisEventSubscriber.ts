@@ -31,6 +31,9 @@ const SSEEventType = {
     TTS_ABORT: 'tts_abort',
     THINKING: 'thinking',
     QUESTION: 'question',
+    TOOL_USE: 'tool_use',
+    TOOL_RESULT: 'tool_result',
+    CLAUDEWS: 'claudews',
     HEARTBEAT: 'heartbeat'
 } as const
 
@@ -217,6 +220,15 @@ export class RedisEventSubscriber {
                 break
             case SSEEventType.QUESTION:
                 this.sseStreamer.streamQuestionEvent(chatId, data)
+                break
+            case SSEEventType.TOOL_USE:
+                this.sseStreamer.streamToolUseEvent(chatId, data)
+                break
+            case SSEEventType.TOOL_RESULT:
+                this.sseStreamer.streamToolResultEvent(chatId, data)
+                break
+            case 'claudews':
+                this.sseStreamer.streamClaudeWSEvent(chatId, data)
                 break
             case SSEEventType.HEARTBEAT:
                 // Heartbeat events are handled by the controller's timer, not via Redis
