@@ -1,8 +1,3 @@
-/**
- * ClaudeWS Agentflow Node
- * Execute AI tasks on ClaudeWS servers with streaming responses in Agentflows
- */
-
 import axios from 'axios'
 import { io } from 'socket.io-client'
 import { decryptCredentialData } from '../../../src/utils'
@@ -10,6 +5,7 @@ import { updateFlowState } from '../utils'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { claudewsQuestionStorage, Question } from './question-storage'
 import { DEFAULT_TIMEOUT_MS, ClaudeWSOutputEventTypes, ClaudeWSDeltaTypes, ClaudeWSContentBlockTypes, SocketEventNames } from './constants'
+import { StatusCodes } from 'http-status-codes'
 
 interface ClaudeWSOutput {
     type: string
@@ -108,8 +104,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
 
                 const plugins = response.data?.plugins || []
@@ -128,9 +123,17 @@ class ClaudeWS_Agentflow implements INode {
                 // Group by type and return as selectable options
                 for (const plugin of plugins) {
                     const typeIcon = getTypeIcon(plugin.type)
+
+                    // Use plugin.id as the value (will be used in selectedComponents array)
+                    // DO NOT fallback to plugin.name - ID must be the actual database ID
+                    if (!plugin.id) {
+                        console.warn('[ClaudeWS Agentflow] Plugin missing ID, skipping:', plugin.name)
+                        continue
+                    }
+
                     returnData.push({
                         label: `${typeIcon} ${plugin.name}`,
-                        name: plugin.id || plugin.name,
+                        name: plugin.id, // Always use the ID, not the name
                         description: plugin.description || `${plugin.type} - ${plugin.name}`
                     })
                 }
@@ -197,8 +200,7 @@ class ClaudeWS_Agentflow implements INode {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     }
                 )
 
@@ -251,8 +253,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
 
                 const plugins = response.data?.plugins || []
@@ -430,6 +431,18 @@ class ClaudeWS_Agentflow implements INode {
      */
     async run(nodeData: INodeData, input: string, options: ICommonObject): Promise<ICommonObject> {
         const serverId = nodeData.inputs?.claudewsServer
+
+        // Ensure server is configured
+        if (!serverId) {
+            return {
+                output: { content: '' },
+                state: {},
+                chatHistory: [],
+                input: nodeData.inputs || {},
+                id: nodeData.id,
+                name: this.name
+            }
+        }
         const roomName = nodeData.inputs?.claudewsRoomName as string | undefined
         const roomId = nodeData.inputs?.claudewsRoomId as string | undefined
         const roomSessionKey = nodeData.inputs?.claudewsRoomSessionKey as string | undefined
@@ -438,7 +451,89 @@ class ClaudeWS_Agentflow implements INode {
         let taskId = nodeData.inputs?.claudewsTaskId as string | undefined
         const forceCreate = nodeData.inputs?.claudewsForceCreate as boolean | undefined
         const importSkills = nodeData.inputs?.claudewsImportSkills as boolean | undefined
-        const enabledSkills = nodeData.inputs?.claudewsEnabledSkills as string[] | undefined
+
+        // Handle enabledSkills - can be string (single selection) or array (multi-selection)
+        let enabledSkills: string[] | undefined
+        const rawEnabledSkills = nodeData.inputs?.claudewsEnabledSkills
+
+        console.log('[ClaudeWS Agentflow] Raw enabledSkills input:', {
+            rawValue: rawEnabledSkills,
+            jsonRaw: JSON.stringify(rawEnabledSkills, null, 2),
+            type: typeof rawEnabledSkills,
+            isArray: Array.isArray(rawEnabledSkills),
+            length: Array.isArray(rawEnabledSkills) ? rawEnabledSkills.length : 'N/A',
+            firstItemType: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0 ? typeof rawEnabledSkills[0] : 'N/A',
+            firstItemSample: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0 ? rawEnabledSkills[0] : 'N/A'
+        })
+
+        if (rawEnabledSkills) {
+            if (typeof rawEnabledSkills === 'string') {
+                // Try to parse as JSON array first (format: ["id1","id2"])
+                try {
+                    enabledSkills = JSON.parse(rawEnabledSkills)
+                    if (Array.isArray(enabledSkills)) {
+                        console.log('[ClaudeWS Agentflow] Parsed as JSON array:', enabledSkills)
+                    } else {
+                        // If parsed but not array, treat as single skill
+                        enabledSkills = [rawEnabledSkills]
+                        console.log('[ClaudeWS Agentflow] Parsed as single skill string:', enabledSkills)
+                    }
+                } catch (parseError) {
+                    // Not valid JSON, try comma-separated format
+                    enabledSkills = rawEnabledSkills
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0)
+                    console.log('[ClaudeWS Agentflow] Parsed as comma-separated string:', enabledSkills)
+                }
+            } else if (Array.isArray(rawEnabledSkills)) {
+                // Handle different array formats from asyncMultiOptions
+                console.log('[ClaudeWS Agentflow] Processing array items...')
+                enabledSkills = rawEnabledSkills
+                    .map((item: any, index: number) => {
+                        console.log(`[ClaudeWS Agentflow]   Item ${index}:`, {
+                            value: item,
+                            type: typeof item,
+                            keys: typeof item === 'object' && item !== null ? Object.keys(item) : 'N/A'
+                        })
+
+                        // If item is string, use it directly
+                        if (typeof item === 'string') {
+                            console.log(`[ClaudeWS Agentflow]   → Using string value: ${item}`)
+                            return item
+                        }
+                        // If item is object with 'name' property (from asyncMultiOptions)
+                        if (item && typeof item === 'object' && item.name && typeof item.name === 'string') {
+                            console.log(`[ClaudeWS Agentflow]   → Using item.name: ${item.name}`)
+                            return item.name
+                        }
+                        // If item is object with 'value' property
+                        if (item && typeof item === 'object' && item.value && typeof item.value === 'string') {
+                            console.log(`[ClaudeWS Agentflow]   → Using item.value: ${item.value}`)
+                            return item.value
+                        }
+                        // Skip invalid items
+                        console.log(`[ClaudeWS Agentflow]   → Could not extract value, returning null`)
+                        return null
+                    })
+                    .filter((skill): skill is string => skill !== null && skill.length > 0)
+
+                console.log('[ClaudeWS Agentflow] Final parsed array:', enabledSkills)
+            } else if (typeof rawEnabledSkills === 'object') {
+                // Might be an object with value property (some UI components)
+                console.log('[ClaudeWS Agentflow] Processing as plain object...')
+                enabledSkills = Object.values(rawEnabledSkills).filter((v): v is string => typeof v === 'string' && v.length > 0)
+                console.log('[ClaudeWS Agentflow] Parsed from object values:', enabledSkills)
+            }
+
+            console.log('[ClaudeWS Agentflow] Final enabledSkills:', {
+                count: enabledSkills?.length || 0,
+                skills: enabledSkills
+            })
+        } else {
+            console.log('[ClaudeWS Agentflow] No enabledSkills provided')
+        }
+
         const messages = nodeData.inputs?.claudewsMessages as Array<{ role: string; content: string }> | undefined
         const updateStateConfig = nodeData.inputs?.claudewsUpdateFlowState as Array<{ key: string; value: string }> | undefined
 
@@ -449,8 +544,7 @@ class ClaudeWS_Agentflow implements INode {
         const appDataSource = options.appDataSource
         const databaseEntities = options.databaseEntities
 
-        // Validate required inputs
-        if (!serverId) throw new Error('ClaudeWS Server is required')
+        // Validate required inputs (serverId already checked at the beginning)
         if (!roomId && !roomName) throw new Error('Room ID or Room Name is required')
 
         // Get server from database
@@ -488,7 +582,8 @@ class ClaudeWS_Agentflow implements INode {
         }
 
         // Resolve room ID if only room name is provided
-        console.log('[ClaudeWS Agentflow] Initial room values:', {
+        // NOTE: In ClaudeWS, "room" = "project"
+        console.log('[ClaudeWS Agentflow] Initial project/room values:', {
             roomIdInput: roomId,
             roomNameInput: roomName,
             roomSessionKeyInput: roomSessionKey,
@@ -497,58 +592,153 @@ class ClaudeWS_Agentflow implements INode {
         })
 
         let resolvedRoomId = roomId
-        if (!resolvedRoomId && roomName) {
-            // Fetch rooms and find by name
-            const roomsResponse = await axios.get(`${baseUrl}/api/rooms`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey
-                },
-                timeout: 10000
-            })
-            const room = roomsResponse.data?.find((r: any) => r.name === roomName)
-            if (!room) {
-                throw new Error(`Room with name "${roomName}" not found`)
+
+        // Step 1: Resolve or Create Project/Room
+        // IMPORTANT: Even if roomId is provided, we must verify it exists in ClaudeWS database
+        if (resolvedRoomId) {
+            // User provided a roomId, verify it exists
+            console.log('[ClaudeWS Agentflow] Verifying project exists:', resolvedRoomId)
+
+            try {
+                // Try to fetch the specific project
+                await axios.get(`${baseUrl}/api/projects/${resolvedRoomId}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    }
+                })
+                console.log('[ClaudeWS Agentflow] Project verified:', resolvedRoomId)
+            } catch (verifyError: any) {
+                // Project not found (404), need to create it
+                if (verifyError.response?.status === StatusCodes.NOT_FOUND) {
+                    console.log('[ClaudeWS Agentflow] Project not found in database, creating...')
+
+                    if (!forceCreate) {
+                        throw new Error(`Project "${resolvedRoomId}" not found. Enable "Force Create" to create it automatically.`)
+                    }
+
+                    // Create project with the provided ID as name
+                    const projectPayload = {
+                        name: roomName || resolvedRoomId,
+                        path: resolvedRoomId
+                    }
+
+                    const projectResponse = await axios.post(`${baseUrl}/api/projects`, projectPayload, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey
+                        }
+                    })
+
+                    // Use the actual project ID from response (might be different from input)
+                    resolvedRoomId = projectResponse.data.id
+                    console.log('[ClaudeWS Agentflow] Project created successfully:', {
+                        id: resolvedRoomId,
+                        name: projectResponse.data.name,
+                        path: projectResponse.data.path
+                    })
+                } else {
+                    throw new Error(`Failed to verify project: ${verifyError.message}`)
+                }
             }
-            resolvedRoomId = room.id
-            console.log('[ClaudeWS Agentflow] Resolved room ID from name:', {
-                roomName,
-                resolvedRoomId
-            })
+        } else if (!resolvedRoomId && roomName) {
+            if (forceCreate) {
+                // Create new project if forceCreate is enabled
+                console.log('[ClaudeWS Agentflow] Creating new project:', roomName)
+
+                try {
+                    const projectPayload = {
+                        name: roomName,
+                        path: roomName
+                    }
+
+                    const projectResponse = await axios.post(`${baseUrl}/api/projects`, projectPayload, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey
+                        }
+                    })
+
+                    resolvedRoomId = projectResponse.data.id
+                    console.log('[ClaudeWS Agentflow] Project created successfully:', {
+                        id: resolvedRoomId,
+                        name: projectResponse.data.name,
+                        path: projectResponse.data.path
+                    })
+                } catch (createError: any) {
+                    // If project already exists (409), try to find it
+                    if (createError.response?.status === StatusCodes.CONFLICT) {
+                        console.log('[ClaudeWS Agentflow] Project already exists, fetching existing...')
+                        const projectsResponse = await axios.get(`${baseUrl}/api/projects`, {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': apiKey
+                            }
+                        })
+                        const existingProject = projectsResponse.data?.find((p: any) => p.name === roomName)
+                        if (existingProject) {
+                            resolvedRoomId = existingProject.id
+                            console.log('[ClaudeWS Agentflow] Using existing project:', resolvedRoomId)
+                        } else {
+                            throw new Error(`Project "${roomName}" conflict but not found in list`)
+                        }
+                    } else {
+                        throw new Error(`Failed to create project: ${createError.message}`)
+                    }
+                }
+            } else {
+                // Try to find existing project by name
+                const projectsResponse = await axios.get(`${baseUrl}/api/projects`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    }
+                })
+                const project = projectsResponse.data?.find((p: any) => p.name === roomName)
+                if (!project) {
+                    throw new Error(`Project with name "${roomName}" not found. Enable "Force Create" to create it automatically.`)
+                }
+                resolvedRoomId = project.id
+                console.log('[ClaudeWS Agentflow] Found existing project:', {
+                    name: roomName,
+                    id: resolvedRoomId
+                })
+            }
         }
 
-        console.log('[ClaudeWS Agentflow] Final room values before execution:', {
+        console.log('[ClaudeWS Agentflow] Final project/room values:', {
             resolvedRoomId,
             roomName,
             roomSessionKey,
             privosEndpointUrl,
-            taskName,
-            taskId
+            taskName
         })
 
+        // Step 2: Resolve or Create Task
         // If no task ID provided, create a new task or find by name
         if (!taskId) {
             if (taskName) {
-                // Try to find existing task by name in the room
-                const tasksResponse = await axios.get(`${baseUrl}/api/tasks?roomId=${resolvedRoomId}`, {
+                // Try to find existing task by name in the project
+                const tasksResponse = await axios.get(`${baseUrl}/api/tasks?projectId=${resolvedRoomId}`, {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
                 const existingTask = tasksResponse.data?.find((t: any) => t.title === taskName)
                 if (existingTask) {
                     taskId = existingTask.id
+                    console.log('[ClaudeWS Agentflow] Found existing task:', taskId)
                 }
             }
 
             // If still no task ID, create a new task
             if (!taskId) {
+                console.log('[ClaudeWS Agentflow] Creating new task...')
                 const taskPayload: ICommonObject = {
-                    roomId: resolvedRoomId,
-                    title: taskName || prompt,
-                    description: null,
+                    projectId: resolvedRoomId, // Use projectId instead of roomId
+                    title: taskName || prompt.substring(0, 100),
+                    description: prompt.substring(0, 500),
                     status: 'todo'
                 }
 
@@ -556,11 +746,11 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 30000
+                    }
                 })
 
                 taskId = taskResponse.data.id
+                console.log('[ClaudeWS Agentflow] Task created:', taskId)
             }
         }
 
@@ -569,39 +759,130 @@ class ClaudeWS_Agentflow implements INode {
             throw new Error('Failed to create or find task')
         }
 
-        // Sync skills to project if import is enabled and skills are selected
-        if (importSkills !== false && enabledSkills && Array.isArray(enabledSkills) && enabledSkills.length > 0) {
-            console.log('[ClaudeWS Agentflow] Syncing skills to project...', {
-                projectId: resolvedRoomId,
-                skillCount: enabledSkills.length,
-                skills: enabledSkills
+        // Step 3: Always create/update project settings file
+        // This creates .claude/project-settings.json which is REQUIRED for sync
+        console.log('[ClaudeWS Agentflow] Step 3: Creating/updating project settings...')
+
+        // Prepare skills - use enabledSkills if provided, otherwise empty array
+        // Define at higher scope so it's accessible in all steps
+        const skillsToSync = importSkills !== false && enabledSkills && Array.isArray(enabledSkills) ? enabledSkills : []
+
+        console.log('[ClaudeWS Agentflow] Skills to sync:', {
+            skillsCount: skillsToSync.length,
+            skills: skillsToSync,
+            importEnabled: importSkills !== false
+        })
+
+        try {
+            const settingsResponse = await axios.post(
+                `${baseUrl}/api/projects/${resolvedRoomId}/settings`,
+                {
+                    settings: {
+                        selectedComponents: skillsToSync,
+                        selectedAgentSets: []
+                    }
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    }
+                }
+            )
+
+            console.log('[ClaudeWS Agentflow] Settings file created/updated successfully:', {
+                file: '.claude/project-settings.json',
+                selectedComponents: settingsResponse.data.settings?.selectedComponents || skillsToSync,
+                projectId: resolvedRoomId
             })
+        } catch (settingsError: any) {
+            console.error('[ClaudeWS Agentflow] Failed to create settings file:', settingsError.response?.data || settingsError.message)
+            // Continue anyway - settings might already exist
+        }
+
+        // Step 4: Sync skills to project (if enabled and skills selected)
+        if (skillsToSync.length > 0) {
+            console.log('[ClaudeWS Agentflow] Step 4: Syncing skills to project...')
 
             try {
-                // Batch sync all skills at once using Agent Factory /sync endpoint
-                await axios.post(
+                const syncResponse = await axios.post(
                     `${baseUrl}/api/agent-factory/projects/${resolvedRoomId}/sync`,
                     {
-                        componentIds: enabledSkills,
+                        componentIds: skillsToSync,
                         agentSetIds: []
                     },
                     {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     }
                 )
 
-                console.log('[ClaudeWS Agentflow] Skills sync completed:', {
-                    total: enabledSkills.length,
-                    projectId: resolvedRoomId
-                })
+                // Handle different response formats
+                const responseData = syncResponse.data
+
+                // Format 1: Detailed response { success, message, installed, skipped, errors }
+                if (responseData && typeof responseData === 'object' && 'installed' in responseData) {
+                    console.log('[ClaudeWS Agentflow] Skills sync completed (detailed format):', {
+                        success: responseData.success,
+                        installed: responseData.installed?.length || 0,
+                        skipped: responseData.skipped?.length || 0,
+                        errors: responseData.errors?.length || 0,
+                        projectId: resolvedRoomId
+                    })
+                }
+                // Format 2: Simple array response ["id1", "id2", ...]
+                else if (Array.isArray(responseData)) {
+                    console.log('[ClaudeWS Agentflow] Skills sync completed (array format):', {
+                        installed: responseData.length,
+                        ids: responseData,
+                        projectId: resolvedRoomId
+                    })
+                }
+                // Format 3: Unknown format, log raw response
+                else {
+                    console.log('[ClaudeWS Agentflow] Skills sync completed (unknown format):', {
+                        response: responseData,
+                        projectId: resolvedRoomId
+                    })
+                }
             } catch (syncError: any) {
                 console.error('[ClaudeWS Agentflow] Error during skill sync:', syncError.response?.data || syncError.message)
                 // Continue anyway - skills might already be installed
             }
+
+            // Step 5: Verify installation
+            try {
+                console.log('[ClaudeWS Agentflow] Step 5: Verifying skill installation...')
+                const verifyResponse = await axios.get(`${baseUrl}/api/agent-factory/projects/${resolvedRoomId}/installed`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    }
+                })
+
+                const installedData = verifyResponse.data
+                console.log('[ClaudeWS Agentflow] Installation verification result:', {
+                    totalInstalled: installedData.installed?.length || 0,
+                    installed: installedData.installed || [],
+                    projectId: resolvedRoomId
+                })
+
+                // Check if all requested skills are installed
+                const missingSkills = skillsToSync.filter((skillId: string) => !installedData.installed?.includes(skillId))
+
+                if (missingSkills.length > 0) {
+                    console.warn('[ClaudeWS Agentflow] Some skills were not installed:', missingSkills)
+                } else {
+                    console.log('[ClaudeWS Agentflow] ✅ All requested skills verified successfully!')
+                }
+            } catch (verifyError: any) {
+                console.error('[ClaudeWS Agentflow] Error during verification:', verifyError.response?.data || verifyError.message)
+                // Continue anyway - verification is optional
+            }
+        } else {
+            console.log('[ClaudeWS Agentflow] No skills to sync, skipping sync and verification steps')
         }
 
         // Execute streaming attempt via Socket.io
@@ -680,6 +961,7 @@ class ClaudeWS_Agentflow implements INode {
         }
     }
 
+    // Temporary newline to fix parsing
     /**
      * Execute streaming attempt via Socket.io
      */
@@ -708,7 +990,6 @@ class ClaudeWS_Agentflow implements INode {
 
             const socket = io(baseUrl, {
                 reconnection: false,
-                timeout: DEFAULT_TIMEOUT_MS,
                 auth: { 'x-api-key': apiKey },
                 extraHeaders: { 'x-api-key': apiKey }
             })
