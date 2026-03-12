@@ -8,7 +8,7 @@ import claudewsServerService from '../claudews-servers'
 /**
  * List all plugins from ClaudeWS server with optional type filter
  */
-const listPlugins = async (serverId: string, type?: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any[]> => {
+const listPlugins = async (serverId: string, type?: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any[]> => {
     try {
         console.log('[ClaudeWS] listPlugins called with serverId:', serverId, 'type:', type)
 
@@ -95,7 +95,7 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
 /**
  * Get specific plugin details from ClaudeWS server
  */
-const getPlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const getPlugin = async (serverId: string, pluginId: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
@@ -111,7 +111,7 @@ const getPlugin = async (serverId: string, pluginId: string, userId?: string, is
         return response.data
     } catch (error: any) {
         if (error instanceof InternalFlowiseError) throw error
-        if (error.response?.status === 404) {
+        if (error.response?.status === StatusCodes.NOT_FOUND) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Plugin ${pluginId} not found`)
         }
         throw new InternalFlowiseError(
@@ -127,7 +127,7 @@ const getPlugin = async (serverId: string, pluginId: string, userId?: string, is
 const discoverPlugins = async (
     serverId: string,
     paths: string[],
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -159,7 +159,7 @@ const discoverPlugins = async (
 /**
  * Upload plugin files to ClaudeWS server
  */
-const uploadPlugin = async (serverId: string, files: any[], userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const uploadPlugin = async (serverId: string, files: any[], _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         console.log('[ClaudeWS] uploadPlugin service called with', files.length, 'files')
 
@@ -212,8 +212,7 @@ const uploadPlugin = async (serverId: string, files: any[], userId?: string, isR
                     const axios = require('axios')
                     const fileResponse = await axios.get(file.location, {
                         responseType: 'arraybuffer',
-                        timeout: 30000, // 30 second timeout
-                        validateStatus: (status: number) => status < 500 // Reject only on 5xx errors
+                        validateStatus: (status: number) => status < 500
                     })
 
                     if (fileResponse.status !== 200) {
@@ -267,7 +266,7 @@ const uploadPlugin = async (serverId: string, files: any[], userId?: string, isR
 const confirmUpload = async (
     serverId: string,
     sessionId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -323,7 +322,7 @@ const importPlugin = async (
         sourcePath: string
         metadata?: Record<string, unknown>
     },
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -372,7 +371,7 @@ const importPlugin = async (
 /**
  * Delete plugin from ClaudeWS server
  */
-const deletePlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const deletePlugin = async (serverId: string, pluginId: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
@@ -407,7 +406,7 @@ const deletePlugin = async (serverId: string, pluginId: string, userId?: string,
 const listPluginFiles = async (
     serverId: string,
     pluginId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any[]> => {
@@ -440,7 +439,7 @@ const getPluginFileContent = async (
     serverId: string,
     pluginId: string,
     filePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -473,7 +472,7 @@ const getPluginFileContent = async (
 const getPluginDependencies = async (
     serverId: string,
     pluginId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -506,7 +505,7 @@ const installDependency = async (
     serverId: string,
     pluginId: string,
     depId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -538,7 +537,7 @@ const installDependency = async (
 const getFileContent = async (
     serverId: string,
     filePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -571,7 +570,7 @@ const getDependenciesFromSource = async (
     serverId: string,
     sourcePath: string,
     type: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -603,7 +602,7 @@ const getDependenciesFromSource = async (
 const listFilesFromSource = async (
     serverId: string,
     sourcePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {

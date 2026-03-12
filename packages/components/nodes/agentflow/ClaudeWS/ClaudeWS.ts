@@ -1,8 +1,3 @@
-/**
- * ClaudeWS Agentflow Node
- * Execute AI tasks on ClaudeWS servers with streaming responses in Agentflows
- */
-
 import axios from 'axios'
 import { io } from 'socket.io-client'
 import { decryptCredentialData } from '../../../src/utils'
@@ -10,6 +5,7 @@ import { updateFlowState } from '../utils'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { claudewsQuestionStorage, Question } from './question-storage'
 import { DEFAULT_TIMEOUT_MS, ClaudeWSOutputEventTypes, ClaudeWSDeltaTypes, ClaudeWSContentBlockTypes, SocketEventNames } from './constants'
+import { StatusCodes } from 'http-status-codes'
 
 interface ClaudeWSOutput {
     type: string
@@ -108,8 +104,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
 
                 const plugins = response.data?.plugins || []
@@ -138,7 +133,7 @@ class ClaudeWS_Agentflow implements INode {
 
                     returnData.push({
                         label: `${typeIcon} ${plugin.name}`,
-                        name: plugin.id,  // Always use the ID, not the name
+                        name: plugin.id, // Always use the ID, not the name
                         description: plugin.description || `${plugin.type} - ${plugin.name}`
                     })
                 }
@@ -205,8 +200,7 @@ class ClaudeWS_Agentflow implements INode {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     }
                 )
 
@@ -259,8 +253,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
 
                 const plugins = response.data?.plugins || []
@@ -469,12 +462,8 @@ class ClaudeWS_Agentflow implements INode {
             type: typeof rawEnabledSkills,
             isArray: Array.isArray(rawEnabledSkills),
             length: Array.isArray(rawEnabledSkills) ? rawEnabledSkills.length : 'N/A',
-            firstItemType: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0
-                ? typeof rawEnabledSkills[0]
-                : 'N/A',
-            firstItemSample: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0
-                ? rawEnabledSkills[0]
-                : 'N/A'
+            firstItemType: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0 ? typeof rawEnabledSkills[0] : 'N/A',
+            firstItemSample: Array.isArray(rawEnabledSkills) && rawEnabledSkills.length > 0 ? rawEnabledSkills[0] : 'N/A'
         })
 
         if (rawEnabledSkills) {
@@ -491,7 +480,10 @@ class ClaudeWS_Agentflow implements INode {
                     }
                 } catch (parseError) {
                     // Not valid JSON, try comma-separated format
-                    enabledSkills = rawEnabledSkills.split(',').map(s => s.trim()).filter(s => s.length > 0)
+                    enabledSkills = rawEnabledSkills
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0)
                     console.log('[ClaudeWS Agentflow] Parsed as comma-separated string:', enabledSkills)
                 }
             } else if (Array.isArray(rawEnabledSkills)) {
@@ -530,8 +522,7 @@ class ClaudeWS_Agentflow implements INode {
             } else if (typeof rawEnabledSkills === 'object') {
                 // Might be an object with value property (some UI components)
                 console.log('[ClaudeWS Agentflow] Processing as plain object...')
-                enabledSkills = Object.values(rawEnabledSkills)
-                    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+                enabledSkills = Object.values(rawEnabledSkills).filter((v): v is string => typeof v === 'string' && v.length > 0)
                 console.log('[ClaudeWS Agentflow] Parsed from object values:', enabledSkills)
             }
 
@@ -614,13 +605,12 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
                 console.log('[ClaudeWS Agentflow] Project verified:', resolvedRoomId)
             } catch (verifyError: any) {
                 // Project not found (404), need to create it
-                if (verifyError.response?.status === 404) {
+                if (verifyError.response?.status === StatusCodes.NOT_FOUND) {
                     console.log('[ClaudeWS Agentflow] Project not found in database, creating...')
 
                     if (!forceCreate) {
@@ -637,8 +627,7 @@ class ClaudeWS_Agentflow implements INode {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     })
 
                     // Use the actual project ID from response (might be different from input)
@@ -652,8 +641,7 @@ class ClaudeWS_Agentflow implements INode {
                     throw new Error(`Failed to verify project: ${verifyError.message}`)
                 }
             }
-        } else if (roomName) {
-        if (!resolvedRoomId && roomName) {
+        } else if (!resolvedRoomId && roomName) {
             if (forceCreate) {
                 // Create new project if forceCreate is enabled
                 console.log('[ClaudeWS Agentflow] Creating new project:', roomName)
@@ -661,7 +649,6 @@ class ClaudeWS_Agentflow implements INode {
                 try {
                     const projectPayload = {
                         name: roomName,
-                        // Use roomName as path (will be created by ClaudeWS)
                         path: roomName
                     }
 
@@ -669,8 +656,7 @@ class ClaudeWS_Agentflow implements INode {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     })
 
                     resolvedRoomId = projectResponse.data.id
@@ -681,14 +667,13 @@ class ClaudeWS_Agentflow implements INode {
                     })
                 } catch (createError: any) {
                     // If project already exists (409), try to find it
-                    if (createError.response?.status === 409) {
+                    if (createError.response?.status === StatusCodes.CONFLICT) {
                         console.log('[ClaudeWS Agentflow] Project already exists, fetching existing...')
                         const projectsResponse = await axios.get(`${baseUrl}/api/projects`, {
                             headers: {
                                 'Content-Type': 'application/json',
                                 'x-api-key': apiKey
-                            },
-                            timeout: 10000
+                            }
                         })
                         const existingProject = projectsResponse.data?.find((p: any) => p.name === roomName)
                         if (existingProject) {
@@ -707,8 +692,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
                 const project = projectsResponse.data?.find((p: any) => p.name === roomName)
                 if (!project) {
@@ -739,8 +723,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 10000
+                    }
                 })
                 const existingTask = tasksResponse.data?.find((t: any) => t.title === taskName)
                 if (existingTask) {
@@ -753,7 +736,7 @@ class ClaudeWS_Agentflow implements INode {
             if (!taskId) {
                 console.log('[ClaudeWS Agentflow] Creating new task...')
                 const taskPayload: ICommonObject = {
-                    projectId: resolvedRoomId,  // Use projectId instead of roomId
+                    projectId: resolvedRoomId, // Use projectId instead of roomId
                     title: taskName || prompt.substring(0, 100),
                     description: prompt.substring(0, 500),
                     status: 'todo'
@@ -763,8 +746,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 30000
+                    }
                 })
 
                 taskId = taskResponse.data.id
@@ -783,9 +765,7 @@ class ClaudeWS_Agentflow implements INode {
 
         // Prepare skills - use enabledSkills if provided, otherwise empty array
         // Define at higher scope so it's accessible in all steps
-        const skillsToSync = (importSkills !== false && enabledSkills && Array.isArray(enabledSkills))
-            ? enabledSkills
-            : []
+        const skillsToSync = importSkills !== false && enabledSkills && Array.isArray(enabledSkills) ? enabledSkills : []
 
         console.log('[ClaudeWS Agentflow] Skills to sync:', {
             skillsCount: skillsToSync.length,
@@ -806,8 +786,7 @@ class ClaudeWS_Agentflow implements INode {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey
-                    },
-                    timeout: 30000
+                    }
                 }
             )
 
@@ -836,8 +815,7 @@ class ClaudeWS_Agentflow implements INode {
                         headers: {
                             'Content-Type': 'application/json',
                             'x-api-key': apiKey
-                        },
-                        timeout: 30000
+                        }
                     }
                 )
 
@@ -877,16 +855,12 @@ class ClaudeWS_Agentflow implements INode {
             // Step 5: Verify installation
             try {
                 console.log('[ClaudeWS Agentflow] Step 5: Verifying skill installation...')
-                const verifyResponse = await axios.get(
-                    `${baseUrl}/api/agent-factory/projects/${resolvedRoomId}/installed`,
-                    {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': apiKey
-                        },
-                        timeout: 10000
+                const verifyResponse = await axios.get(`${baseUrl}/api/agent-factory/projects/${resolvedRoomId}/installed`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
                     }
-                )
+                })
 
                 const installedData = verifyResponse.data
                 console.log('[ClaudeWS Agentflow] Installation verification result:', {
@@ -896,9 +870,7 @@ class ClaudeWS_Agentflow implements INode {
                 })
 
                 // Check if all requested skills are installed
-                const missingSkills = skillsToSync.filter(
-                    (skillId: string) => !installedData.installed?.includes(skillId)
-                )
+                const missingSkills = skillsToSync.filter((skillId: string) => !installedData.installed?.includes(skillId))
 
                 if (missingSkills.length > 0) {
                     console.warn('[ClaudeWS Agentflow] Some skills were not installed:', missingSkills)
@@ -989,6 +961,7 @@ class ClaudeWS_Agentflow implements INode {
         }
     }
 
+    // Temporary newline to fix parsing
     /**
      * Execute streaming attempt via Socket.io
      */
@@ -1017,7 +990,6 @@ class ClaudeWS_Agentflow implements INode {
 
             const socket = io(baseUrl, {
                 reconnection: false,
-                timeout: DEFAULT_TIMEOUT_MS,
                 auth: { 'x-api-key': apiKey },
                 extraHeaders: { 'x-api-key': apiKey }
             })
@@ -1376,6 +1348,5 @@ class ClaudeWS_Agentflow implements INode {
         }
     }
 }
-
 
 module.exports = { nodeClass: ClaudeWS_Agentflow }
