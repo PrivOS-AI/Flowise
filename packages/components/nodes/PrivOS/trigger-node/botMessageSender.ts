@@ -88,9 +88,7 @@ export class BotMessageSender {
 
         // Append files as markdown images if present
         if (options.files && options.files.length > 0) {
-            const fileMarkdown = (options.files || [])
-                .map(f => `![${f.caption || f.url}](${f.url})`)
-                .join('\n')
+            const fileMarkdown = (options.files || []).map((f) => `![${f.caption || f.url}](${f.url})`).join('\n')
             messageText = `${messageText}${messageText ? '\n' : ''}${fileMarkdown}`
         }
 
@@ -100,9 +98,8 @@ export class BotMessageSender {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                roomId: options.roomId,
-                text: messageText,
-                reply_to_message_id: options.reply_to_message_id
+                ...options,
+                text: messageText
             })
         })
     }
@@ -160,22 +157,16 @@ export class BotMessageSender {
                 if (!result.text) {
                     throw new Error('Text is required for text messages')
                 }
-                return this.sendMessage({
+                const data = {
                     roomId,
                     text: result?.text,
                     files: result?.files,
-                    reply_to_message_id: replyToMessageId
-                })
-            default:
-                if (result.text) {
-                    return this.sendMessage({
-                        roomId,
-                        text: result.text,
-                        files: result?.files,
-                        reply_to_message_id: replyToMessageId
-                    })
+                    reply_to_message_id: replyToMessageId,
+                    ...(result.metadata ? { ...result.metadata } : {})
                 }
-
+                console.log('Sending message with data:', JSON.stringify(data, null, 2))
+                return this.sendMessage(data)
+            default:
                 throw new Error(`Unknown message type: ${result.messageType}`)
         }
     }
