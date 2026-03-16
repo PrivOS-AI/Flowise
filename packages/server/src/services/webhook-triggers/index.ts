@@ -6,6 +6,8 @@ import { utilBuildChatflow } from '../../utils/buildChatflow'
 import logger from '../../utils/logger'
 import { ChatflowType } from '../../Interface'
 import { Trigger } from '../../database/entities/Trigger'
+import { decryptCredentialData } from 'flowise-components'
+import { Credential } from '../../database/entities/Credential'
 
 // ============================================================================
 // Types & Interfaces
@@ -193,16 +195,31 @@ const findMatchingAgentFlowBySlug = async (slug: string, eventType: string) => {
 /**
  * Prepare the request body with chatflow data for execution
  */
-const prepareChatFlowExecutionRequest = (req: Request, agentFlow: IMatchingAgentFlow): void => {
+const prepareChatFlowExecutionRequest = async (req: Request, agentFlow: IMatchingAgentFlow): Promise<void> => {
+    const appServer = getRunningExpressApp()
+    const credential = await appServer.AppDataSource.getRepository(Credential).findOneBy({ id: agentFlow.credentialId })
+    if (!credential) throw new Error('Credential data not found')
+    const { authToken } = await decryptCredentialData(credential.encryptedData)
+
     const { form = {}, question = '', room, roomId, message, messageId, event = '', triggerConfig } = req.body ?? {}
     req.params.id = agentFlow.id
+    const formBuilt = {
+        ...form,
+        messageId: message?._id || message?.id || messageId,
+        event,
+        botId: req.body.bot?.id,
+        botTokenKey: authToken,
+        message: JSON.stringify(message),
+        mainMessageId: form?.metadata?.mainMessageId || message?._id
+    }
+    req.body.form = formBuilt
     req.body.triggerData = {
         ...req.body,
         form,
         question,
         botCredentialId: agentFlow.credentialId,
         roomId: room?.id ?? roomId,
-        messageId: message?.id ?? messageId,
+        messageId: message?._id || message?.id || messageId,
         eventType: event,
         config: triggerConfig
     }
@@ -213,7 +230,7 @@ const prepareChatFlowExecutionRequest = (req: Request, agentFlow: IMatchingAgent
  */
 const executeAgentFlow = async (req: Request, agentFlow: IMatchingAgentFlow): Promise<void> => {
     try {
-        prepareChatFlowExecutionRequest(req, agentFlow)
+        await prepareChatFlowExecutionRequest(req, agentFlow)
         await utilBuildChatflow(req, true)
     } catch (error) {
         logger.error(`[webhook-triggers]: Error executing agentflow ${agentFlow.id}: ${error}`)
@@ -228,14 +245,6 @@ export const processWebhookEvent = async (req: Request): Promise<IWebhookEventRe
     const { bot, message, event: eventType } = req.body as WebhookEventRequest
 
     // Prevent bot-triggered event loops
-    if (isBotTriggeredEvent(bot?.id, message?.userId)) {
-        logger.info(`[webhook-triggers]: Ignoring event ${eventType} triggered by the bot itself to prevent loops.`)
-        return {
-            success: true,
-            message: `Ignored event ${eventType} triggered by the bot itself.`
-        }
-    }
-
     // Find all matching agent flows
     const { matchingAgentFlows, triggerConfig } = await findMatchingAgentFlows(eventType, bot)
 

@@ -10,7 +10,8 @@ const ALL_EVENTS = [
     { label: 'Room Joined', name: PrivosEvent.ROOM_JOINED, description: 'Triggered when a user joins a room' },
     { label: 'Room Left', name: PrivosEvent.ROOM_LEFT, description: 'Triggered when a user leaves a room' },
     { label: 'User Joined', name: PrivosEvent.USER_JOINED, description: 'Triggered when a user joins the workspace' },
-    { label: 'User Left', name: PrivosEvent.USER_LEFT, description: 'Triggered when a user leaves the workspace' }
+    { label: 'User Left', name: PrivosEvent.USER_LEFT, description: 'Triggered when a user leaves the workspace' },
+    { label: 'Message mention', name: PrivosEvent.MESSAGE_MENTION, description: 'Triggered when a user is mentioned in a message' }
 ]
 
 class PrivosTrigger implements INode {
