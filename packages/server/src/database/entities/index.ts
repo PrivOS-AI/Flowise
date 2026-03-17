@@ -21,6 +21,7 @@ import { AgentflowFolder } from './AgentflowFolder'
 import { Trigger } from './Trigger'
 import { ClaudeWSServer } from './ClaudeWSServer'
 import { ClaudeWSPlugin } from './ClaudeWSPlugin'
+import { DynamicWebhook, WebhookLog } from '../../entities/DynamicWebhook'
 import { LoginActivity, WorkspaceShared, WorkspaceUsers } from '../../enterprise/database/entities/EnterpriseEntities'
 import { User } from '../../enterprise/database/entities/user.entity'
 import { Organization } from '../../enterprise/database/entities/organization.entity'
@@ -58,6 +59,8 @@ export const entities = {
     Trigger,
     ClaudeWSServer,
     ClaudeWSPlugin,
+    DynamicWebhook,
+    WebhookLog,
     Organization,
     Role,
     OrganizationUser,
