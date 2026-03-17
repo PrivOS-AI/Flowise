@@ -47,6 +47,7 @@ import multerS3 from 'multer-s3'
 import MulterGoogleCloudStorage from 'multer-cloud-storage'
 import { ChatFlow } from '../database/entities/ChatFlow'
 import { ChatMessage } from '../database/entities/ChatMessage'
+import { DynamicWebhook, WebhookLog } from '../entities/DynamicWebhook'
 import { Credential } from '../database/entities/Credential'
 import { Tool } from '../database/entities/Tool'
 import { Assistant } from '../database/entities/Assistant'
@@ -106,7 +107,9 @@ export const databaseEntities: IDatabaseEntity = {
     DocumentStore: DocumentStore,
     DocumentStoreFileChunk: DocumentStoreFileChunk,
     ClaudeWSServer: ClaudeWSServer,
-    ClaudeWSPlugin: ClaudeWSPlugin
+    ClaudeWSPlugin: ClaudeWSPlugin,
+    DynamicWebhook: DynamicWebhook,
+    WebhookLog: WebhookLog
 }
 
 /**

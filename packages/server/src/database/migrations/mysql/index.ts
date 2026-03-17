@@ -49,6 +49,7 @@ import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToF
 import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
 import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
+import { CreateDynamicWebhook1772725052772 } from './1772725052772-CreateDynamicWebhook'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/mysql/1720230151482-AddAuthTables'
 import { AddWorkspace1720230151484 } from '../../../enterprise/database/migrations/mysql/1720230151484-AddWorkspace'
@@ -124,5 +125,6 @@ export const mysqlMigrations = [
     AddAgentflowFolder1770300000000,
     AddParentIdToFolder1770400000000,
     AddTriggerEntityAndSlug1737625150000,
-    AddClaudeWSEntities1770500000000
+    AddClaudeWSEntities1770500000000,
+    CreateDynamicWebhook1772725052772
 ]

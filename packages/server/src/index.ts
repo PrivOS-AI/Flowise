@@ -18,6 +18,9 @@ import { getAllowedIframeOrigins, getCorsOptions, sanitizeMiddleware } from './u
 import { Telemetry } from './utils/telemetry'
 import flowiseApiV1Router from './routes'
 import webhookTriggersRouter from './routes/webhook-triggers'
+import dynamicWebhookRouter from './routes/dynamic-webhook'
+import dynamicWebhookManagementRouter from './routes/dynamic-webhook/management'
+import publicWebhookRouter from './routes/dynamic-webhook/public'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
@@ -44,7 +47,7 @@ import { ExpressAdapter } from '@bull-board/express'
 
 declare global {
     namespace Express {
-        interface User extends LoggedInUser { }
+        interface User extends LoggedInUser {}
         interface Request {
             user?: LoggedInUser
         }
@@ -269,6 +272,9 @@ export class App {
         // public route
         this.app.use('/api/v1/webhook', webhookTriggersRouter)
 
+        // Privos.ai webhook routes (public, no auth required)
+        this.app.use('/webhook-lp', dynamicWebhookRouter)
+
         await initializeJwtCookieMiddleware(this.app, this.identityManager)
 
         this.app.use(async (req, res, next) => {
@@ -382,6 +388,12 @@ export class App {
 
         this.app.use('/api/v1', flowiseApiV1Router)
 
+        // Dynamic webhook management API (requires authentication)
+        this.app.use('/api/v1/webhooks', dynamicWebhookManagementRouter)
+
+        // Public webhook creation API (no authentication)
+        this.app.use('/api/v1/public/webhooks', publicWebhookRouter)
+
         // ----------------------------------------
         // Configure number of proxies in Host Environment
         // ----------------------------------------
@@ -456,7 +468,7 @@ export async function start(): Promise<void> {
 
             // Rewrite path: /claudews-socket/socket.io -> /socket.io
             // We must preserve query params (like EIO, transport)
-            // req.url includes query string. 
+            // req.url includes query string.
             // replace only the prefix.
             req.url = req.url.replace('/claudews-socket', '')
 

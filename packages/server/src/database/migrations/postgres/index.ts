@@ -48,6 +48,7 @@ import { AddParentIdToFolder1770400000000 } from './1770400000000-AddParentIdToF
 import { AddTriggerEntityAndSlug1737625150000 } from './1737625150000-AddTriggerEntityAndSlug'
 import { AddClaudeWSEntities1770500000000 } from './1770500000000-AddClaudeWSEntities'
 import { AddRoomIdToEntities1730000000000 } from './1730000000000-AddRoomIdToEntities'
+import { CreateDynamicWebhook1772725052772 } from './1772725052772-CreateDynamicWebhook'
 import { FinalSafetyMigration9999999999999 } from './9999999999999-FinalSafetyMigration'
 
 import { AddAuthTables1720230151482 } from '../../../enterprise/database/migrations/postgres/1720230151482-AddAuthTables'
@@ -124,5 +125,6 @@ export const postgresMigrations = [
     AddParentIdToFolder1770400000000,
     AddTriggerEntityAndSlug1737625150000,
     AddClaudeWSEntities1770500000000,
+    CreateDynamicWebhook1772725052772,
     FinalSafetyMigration9999999999999
 ]
