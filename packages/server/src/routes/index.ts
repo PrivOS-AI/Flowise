@@ -73,10 +73,12 @@ import workspaceUserRouter from '../enterprise/routes/workspace-user.route'
 import accountRouter from '../enterprise/routes/account.route'
 import loginMethodRouter from '../enterprise/routes/login-method.route'
 import privosChatRouter from './privos-chat'
+import agentflowCreatorRouter from './agentflow-creator'
 import { IdentityManager } from '../IdentityManager'
 
 const router = express.Router()
 
+router.use('/agentflow-creator', agentflowCreatorRouter)
 router.use('/ping', pingRouter)
 router.use('/apikey', apikeyRouter)
 router.use('/agentflow-folders', agentflowFoldersRouter)
@@ -151,6 +153,5 @@ router.use('/loginmethod', loginMethodRouter)
 router.use('/logs', IdentityManager.checkFeatureByPlan('feat:logs'), logsRouter)
 router.use('/files', IdentityManager.checkFeatureByPlan('feat:files'), filesRouter)
 router.use('/privos-chat', privosChatRouter)
-
 
 export default router

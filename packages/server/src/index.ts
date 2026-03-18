@@ -21,6 +21,7 @@ import webhookTriggersRouter from './routes/webhook-triggers'
 import dynamicWebhookRouter from './routes/dynamic-webhook'
 import dynamicWebhookManagementRouter from './routes/dynamic-webhook/management'
 import publicWebhookRouter from './routes/dynamic-webhook/public'
+import agentflowCreatorRouter from './routes/agentflow-creator'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
 import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
@@ -271,6 +272,9 @@ export class App {
 
         // public route
         this.app.use('/api/v1/webhook', webhookTriggersRouter)
+
+        // Public Agent Flow Creator API (no authentication required)
+        this.app.use('/api/v1/agentflow-creator', agentflowCreatorRouter)
 
         // Privos.ai webhook routes (public, no auth required)
         this.app.use('/webhook-lp', dynamicWebhookRouter)
