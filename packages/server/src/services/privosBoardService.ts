@@ -1,12 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import logger from '../utils/logger'
-
-/**
- * PRIVOS BOARD SERVICE
- *
- * Service for creating items in Privos boards
- * Reference: privos-manager skill
- */
+import { SECURITY_CONFIG, checkRateLimit, sanitizeString, validateFieldId, validateFieldValue, validateEmail } from './constant'
 
 interface CustomField {
     fieldId: string
@@ -39,7 +33,7 @@ export class PrivosBoardService {
     private baseUrl: string
 
     constructor(apiKey: string = '', userId: string = '', baseUrl?: string) {
-        this.baseUrl = baseUrl || process.env.PRIVOS_CHAT_URL || process.env.PRIVOS_API_BASE_URL || 'https://privos.roxane.one/api/v1'
+        this.baseUrl = baseUrl || process.env.PRIVOS_CHAT_URL || 'https://privos.roxane.one/api/v1'
 
         // Build headers - use x-api-key for Privos API authentication
         const headers: Record<string, string> = {
@@ -57,8 +51,7 @@ export class PrivosBoardService {
 
         this.axiosInstance = axios.create({
             baseURL: this.baseUrl,
-            headers,
-            timeout: 30000
+            headers
         })
 
         logger.info(`[PrivosBoardService]: Initialized with baseUrl: ${this.baseUrl}, hasApiKey: ${!!apiKey}`)
@@ -74,26 +67,82 @@ export class PrivosBoardService {
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
         try {
+            // SECURITY: Rate limiting check
+            // Use API key or IP address as rate limit key
+            const apiKeyHeader = this.axiosInstance.defaults.headers['x-api-key']
+            const rateLimitKey = (typeof apiKeyHeader === 'string' ? apiKeyHeader : '') || 'anonymous'
+            try {
+                checkRateLimit(rateLimitKey)
+            } catch (rateError: any) {
+                logger.warn(`[PrivosBoardService][${requestId}]: Rate limit exceeded: ${rateError.message}`)
+                return {
+                    success: false,
+                    error: 'Rate limit exceeded',
+                    message: rateError.message
+                }
+            }
+
+            // SECURITY: Validate and sanitize inputs
+            if (!request.name || request.name.trim().length === 0) {
+                return {
+                    success: false,
+                    error: 'Validation failed',
+                    message: 'Name is required'
+                }
+            }
+
+            if (!request.listId || request.listId.trim().length === 0) {
+                return {
+                    success: false,
+                    error: 'Validation failed',
+                    message: 'List ID is required'
+                }
+            }
+
+            if (!request.stageId || request.stageId.trim().length === 0) {
+                return {
+                    success: false,
+                    error: 'Validation failed',
+                    message: 'Stage ID is required'
+                }
+            }
+
             logger.info(`[PrivosBoardService][${requestId}]: Creating item...`)
             logger.info(`[PrivosBoardService][${requestId}]: Name: ${request.name}`)
             logger.info(`[PrivosBoardService][${requestId}]: List ID: ${request.listId}`)
             logger.info(`[PrivosBoardService][${requestId}]: Stage ID: ${request.stageId}`)
 
-            // Prepare request body
+            // Prepare request body with sanitized inputs
             const requestBody: any = {
-                name: request.name,
-                listId: request.listId,
-                stageId: request.stageId
+                name: sanitizeString(request.name, SECURITY_CONFIG.MAX_LENGTH.name),
+                listId: sanitizeString(request.listId, SECURITY_CONFIG.MAX_LENGTH.fieldId),
+                stageId: sanitizeString(request.stageId, SECURITY_CONFIG.MAX_LENGTH.fieldId)
             }
 
-            // Add description if provided
+            // Add description if provided (sanitized)
             if (request.description) {
-                requestBody.description = request.description
+                requestBody.description = sanitizeString(request.description, SECURITY_CONFIG.MAX_LENGTH.description)
             }
 
-            // Add custom fields if provided
+            // Add custom fields if provided (validate and sanitize)
             if (request.customFields && request.customFields.length > 0) {
-                requestBody.customFields = request.customFields
+                const sanitizedCustomFields = request.customFields
+                    .filter((field) => {
+                        // Validate field ID
+                        if (!field.fieldId || !validateFieldId(field.fieldId)) {
+                            logger.warn(`[PrivosBoardService][${requestId}]: Invalid field ID: ${field.fieldId}`)
+                            return false
+                        }
+                        return true
+                    })
+                    .map((field) => ({
+                        fieldId: sanitizeString(field.fieldId, SECURITY_CONFIG.MAX_LENGTH.fieldId),
+                        value: validateFieldValue(field.value)
+                    }))
+
+                if (sanitizedCustomFields.length > 0) {
+                    requestBody.customFields = sanitizedCustomFields
+                }
             }
 
             logger.info(`[PrivosBoardService][${requestId}]: Request body: ${JSON.stringify(requestBody)}`)
@@ -131,22 +180,46 @@ export class PrivosBoardService {
     }
 
     /**
-     * Map webhook payload to Privos item request
+     * Map webhook payload to Privos item request with security validation
      *
      * @param payload - Webhook payload from form
      * @returns CreateItemRequest
      */
     static mapWebhookPayloadToItemRequest(payload: any): CreateItemRequest {
-        // Extract user input data
+        // SECURITY: Validate payload is an object
+        if (!payload || typeof payload !== 'object') {
+            logger.warn('[PrivosBoardService]: Invalid payload type')
+            throw new Error('Invalid payload: must be an object')
+        }
+
+        // Extract user input data with safe defaults
         const name = payload.name || 'Unknown'
         const email = payload.email
         const phoneNumber = payload.phone_number || payload.phone
         const message = payload.message
         const source = payload.source || 'webhook'
 
-        // Extract routing information
+        // SECURITY: Validate required fields
         const listId = payload.listId
         const stageId = payload.stageId
+
+        if (!listId || typeof listId !== 'string') {
+            logger.warn('[PrivosBoardService]: Missing or invalid listId')
+            throw new Error('listId is required and must be a string')
+        }
+
+        if (!stageId || typeof stageId !== 'string') {
+            logger.warn('[PrivosBoardService]: Missing or invalid stageId')
+            throw new Error('stageId is required and must be a string')
+        }
+
+        // SECURITY: Sanitize email format
+        if (email && typeof email === 'string') {
+            if (!validateEmail(email)) {
+                logger.warn('[PrivosBoardService]: Invalid email format')
+                throw new Error('Invalid email format')
+            }
+        }
 
         // Build description from available fields
         const descriptionParts: string[] = []
@@ -173,44 +246,81 @@ export class PrivosBoardService {
         const customFields: CustomField[] = []
         const customFieldIds = payload.customFieldIds || {}
 
-        // Map email
-        if (email && customFieldIds.email) {
-            customFields.push({
-                fieldId: customFieldIds.email,
-                value: email
-            })
-        }
+        // SECURITY: Validate customFieldIds is an object
+        if (customFieldIds && typeof customFieldIds !== 'object') {
+            logger.warn('[PrivosBoardService]: Invalid customFieldIds type, ignoring')
+        } else {
+            // Standard field mappings (backward compatibility)
+            const standardMappings: Record<string, any> = {
+                email,
+                phone: phoneNumber,
+                name,
+                message,
+                source
+            }
 
-        // Map phone
-        if (phoneNumber && customFieldIds.phone) {
-            customFields.push({
-                fieldId: customFieldIds.phone,
-                value: phoneNumber
-            })
-        }
+            // Process standard fields first
+            for (const [fieldKey, fieldValue] of Object.entries(standardMappings)) {
+                if (fieldValue && customFieldIds[fieldKey]) {
+                    const fieldId = customFieldIds[fieldKey]
 
-        // Map name
-        if (name && customFieldIds.name) {
-            customFields.push({
-                fieldId: customFieldIds.name,
-                value: name
-            })
-        }
+                    // SECURITY: Validate field ID format
+                    if (validateFieldId(fieldId)) {
+                        customFields.push({
+                            fieldId,
+                            value: fieldValue
+                        })
+                    } else {
+                        logger.warn(`[PrivosBoardService]: Invalid field ID for ${fieldKey}: ${fieldId}`)
+                    }
+                }
+            }
 
-        // Map message
-        if (message && customFieldIds.message) {
-            customFields.push({
-                fieldId: customFieldIds.message,
-                value: message
-            })
-        }
+            const reservedKeys = [
+                'name',
+                'email',
+                'phone_number',
+                'phone',
+                'message',
+                'source',
+                'listId',
+                'stageId',
+                'roomId',
+                'privosApiKey',
+                'customFieldIds'
+            ]
 
-        // Map source
-        if (source && customFieldIds.source) {
-            customFields.push({
-                fieldId: customFieldIds.source,
-                value: source
-            })
+            // SECURITY: Limit number of custom fields to prevent abuse
+            let customFieldCount = 0
+            const MAX_CUSTOM_FIELDS = 50
+
+            for (const [key, value] of Object.entries(payload)) {
+                // Skip reserved keys
+                if (reservedKeys.includes(key)) {
+                    continue
+                }
+
+                // SECURITY: Prevent custom field overflow
+                if (customFieldCount >= MAX_CUSTOM_FIELDS) {
+                    logger.warn(`[PrivosBoardService]: Exceeded max custom fields (${MAX_CUSTOM_FIELDS}), skipping remaining`)
+                    break
+                }
+
+                // If this key has a custom field ID mapping AND has a value
+                if (customFieldIds[key] && value !== undefined && value !== null && value !== '') {
+                    const fieldId = customFieldIds[key]
+
+                    if (validateFieldId(fieldId)) {
+                        customFields.push({
+                            fieldId,
+                            value: value
+                        })
+                        customFieldCount++
+                    } else {
+                        logger.warn(`[PrivosBoardService]: Invalid field ID for ${key}: ${fieldId}`)
+                    }
+                }
+            }
         }
 
         return {
