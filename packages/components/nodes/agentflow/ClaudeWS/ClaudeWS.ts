@@ -594,70 +594,93 @@ class ClaudeWS_Agentflow implements INode {
         let resolvedRoomId = roomId
 
         if (resolvedRoomId) {
-            // User provided a roomId, verify it exists
+            // User provided a roomId — try to fetch it first; create only if 404
             console.log('[ClaudeWS Agentflow] Verifying project exists:', resolvedRoomId)
 
             try {
-                // Try to fetch the specific project
                 await axios.get(`${baseUrl}/api/projects/${resolvedRoomId}`, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey
-                    }
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
                 })
                 console.log('[ClaudeWS Agentflow] Project verified:', resolvedRoomId)
             } catch (verifyError: any) {
                 if (verifyError.response?.status === StatusCodes.NOT_FOUND) {
-                    console.log('[ClaudeWS Agentflow] Project not found in database, creating...')
-
                     if (!forceCreate) {
                         throw new Error(`Project "${resolvedRoomId}" not found. Enable "Force Create" to create it automatically.`)
                     }
 
-                    // Create project with the provided ID as name
-                    const projectPayload = {
-                        name: roomName || resolvedRoomId,
-                        path: resolvedRoomId
-                    }
-
-                    const projectResponse = await axios.post(`${baseUrl}/api/projects`, projectPayload, {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': apiKey
+                    console.log('[ClaudeWS Agentflow] Project not found, creating with name:', roomName || resolvedRoomId)
+                    try {
+                        const projectPayload = { name: roomName || resolvedRoomId }
+                        const projectResponse = await axios.post(`${baseUrl}/api/projects`, projectPayload, {
+                            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+                        })
+                        resolvedRoomId = projectResponse.data.id
+                        console.log('[ClaudeWS Agentflow] Project created:', resolvedRoomId)
+                    } catch (createError: any) {
+                        if (createError.response?.status === 409) {
+                            // Project already exists (race condition / duplicate name) — fetch it
+                            console.log('[ClaudeWS Agentflow] 409 on create — fetching existing project list...')
+                            const listResp = await axios.get(`${baseUrl}/api/projects`, {
+                                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+                            })
+                            const target = listResp.data?.find(
+                                (p: any) => p.name === (roomName || resolvedRoomId) || p.id === resolvedRoomId
+                            )
+                            if (!target) throw new Error('Project conflict but could not find existing project')
+                            resolvedRoomId = target.id
+                            console.log('[ClaudeWS Agentflow] Resolved existing project after 409:', resolvedRoomId)
+                        } else {
+                            throw createError
                         }
-                    })
-
-                    resolvedRoomId = projectResponse.data.id
-                    console.log('[ClaudeWS Agentflow] Project created successfully:', {
-                        id: resolvedRoomId,
-                        name: projectResponse.data.name,
-                        path: projectResponse.data.path
-                    })
+                    }
                 } else {
                     throw new Error(`Failed to verify project: ${verifyError.message}`)
                 }
             }
         } else if (!resolvedRoomId && roomName) {
-            console.log('[ClaudeWS Agentflow] Fetching projects to check if exists:', roomName)
+            // Only room name provided — find existing project or create new one
+            console.log('[ClaudeWS Agentflow] Looking up project by name:', roomName)
 
             const projectsResponse = await axios.get(`${baseUrl}/api/projects`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+            })
+
+            const existingProject = projectsResponse.data?.find((p: any) => p.name === roomName)
+            if (existingProject) {
+                resolvedRoomId = existingProject.id
+                console.log('[ClaudeWS Agentflow] ✅ Found existing project by name:', {
+                    name: roomName,
+                    id: resolvedRoomId
+                })
+            } else if (forceCreate !== false) {
+                // Create new project using the room name
+                console.log('[ClaudeWS Agentflow] Project not found, creating with name:', roomName)
+                try {
+                    const projectResponse = await axios.post(
+                        `${baseUrl}/api/projects`,
+                        { name: roomName },
+                        { headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey } }
+                    )
+                    resolvedRoomId = projectResponse.data.id
+                    console.log('[ClaudeWS Agentflow] Project created:', resolvedRoomId)
+                } catch (createError: any) {
+                    if (createError.response?.status === 409) {
+                        // Already exists — fetch again
+                        console.log('[ClaudeWS Agentflow] 409 on create — refetching project list...')
+                        const retryResp = await axios.get(`${baseUrl}/api/projects`, {
+                            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+                        })
+                        const found = retryResp.data?.find((p: any) => p.name === roomName)
+                        if (!found) throw new Error(`409 conflict but project "${roomName}" still not found`)
+                        resolvedRoomId = found.id
+                        console.log('[ClaudeWS Agentflow] Resolved existing project after 409:', resolvedRoomId)
+                    } else {
+                        throw createError
+                    }
                 }
-            })
-
-            const project = projectsResponse.data?.find((p: any) => p.name === roomName)
-            if (!project) {
-                throw new Error(`Project with name "${roomName}" not found. Please create it first in ClaudeWS Agentflow.`)
+            } else {
+                throw new Error(`Project with name "${roomName}" not found. Enable "Force Create" to create it automatically.`)
             }
-
-            resolvedRoomId = project.id
-            console.log('[ClaudeWS Agentflow] ✅ Found existing project:', {
-                name: roomName,
-                id: resolvedRoomId,
-                path: project.path
-            })
         }
 
         console.log('[ClaudeWS Agentflow] Final project/room values:', {
@@ -673,16 +696,18 @@ class ClaudeWS_Agentflow implements INode {
         if (!taskId) {
             if (taskName) {
                 // Try to find existing task by name in the project
-                const tasksResponse = await axios.get(`${baseUrl}/api/tasks?projectId=${resolvedRoomId}`, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey
+                try {
+                    const tasksResponse = await axios.get(`${baseUrl}/api/tasks?projectId=${resolvedRoomId}`, {
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                        timeout: 10000
+                    })
+                    const existingTask = tasksResponse.data?.find((t: any) => t.title === taskName)
+                    if (existingTask) {
+                        taskId = existingTask.id
+                        console.log('[ClaudeWS Agentflow] Found existing task:', taskId)
                     }
-                })
-                const existingTask = tasksResponse.data?.find((t: any) => t.title === taskName)
-                if (existingTask) {
-                    taskId = existingTask.id
-                    console.log('[ClaudeWS Agentflow] Found existing task:', taskId)
+                } catch (fetchTaskError: any) {
+                    console.warn('[ClaudeWS Agentflow] Could not fetch tasks, will try creating:', fetchTaskError.message)
                 }
             }
 
@@ -690,21 +715,35 @@ class ClaudeWS_Agentflow implements INode {
             if (!taskId) {
                 console.log('[ClaudeWS Agentflow] Creating new task...')
                 const taskPayload: ICommonObject = {
-                    projectId: resolvedRoomId, // Use projectId instead of roomId
-                    title: taskName || prompt.substring(0, 100),
-                    description: prompt.substring(0, 500),
+                    projectId: resolvedRoomId,
+                    title: taskName || prompt,
+                    description: null,
                     status: 'todo'
                 }
 
-                const taskResponse = await axios.post(`${baseUrl}/api/tasks`, taskPayload, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey
+                try {
+                    const taskResponse = await axios.post(`${baseUrl}/api/tasks`, taskPayload, {
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                        timeout: 30000
+                    })
+                    taskId = taskResponse.data.id
+                    console.log('[ClaudeWS Agentflow] Task created:', taskId)
+                } catch (createTaskError: any) {
+                    if (createTaskError.response?.status === 409 && taskName) {
+                        // Task with same title already exists — fetch it
+                        console.log('[ClaudeWS Agentflow] 409 on task create — fetching task list...')
+                        const retryTasksResp = await axios.get(`${baseUrl}/api/tasks?projectId=${resolvedRoomId}`, {
+                            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                            timeout: 10000
+                        })
+                        const foundTask = retryTasksResp.data?.find((t: any) => t.title === taskName)
+                        if (!foundTask) throw new Error(`409 conflict but task "${taskName}" still not found`)
+                        taskId = foundTask.id
+                        console.log('[ClaudeWS Agentflow] Resolved existing task after 409:', taskId)
+                    } else {
+                        throw createTaskError
                     }
-                })
-
-                taskId = taskResponse.data.id
-                console.log('[ClaudeWS Agentflow] Task created:', taskId)
+                }
             }
         }
 
