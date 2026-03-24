@@ -24,7 +24,7 @@ import publicWebhookRouter from './routes/dynamic-webhook/public'
 import agentflowCreatorRouter from './routes/agentflow-creator'
 import errorHandlerMiddleware from './middlewares/errors'
 import { WHITELIST_URLS } from './utils/constants'
-import { initializeJwtCookieMiddleware, verifyToken } from './enterprise/middleware/passport'
+import { authenticateJwtOrSession, initializeJwtCookieMiddleware } from './enterprise/middleware/passport'
 import { IdentityManager } from './IdentityManager'
 import { verifyExternalAuth } from './middlewares/externalAuth'
 import { extractRoomDataMiddleware } from './middlewares/extractRoomData'
@@ -290,16 +290,84 @@ export class App {
                     const isWhitelisted = whitelistURLs.some((url) => req.path.startsWith(url))
                     if (isWhitelisted) {
                         next()
-                    } else if (req.headers.authorization && process.env.EXTERNAL_AUTH_PROFILE_URL) {
-                        // External authentication - validate token via profile URL
-                        verifyExternalAuth(req, res, next)
-                    } else if (req.headers['x-request-from'] === 'internal') {
-                        verifyToken(req, res, next)
-                    } else if (req.user) {
-                        // Session-based authentication (JWT cookie)
-                        // req.user is set by passport JWT cookie middleware
-                        next()
                     } else {
+                        const jwtResult = await authenticateJwtOrSession(req)
+                        if (jwtResult.expired) {
+                            if (req.cookies && req.cookies.refreshToken) {
+                                return res.status(401).json({ message: 'Token Expired', retry: true })
+                            }
+                            return res.status(401).json({ message: 'Invalid or Missing token' })
+                        }
+
+                        if (jwtResult.authenticated || req.user) {
+                            // Native Flowise session / JWT authentication
+                            next()
+                            return
+                        }
+
+                        // Flowise API key authentication
+                        const { isValid, workspaceId: apiKeyWorkSpaceId } = await validateAPIKey(req)
+                        if (isValid) {
+                            // Only check license validity for non-open-source platforms
+                            if (this.identityManager.getPlatformType() !== Platform.OPEN_SOURCE) {
+                                if (!this.identityManager.isLicenseValid()) {
+                                    return res.status(401).json({ error: 'Unauthorized Access' })
+                                }
+                            }
+
+                            // Find workspace
+                            const workspace = await this.AppDataSource.getRepository(Workspace).findOne({
+                                where: { id: apiKeyWorkSpaceId }
+                            })
+                            if (!workspace) {
+                                return res.status(401).json({ error: 'Unauthorized Access' })
+                            }
+
+                            // Find owner role
+                            const ownerRole = await this.AppDataSource.getRepository(Role).findOne({
+                                where: { name: GeneralRole.OWNER, organizationId: IsNull() }
+                            })
+                            if (!ownerRole) {
+                                return res.status(401).json({ error: 'Unauthorized Access' })
+                            }
+
+                            // Find organization
+                            const activeOrganizationId = workspace.organizationId as string
+                            const org = await this.AppDataSource.getRepository(Organization).findOne({
+                                where: { id: activeOrganizationId }
+                            })
+                            if (!org) {
+                                return res.status(401).json({ error: 'Unauthorized Access' })
+                            }
+                            const subscriptionId = org.subscriptionId as string
+                            const customerId = org.customerId as string
+                            const features = await this.identityManager.getFeaturesByPlan(subscriptionId)
+                            const productId = await this.identityManager.getProductIdFromSubscription(subscriptionId)
+
+                            // @ts-ignore
+                            req.user = {
+                                permissions: [...JSON.parse(ownerRole.permissions)],
+                                features,
+                                activeOrganizationId: activeOrganizationId,
+                                activeOrganizationSubscriptionId: subscriptionId,
+                                activeOrganizationCustomerId: customerId,
+                                activeOrganizationProductId: productId,
+                                isOrganizationAdmin: true,
+                                activeWorkspaceId: apiKeyWorkSpaceId!,
+                                activeWorkspace: workspace.name,
+                                isApiKeyValidated: true
+                            }
+
+                            next()
+                            return
+                        }
+
+                        if (req.headers.authorization && process.env.EXTERNAL_AUTH_PROFILE_URL) {
+                            // External authentication - validate token via profile URL
+                            verifyExternalAuth(req, res, next)
+                            return
+                        }
+
                         // Only check license validity for non-open-source platforms
                         if (this.identityManager.getPlatformType() !== Platform.OPEN_SOURCE) {
                             if (!this.identityManager.isLicenseValid()) {
@@ -307,54 +375,7 @@ export class App {
                             }
                         }
 
-                        const { isValid, workspaceId: apiKeyWorkSpaceId } = await validateAPIKey(req)
-                        if (!isValid) {
-                            return res.status(401).json({ error: 'Unauthorized Access' })
-                        }
-
-                        // Find workspace
-                        const workspace = await this.AppDataSource.getRepository(Workspace).findOne({
-                            where: { id: apiKeyWorkSpaceId }
-                        })
-                        if (!workspace) {
-                            return res.status(401).json({ error: 'Unauthorized Access' })
-                        }
-
-                        // Find owner role
-                        const ownerRole = await this.AppDataSource.getRepository(Role).findOne({
-                            where: { name: GeneralRole.OWNER, organizationId: IsNull() }
-                        })
-                        if (!ownerRole) {
-                            return res.status(401).json({ error: 'Unauthorized Access' })
-                        }
-
-                        // Find organization
-                        const activeOrganizationId = workspace.organizationId as string
-                        const org = await this.AppDataSource.getRepository(Organization).findOne({
-                            where: { id: activeOrganizationId }
-                        })
-                        if (!org) {
-                            return res.status(401).json({ error: 'Unauthorized Access' })
-                        }
-                        const subscriptionId = org.subscriptionId as string
-                        const customerId = org.customerId as string
-                        const features = await this.identityManager.getFeaturesByPlan(subscriptionId)
-                        const productId = await this.identityManager.getProductIdFromSubscription(subscriptionId)
-
-                        // @ts-ignore
-                        req.user = {
-                            permissions: [...JSON.parse(ownerRole.permissions)],
-                            features,
-                            activeOrganizationId: activeOrganizationId,
-                            activeOrganizationSubscriptionId: subscriptionId,
-                            activeOrganizationCustomerId: customerId,
-                            activeOrganizationProductId: productId,
-                            isOrganizationAdmin: true,
-                            activeWorkspaceId: apiKeyWorkSpaceId!,
-                            activeWorkspace: workspace.name,
-                            isApiKeyValidated: true
-                        }
-                        next()
+                        return res.status(401).json({ error: 'Unauthorized Access' })
                     }
                 } else {
                     return res.status(401).json({ error: 'Unauthorized Access' })

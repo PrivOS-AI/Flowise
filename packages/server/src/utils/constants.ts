@@ -154,7 +154,6 @@ export const EXTERNAL_SSO_DEFAULT_PERMISSIONS = [
     'documentStores:add-loader',
     'executions:view',
     'executions:delete',
-    'apikeys:view',
     'templates:marketplace',
     'templates:custom'
 ]

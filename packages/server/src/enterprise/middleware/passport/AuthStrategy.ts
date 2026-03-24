@@ -11,6 +11,10 @@ const _cookieExtractor = (req: any) => {
         jwt = req.cookies['token']
     }
 
+    if (!jwt && req?.headers?.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        jwt = req.headers.authorization.substring(7)
+    }
+
     return jwt
 }
 
