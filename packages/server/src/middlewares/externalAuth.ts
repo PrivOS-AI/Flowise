@@ -36,6 +36,8 @@ interface ExternalUserProfile {
     [key: string]: any
 }
 
+const PRIVOS_ADMIN_ROLES = ['admin', 'privos-studio-manager']
+
 /**
  * Default permission mapping based on user roles
  * Uses shared constant to ensure consistency with external-sso route
@@ -121,6 +123,8 @@ export const verifyExternalAuth = async (req: Request, res: Response, next: Next
                 ? userData.emails[0].address
                 : userData.email || userData.username || `${userId}@external.user`
         const name = userData.name || userData.displayName || userData.username || email
+        const roles = userData.roles || []
+        const hasAdminAccess = roles.some((role: string) => PRIVOS_ADMIN_ROLES.includes(role))
 
         // Validate required fields
         if (!userId || !email) {
@@ -141,7 +145,7 @@ export const verifyExternalAuth = async (req: Request, res: Response, next: Next
             activeOrganizationSubscriptionId: '',
             activeOrganizationCustomerId: '',
             activeOrganizationProductId: '',
-            isOrganizationAdmin: false,
+            isOrganizationAdmin: hasAdminAccess,
             activeWorkspaceId: 'external-workspace',
             activeWorkspace: 'external-workspace',
             assignedWorkspaces: [],

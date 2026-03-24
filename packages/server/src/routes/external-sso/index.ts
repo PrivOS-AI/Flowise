@@ -8,13 +8,14 @@ import { encryptToken } from '../../enterprise/utils/tempTokenUtils'
 import privosChatService from '../../services/privos-chat'
 
 const router = express.Router()
+const PRIVOS_ADMIN_ROLES = ['admin', 'privos-studio-manager']
 
 /**
  * SSO Endpoint for External Authentication
  *
  * Usage:
- *   Redirect from external service (Rocket.Chat):
- *   https://flowise.example.com/api/v1/external-sso?token=AUTH_TOKEN&userId=USER_ID&roomId=ROOM_ID&redirect=/chatflows
+ *   Redirect from external service (PrivOS Chat):
+ *   /api/v1/external-sso?token=AUTH_TOKEN&userId=USER_ID&roomId=ROOM_ID&redirect=/chatflows
  *
  * Flow:
  *   1. Extract token, userId, and roomId (optional) from query params
@@ -116,9 +117,11 @@ router.get('/', async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Invalid user data' })
         }
 
+        const hasAdminAccess = roles.some((role: string) => PRIVOS_ADMIN_ROLES.includes(role))
+
         // Map roles to permissions
         let permissions: string[] = ['chatflows:view']
-        if (roles.includes('admin')) {
+        if (hasAdminAccess) {
             permissions = [
                 'chatflows:view',
                 'chatflows:create',
@@ -129,7 +132,7 @@ router.get('/', async (req: Request, res: Response) => {
                 'credentials:update',
                 'credentials:delete'
             ]
-            logger.info('[ExternalSSO]: User has admin role - granted full permissions')
+            logger.info('[ExternalSSO]: User has elevated admin-equivalent role - granted full permissions')
         } else if (roles.includes('bot')) {
             permissions = ['chatflows:view', 'chatflows:create', 'credentials:view']
             logger.info('[ExternalSSO]: User has bot role - granted create permissions')
@@ -211,7 +214,7 @@ router.get('/', async (req: Request, res: Response) => {
             email,
             name,
             status: 'ACTIVE',
-            role: roles.includes('admin') ? 'ADMIN' : 'USER',
+            role: hasAdminAccess ? 'ADMIN' : 'USER',
             isSSO: true,
             activeOrganizationId: 'external-org',
             activeOrganizationSubscriptionId: '',
@@ -220,7 +223,7 @@ router.get('/', async (req: Request, res: Response) => {
             activeWorkspaceId: 'external-workspace',
             activeWorkspace: 'external-workspace',
             assignedWorkspaces: [],
-            isOrganizationAdmin: roles.includes('admin'),
+            isOrganizationAdmin: hasAdminAccess,
             permissions,
             features: {},
             token: authToken,
@@ -263,7 +266,7 @@ router.get('/', async (req: Request, res: Response) => {
             activeOrganizationSubscriptionId: '',
             activeOrganizationCustomerId: '',
             activeOrganizationProductId: '',
-            isOrganizationAdmin: roles.includes('admin'),
+            isOrganizationAdmin: hasAdminAccess,
             activeWorkspaceId: workspaceId,
             activeWorkspace: workspaceId,
             assignedWorkspaces: [],
