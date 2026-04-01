@@ -482,6 +482,83 @@ export class RedisEventPublisher implements IServerSideEventStreamer {
         }
     }
 
+    /**
+     * Stream ClaudeWS tool_use event
+     */
+    streamToolUseEvent(
+        chatId: string,
+        data: {
+            toolId: string
+            toolName: string
+            input: any
+            attemptId?: string
+        }
+    ): void {
+        try {
+            this.redisPublisher.publish(
+                chatId,
+                JSON.stringify({
+                    chatId,
+                    eventType: 'tool_use',
+                    data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming tool_use event:', error)
+        }
+    }
+
+    /**
+     * Stream ClaudeWS tool_result event
+     */
+    streamToolResultEvent(
+        chatId: string,
+        data: {
+            toolUseId: string
+            result: any
+            isError?: boolean
+            attemptId?: string
+        }
+    ): void {
+        try {
+            this.redisPublisher.publish(
+                chatId,
+                JSON.stringify({
+                    chatId,
+                    eventType: 'tool_result',
+                    data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming tool_result event:', error)
+        }
+    }
+
+    /**
+     * Stream generic ClaudeWS event (catch-all)
+     */
+    streamClaudeWSEvent(
+        chatId: string,
+        data: {
+            eventType: string
+            attemptId?: string
+            payload: any
+        }
+    ): void {
+        try {
+            this.redisPublisher.publish(
+                chatId,
+                JSON.stringify({
+                    chatId,
+                    eventType: 'claudews',
+                    data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming ClaudeWS event:', error)
+        }
+    }
+
     async disconnect() {
         if (this.redisPublisher) {
             await this.redisPublisher.quit()

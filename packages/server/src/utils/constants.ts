@@ -45,6 +45,7 @@ export const WHITELIST_URLS = [
     '/api/v1/text-to-speech/generate',
     '/api/v1/text-to-speech/abort',
     '/api/v1/external-sso',
+    '/api/v1/public/webhooks',
     AzureSSO.LOGIN_URI,
     AzureSSO.LOGOUT_URI,
     AzureSSO.CALLBACK_URI,
@@ -153,7 +154,6 @@ export const EXTERNAL_SSO_DEFAULT_PERMISSIONS = [
     'documentStores:add-loader',
     'executions:view',
     'executions:delete',
-    'apikeys:view',
     'templates:marketplace',
     'templates:custom'
 ]

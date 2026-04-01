@@ -332,6 +332,74 @@ export class SSEStreamer implements IServerSideEventStreamer {
     }
 
     /**
+     * Stream ClaudeWS tool_use event
+     * Called when a tool execution starts
+     */
+    streamToolUseEvent(
+        chatId: string,
+        data: {
+            toolId: string
+            toolName: string
+            input: any
+            attemptId?: string
+        }
+    ): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'tool_use',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
+
+    /**
+     * Stream ClaudeWS tool_result event
+     * Called when a tool execution completes
+     */
+    streamToolResultEvent(
+        chatId: string,
+        data: {
+            toolUseId: string
+            result: any
+            isError?: boolean
+            attemptId?: string
+        }
+    ): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'tool_result',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
+
+    /**
+     * Stream generic ClaudeWS event (catch-all)
+     * Called for any ClaudeWS event that doesn't have a specific handler
+     */
+    streamClaudeWSEvent(
+        chatId: string,
+        data: {
+            eventType: string
+            attemptId?: string
+            payload: any
+        }
+    ): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'claudews',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
+
+    /**
      * Start heartbeat to keep SSE connection alive
      * Sends a heartbeat comment every intervalMs (default 20 seconds)
      * This prevents Cloudflare and other proxies from timing out the connection

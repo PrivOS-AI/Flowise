@@ -8,7 +8,7 @@ import claudewsServerService from '../claudews-servers'
 /**
  * List all plugins from ClaudeWS server with optional type filter
  */
-const listPlugins = async (serverId: string, type?: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any[]> => {
+const listPlugins = async (serverId: string, type?: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any[]> => {
     try {
         console.log('[ClaudeWS] listPlugins called with serverId:', serverId, 'type:', type)
 
@@ -95,7 +95,7 @@ const listPlugins = async (serverId: string, type?: string, userId?: string, isR
 /**
  * Get specific plugin details from ClaudeWS server
  */
-const getPlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const getPlugin = async (serverId: string, pluginId: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
@@ -111,7 +111,7 @@ const getPlugin = async (serverId: string, pluginId: string, userId?: string, is
         return response.data
     } catch (error: any) {
         if (error instanceof InternalFlowiseError) throw error
-        if (error.response?.status === 404) {
+        if (error.response?.status === StatusCodes.NOT_FOUND) {
             throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Plugin ${pluginId} not found`)
         }
         throw new InternalFlowiseError(
@@ -127,7 +127,7 @@ const getPlugin = async (serverId: string, pluginId: string, userId?: string, is
 const discoverPlugins = async (
     serverId: string,
     paths: string[],
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -159,7 +159,7 @@ const discoverPlugins = async (
 /**
  * Upload plugin files to ClaudeWS server
  */
-const uploadPlugin = async (serverId: string, files: any[], userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const uploadPlugin = async (serverId: string, files: any[], _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         console.log('[ClaudeWS] uploadPlugin service called with', files.length, 'files')
 
@@ -210,12 +210,24 @@ const uploadPlugin = async (serverId: string, files: any[], userId?: string, isR
                 console.log('[ClaudeWS] Downloading file from S3/MinIO:', file.location)
                 try {
                     const axios = require('axios')
-                    const fileResponse = await axios.get(file.location, { responseType: 'arraybuffer' })
+                    const fileResponse = await axios.get(file.location, {
+                        responseType: 'arraybuffer',
+                        validateStatus: (status: number) => status < 500
+                    })
+
+                    if (fileResponse.status !== 200) {
+                        throw new Error(`S3/MinIO returned status ${fileResponse.status}`)
+                    }
+
                     console.log('[ClaudeWS] Downloaded file size:', fileResponse.data.byteLength, 'bytes')
                     formData.append('file', Buffer.from(fileResponse.data), file.originalname)
                 } catch (downloadError: any) {
-                    console.error('[ClaudeWS] Failed to download file from S3/MinIO:', downloadError.message)
-                    throw new Error(`Failed to download file from storage: ${downloadError.message}`)
+                    console.error('[ClaudeWS] Failed to download file from S3/MinIO:', {
+                        message: downloadError.message,
+                        code: downloadError.code,
+                        status: downloadError.response?.status
+                    })
+                    throw new Error(`Failed to download file from storage: ${downloadError.response?.status || downloadError.message}`)
                 }
             } else {
                 console.error('[ClaudeWS] No valid file source found for:', file.originalname)
@@ -254,7 +266,7 @@ const uploadPlugin = async (serverId: string, files: any[], userId?: string, isR
 const confirmUpload = async (
     serverId: string,
     sessionId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -298,16 +310,25 @@ const confirmUpload = async (
 }
 
 /**
- * Import plugin from external source (URL, git, etc)
+ * Import plugin from local file system to ClaudeWS server
+ * This imports skills/commands/agents from local paths into the Agent Factory
  */
 const importPlugin = async (
     serverId: string,
-    data: { source: string; type: string; config?: any },
-    userId?: string,
+    data: {
+        type: 'skill' | 'command' | 'agent'
+        name: string
+        description?: string
+        sourcePath: string
+        metadata?: Record<string, unknown>
+    },
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
     try {
+        console.log('[ClaudeWS] importPlugin called with:', { type: data.type, name: data.name, sourcePath: data.sourcePath })
+
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
 
@@ -317,14 +338,29 @@ const importPlugin = async (
         }
 
         const client = await claudewsServerService.createClient(server)
-        const response = await client.post('/api/agent-factory/plugins/import', data)
+
+        // Use the correct endpoint: /api/agent-factory/import (not /api/agent-factory/plugins/import)
+        console.log('[ClaudeWS] Calling POST /api/agent-factory/import')
+        const response = await client.post('/api/agent-factory/import', data)
+        console.log('[ClaudeWS] Import response:', response.status, response.data)
 
         // Sync plugin cache after import
         await syncPluginCache(serverId)
 
         return response.data
     } catch (error: any) {
+        console.error('[ClaudeWS] importPlugin error:', error.message)
+
         if (error instanceof InternalFlowiseError) throw error
+
+        // Handle specific error cases
+        if (error.response?.status === 404) {
+            throw new InternalFlowiseError(StatusCodes.NOT_FOUND, `Source path not found: ${data.sourcePath}`)
+        }
+        if (error.response?.status === 409) {
+            throw new InternalFlowiseError(StatusCodes.CONFLICT, `Plugin with name '${data.name}' already exists`)
+        }
+
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
             `Error: claudewsPluginService.importPlugin - ${getErrorMessage(error)}`
@@ -335,7 +371,7 @@ const importPlugin = async (
 /**
  * Delete plugin from ClaudeWS server
  */
-const deletePlugin = async (serverId: string, pluginId: string, userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
+const deletePlugin = async (serverId: string, pluginId: string, _userId?: string, isRootAdmin?: boolean, roomId?: string): Promise<any> => {
     try {
         // Check server access
         const server = await claudewsServerService.getServerById(serverId)
@@ -370,7 +406,7 @@ const deletePlugin = async (serverId: string, pluginId: string, userId?: string,
 const listPluginFiles = async (
     serverId: string,
     pluginId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any[]> => {
@@ -403,7 +439,7 @@ const getPluginFileContent = async (
     serverId: string,
     pluginId: string,
     filePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -436,7 +472,7 @@ const getPluginFileContent = async (
 const getPluginDependencies = async (
     serverId: string,
     pluginId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -469,7 +505,7 @@ const installDependency = async (
     serverId: string,
     pluginId: string,
     depId: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -501,7 +537,7 @@ const installDependency = async (
 const getFileContent = async (
     serverId: string,
     filePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -534,7 +570,7 @@ const getDependenciesFromSource = async (
     serverId: string,
     sourcePath: string,
     type: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {
@@ -566,7 +602,7 @@ const getDependenciesFromSource = async (
 const listFilesFromSource = async (
     serverId: string,
     sourcePath: string,
-    userId?: string,
+    _userId?: string,
     isRootAdmin?: boolean,
     roomId?: string
 ): Promise<any> => {

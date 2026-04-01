@@ -6,6 +6,7 @@ import { StatusCodes } from 'http-status-codes'
 import jwt, { JwtPayload, sign } from 'jsonwebtoken'
 import passport from 'passport'
 import { VerifiedCallback } from 'passport-jwt'
+import { QueryRunner } from 'typeorm'
 import { InternalFlowiseError } from '../../../errors/internalFlowiseError'
 import { IdentityManager } from '../../../IdentityManager'
 import { Platform } from '../../../Interface'
@@ -18,6 +19,7 @@ import { AccountService } from '../../services/account.service'
 import { OrganizationUserErrorMessage, OrganizationUserService } from '../../services/organization-user.service'
 import { OrganizationService } from '../../services/organization.service'
 import { RoleErrorMessage, RoleService } from '../../services/role.service'
+import { UserService } from '../../services/user.service'
 import { WorkspaceUserService } from '../../services/workspace-user.service'
 import { decryptToken, encryptToken, generateSafeCopy } from '../../utils/tempTokenUtils'
 import { getAuthStrategy } from './AuthStrategy'
@@ -47,6 +49,126 @@ const jwtOptions = {
     secretOrKey: jwtAuthTokenSecret,
     audience: jwtAudience,
     issuer: jwtIssuer
+}
+
+const extractTokenFromRequest = (req: Request) => {
+    const cookieToken = req.cookies?.token
+    if (cookieToken) return cookieToken
+
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7).trim()
+    }
+
+    return null
+}
+
+const isLikelyJwt = (token: string) => token.split('.').length === 3
+
+const buildLoggedInUserFromWorkspace = async (userId: string, workspaceId: string): Promise<LoggedInUser | null> => {
+    let queryRunner: QueryRunner | undefined
+
+    try {
+        queryRunner = getRunningExpressApp().AppDataSource.createQueryRunner()
+        await queryRunner.connect()
+
+        const userService = new UserService()
+        const workspaceUserService = new WorkspaceUserService()
+        const organizationUserService = new OrganizationUserService()
+        const organizationService = new OrganizationService()
+        const roleService = new RoleService()
+        const identityManager = getRunningExpressApp().identityManager
+
+        const user = await userService.readUserById(userId, queryRunner)
+        if (!user) return null
+
+        const { workspaceUser } = await workspaceUserService.readWorkspaceUserByWorkspaceIdUserId(workspaceId, userId, queryRunner)
+        if (!workspaceUser) return null
+
+        const { organizationUser } = await organizationUserService.readOrganizationUserByWorkspaceIdUserId(workspaceId, userId, queryRunner)
+        if (!organizationUser) return null
+
+        const workspaceUsers = await workspaceUserService.readWorkspaceUserByUserId(userId, queryRunner)
+        const assignedWorkspaces: IAssignedWorkspace[] = workspaceUsers.map((wu) => ({
+            id: wu.workspace.id,
+            name: wu.workspace.name,
+            role: wu.role?.name || '',
+            organizationId: wu.workspace.organizationId || ''
+        }))
+
+        const ownerRole = await roleService.readGeneralRoleByName(GeneralRole.OWNER, queryRunner)
+        const role = await roleService.readRoleById(workspaceUser.roleId, queryRunner)
+        if (!role) throw new InternalFlowiseError(StatusCodes.NOT_FOUND, RoleErrorMessage.ROLE_NOT_FOUND)
+
+        const organization = await organizationService.readOrganizationById(organizationUser.organizationId, queryRunner)
+        if (!organization) return null
+
+        const subscriptionId = organization.subscriptionId as string
+        const customerId = organization.customerId as string
+        const features = await identityManager.getFeaturesByPlan(subscriptionId)
+        const productId = await identityManager.getProductIdFromSubscription(subscriptionId)
+
+        return {
+            id: workspaceUser.userId,
+            email: user.email || '',
+            name: user.name || '',
+            roleId: workspaceUser.roleId,
+            activeOrganizationId: organization.id,
+            activeOrganizationSubscriptionId: subscriptionId,
+            activeOrganizationCustomerId: customerId,
+            activeOrganizationProductId: productId,
+            isOrganizationAdmin: workspaceUser.roleId === ownerRole?.id,
+            activeWorkspaceId: workspaceUser.workspaceId,
+            activeWorkspace: workspaceUser.workspace.name,
+            assignedWorkspaces,
+            isApiKeyValidated: true,
+            permissions: [...JSON.parse(role.permissions)],
+            features
+        }
+    } finally {
+        if (queryRunner) await queryRunner.release()
+    }
+}
+
+export const authenticateJwtOrSession = async (req: Request): Promise<{ authenticated: boolean; expired: boolean }> => {
+    if (req.user) {
+        return { authenticated: true, expired: false }
+    }
+
+    const token = extractTokenFromRequest(req)
+    if (!token || !isLikelyJwt(token)) {
+        return { authenticated: false, expired: false }
+    }
+
+    try {
+        const payload = jwt.verify(token, jwtAuthTokenSecret, {
+            audience: jwtAudience,
+            issuer: jwtIssuer
+        }) as JwtPayload & { meta?: string }
+
+        const meta = typeof payload.meta === 'string' ? decryptToken(payload.meta) : null
+        if (!meta) {
+            return { authenticated: false, expired: false }
+        }
+
+        const ids = meta.split(':')
+        if (ids.length !== 2) {
+            return { authenticated: false, expired: false }
+        }
+
+        const user = await buildLoggedInUserFromWorkspace(ids[0], ids[1])
+        if (!user) {
+            return { authenticated: false, expired: false }
+        }
+
+        req.user = user
+        return { authenticated: true, expired: false }
+    } catch (error: any) {
+        if (error?.name === 'TokenExpiredError') {
+            return { authenticated: false, expired: true }
+        }
+        return { authenticated: false, expired: false }
+    }
 }
 
 const _initializePassportMiddleware = async (app: express.Application) => {

@@ -68,11 +68,32 @@ class SendMessageToBot_Privos implements INode {
                 show: { action: ['send', 'edit'] }
             },
             {
+                label: 'Reply Message ID',
+                name: 'replyToMessageId',
+                type: 'string',
+                rows: 2,
+                description: 'ID of the message to reply to',
+                placeholder: 'Enter reply message ID...',
+                acceptVariable: true,
+                show: { action: ['send', 'edit'] }
+            },
+            {
+                label: 'Metadata',
+                name: 'metadata',
+                type: 'string',
+                rows: 2,
+                description: 'Additional metadata for the message',
+                placeholder: 'Enter metadata...',
+                acceptVariable: true,
+                show: { action: ['send', 'edit'] }
+            },
+            {
                 label: 'Files',
                 name: 'files',
                 type: 'string',
                 rows: 6,
-                description: 'JSON array of files. Format: [{"url":"https://...", "caption":"text1"}, {"url":"https://...", "caption":"text2"}]',
+                description:
+                    'JSON array of files. Format: [{"url":"https://...", "caption":"text1"}, {"url":"https://...", "caption":"text2"}]',
                 placeholder: '[{"url":"https://example.com/image.jpg","caption":"My Image"}]',
                 acceptVariable: true,
                 optional: true,
@@ -92,6 +113,8 @@ class SendMessageToBot_Privos implements INode {
         const messageType = nodeData.inputs?.messageType as MessageType
         const text = nodeData.inputs?.text as string
         const filesJson = nodeData.inputs?.files as string
+        const replyToMessageId = nodeData.inputs?.replyToMessageId as string
+        const metadata = nodeData.inputs?.metadata as string
 
         const finalRoomId = (nodeData.inputs?.roomId as string) || roomId
 
@@ -125,7 +148,8 @@ class SendMessageToBot_Privos implements INode {
             // ===== BUILD FLOW RESULT =====
             const flowResult: FlowResult = {
                 action,
-                messageId
+                messageId: replyToMessageId || messageId,
+                ...((metadata && { metadata: JSON.parse(metadata) }) || {})
             }
 
             if (action === 'edit') flowResult.text = text
@@ -137,10 +161,12 @@ class SendMessageToBot_Privos implements INode {
                     const unescapedJson = filesJson.replace(/\\/g, '')
                     const parsed = JSON.parse(unescapedJson)
                     if (!Array.isArray(parsed)) throw new Error('Files must be a JSON array')
-                    files = parsed.filter((f: any) => f.url).map((f: any) => ({
-                        url: f.url,
-                        caption: f.caption || undefined
-                    }))
+                    files = parsed
+                        .filter((f: any) => f.url)
+                        .map((f: any) => ({
+                            url: f.url,
+                            caption: f.caption || undefined
+                        }))
                 } catch (e: any) {
                     throw new Error(`Invalid files JSON format: ${e.message}`)
                 }
