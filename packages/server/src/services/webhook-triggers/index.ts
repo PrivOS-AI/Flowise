@@ -26,17 +26,55 @@ export interface IRoom {
 }
 
 export interface IMessage {
-    id: string
-    text: string
-    userId: string
-    username: string
+    id?: string
+    _id?: string
+    rid?: string
+    text?: string
+    msg?: string
+    userId?: string
+    username?: string
     createdAt?: string
+    mentions?: Array<{ _id: string; username: string }>
 }
 
 export interface IUser {
     id: string
     username: string
     name: string
+}
+
+export interface IListItem {
+    id: string
+    name: string
+    description?: string
+}
+
+export interface IList {
+    id: string
+    name: string
+}
+
+export interface IStage {
+    id: string
+    name: string
+}
+
+export interface IFile {
+    id: string
+    name: string
+    size?: number
+    type?: string
+    channelId?: string
+    folderId?: string
+    folderPath?: string
+}
+
+export interface IFolder {
+    id: string
+    name: string
+    channelId?: string
+    parentFolderId?: string
+    folderPath?: string
 }
 
 export interface WebhookEventRequest {
@@ -48,6 +86,20 @@ export interface WebhookEventRequest {
     user?: IUser
     form?: Record<string, any>
     question?: string
+    // List Item event fields
+    item?: IListItem
+    list?: IList
+    stage?: IStage
+    newStage?: IStage
+    previousStage?: IStage
+    actor?: IUser
+    changedFields?: Record<string, { previous: any; current: any }>
+    // File event fields
+    file?: IFile
+    changes?: Record<string, any>
+    // Folder event fields
+    folder?: IFolder
+    previousName?: string
 }
 
 export interface ITriggerNode {
@@ -144,6 +196,7 @@ const findMatchingAgentFlows = async (eventType: string, bot?: IBot) => {
     try {
         // get trigger from botId
         const triggerData = await appServer.AppDataSource.getRepository(Trigger).findOneBy({ botId: bot?.id, isEnabled: true })
+        console.log(bot)
         if (!triggerData) throw new Error('Trigger not found')
 
         const allChatFlows = await appServer.AppDataSource.getRepository(ChatFlow).find({
@@ -201,7 +254,33 @@ const prepareChatFlowExecutionRequest = async (req: Request, agentFlow: IMatchin
     if (!credential) throw new Error('Credential data not found')
     const { authToken } = await decryptCredentialData(credential.encryptedData)
 
-    const { form = {}, question = '', room, roomId, message, messageId, event = '', triggerConfig } = req.body ?? {}
+    const {
+        form = {},
+        question = '',
+        room,
+        roomId,
+        message,
+        messageId,
+        event = '',
+        triggerConfig,
+        bot,
+        timestamp,
+        // List Item event fields
+        item,
+        list,
+        stage,
+        newStage,
+        previousStage,
+        actor,
+        changedFields,
+        // File event fields
+        file,
+        changes,
+        // Folder event fields
+        folder,
+        previousName
+    } = req.body ?? {}
+
     req.params.id = agentFlow.id
     const formBuilt = {
         ...form,
@@ -221,7 +300,23 @@ const prepareChatFlowExecutionRequest = async (req: Request, agentFlow: IMatchin
         roomId: room?.id ?? roomId,
         messageId: message?._id || message?.id || messageId,
         eventType: event,
-        config: triggerConfig
+        config: triggerConfig,
+        // Preserve all event-specific data for downstream nodes
+        bot,
+        timestamp,
+        room,
+        message,
+        item,
+        list,
+        stage,
+        newStage,
+        previousStage,
+        actor,
+        changedFields,
+        file,
+        changes,
+        folder,
+        previousName
     }
 }
 

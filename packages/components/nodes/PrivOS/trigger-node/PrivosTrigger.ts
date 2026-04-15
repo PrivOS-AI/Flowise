@@ -4,14 +4,38 @@ import { PrivosEvent } from '../constants'
 import { PrivosErrorHandler } from '../utils'
 
 const ALL_EVENTS = [
+    // Message events
     { label: 'Message New', name: PrivosEvent.MESSAGE_NEW, description: 'Triggered when a new message is received' },
     { label: 'Message Edited', name: PrivosEvent.MESSAGE_EDITED, description: 'Triggered when a message is edited' },
     { label: 'Message Deleted', name: PrivosEvent.MESSAGE_DELETED, description: 'Triggered when a message is deleted' },
+    { label: 'Message Mention', name: PrivosEvent.MESSAGE_MENTION, description: 'Triggered when users are @mentioned in a message' },
+    { label: 'Bot Mention', name: PrivosEvent.BOT_MENTION, description: 'Triggered when the bot is @mentioned in a message' },
+    // Room events
     { label: 'Room Joined', name: PrivosEvent.ROOM_JOINED, description: 'Triggered when a user joins a room' },
     { label: 'Room Left', name: PrivosEvent.ROOM_LEFT, description: 'Triggered when a user leaves a room' },
+    // User events
     { label: 'User Joined', name: PrivosEvent.USER_JOINED, description: 'Triggered when a user joins the workspace' },
     { label: 'User Left', name: PrivosEvent.USER_LEFT, description: 'Triggered when a user leaves the workspace' },
-    { label: 'Message mention', name: PrivosEvent.MESSAGE_MENTION, description: 'Triggered when a user is mentioned in a message' }
+    // List Item events
+    { label: 'List Item Created', name: PrivosEvent.LIST_ITEM_CREATED, description: 'Triggered when a new item is created in a list' },
+    {
+        label: 'List Item Stage Changed',
+        name: PrivosEvent.LIST_ITEM_STAGE_CHANGED,
+        description: 'Triggered when an item is moved to a different stage'
+    },
+    {
+        label: 'List Item Attributes Changed',
+        name: PrivosEvent.LIST_ITEM_ATTRIBUTES_CHANGED,
+        description: 'Triggered when item attributes/fields are updated'
+    },
+    // File events
+    { label: 'File Created', name: PrivosEvent.FILE_CREATED, description: 'Triggered when a file is uploaded' },
+    { label: 'File Updated', name: PrivosEvent.FILE_UPDATED, description: 'Triggered when a file is updated or renamed' },
+    { label: 'File Deleted', name: PrivosEvent.FILE_DELETED, description: 'Triggered when a file is deleted' },
+    // Folder events
+    { label: 'Folder Created', name: PrivosEvent.FOLDER_CREATED, description: 'Triggered when a folder is created' },
+    { label: 'Folder Deleted', name: PrivosEvent.FOLDER_DELETED, description: 'Triggered when a folder is deleted' },
+    { label: 'Folder Renamed', name: PrivosEvent.FOLDER_RENAMED, description: 'Triggered when a folder is renamed' }
 ]
 
 class PrivosTrigger implements INode {
@@ -160,8 +184,31 @@ class PrivosTrigger implements INode {
     }
 
     async run(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
-        // set inputs to same Start node
-        const payload = options.triggerData?.form || {}
+        const triggerData = options.triggerData || {}
+        const form = triggerData.form || {}
+
+        // Merge event-specific data into payload so it flows through as form input
+        const eventData: ICommonObject = {}
+        if (triggerData.eventType) eventData.eventType = triggerData.eventType
+        if (triggerData.bot) eventData.bot = triggerData.bot
+        if (triggerData.timestamp) eventData.timestamp = triggerData.timestamp
+        if (triggerData.room) eventData.room = triggerData.room
+        if (triggerData.roomId) eventData.roomId = triggerData.roomId
+        if (triggerData.message) eventData.message = triggerData.message
+        if (triggerData.messageId) eventData.messageId = triggerData.messageId
+        if (triggerData.item) eventData.item = triggerData.item
+        if (triggerData.list) eventData.list = triggerData.list
+        if (triggerData.stage) eventData.stage = triggerData.stage
+        if (triggerData.newStage) eventData.newStage = triggerData.newStage
+        if (triggerData.previousStage) eventData.previousStage = triggerData.previousStage
+        if (triggerData.actor) eventData.actor = triggerData.actor
+        if (triggerData.changedFields) eventData.changedFields = triggerData.changedFields
+        if (triggerData.file) eventData.file = triggerData.file
+        if (triggerData.changes) eventData.changes = triggerData.changes
+        if (triggerData.folder) eventData.folder = triggerData.folder
+        if (triggerData.previousName) eventData.previousName = triggerData.previousName
+
+        const payload = { ...form, ...eventData }
         const _flowState = Object.keys(payload).map((key) => ({ key, value: payload[key] || '' }))
         const startInputType = payload?.question && typeof payload.question === 'string' ? 'chatInput' : 'formInput'
         const startEphemeralMemory = payload?.startEphemeralMemory as boolean
