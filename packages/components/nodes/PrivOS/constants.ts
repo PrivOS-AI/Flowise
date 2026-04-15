@@ -214,12 +214,33 @@ export const REQUEST_CONFIG = {
 } as const
 
 export enum PrivosEvent {
+    // Message events
     MESSAGE_NEW = 'message.new',
     MESSAGE_EDITED = 'message.edited',
     MESSAGE_DELETED = 'message.deleted',
+    MESSAGE_MENTION = 'message.mention',
+    BOT_MENTION = 'message.bot_mention',
+
+    // Room events
     ROOM_JOINED = 'room.joined',
     ROOM_LEFT = 'room.left',
+
+    // User events
     USER_JOINED = 'user.joined',
     USER_LEFT = 'user.left',
-    MESSAGE_MENTION = 'message.mention'
+
+    // List Item events
+    LIST_ITEM_CREATED = 'list.item.created',
+    LIST_ITEM_STAGE_CHANGED = 'list.item.stage_changed',
+    LIST_ITEM_ATTRIBUTES_CHANGED = 'list.item.attributes_changed',
+
+    // File events
+    FILE_CREATED = 'file.created',
+    FILE_UPDATED = 'file.updated',
+    FILE_DELETED = 'file.deleted',
+
+    // Folder events
+    FOLDER_CREATED = 'folder.created',
+    FOLDER_DELETED = 'folder.deleted',
+    FOLDER_RENAMED = 'folder.renamed'
 }
