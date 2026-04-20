@@ -239,17 +239,24 @@ const uploadPlugin = async (serverId: string, files: any[], _userId?: string, is
         const formHeaders = formData.getHeaders()
         console.log('[ClaudeWS] FormData boundaries:', formHeaders)
 
-        // Override the axios instance default `Content-Type: application/json` with the
-        // multipart content-type (including boundary). Setting both the pascal-case and
-        // lowercase keys ensures the default is replaced regardless of header casing.
-        const response = await client.post('/api/agent-factory/upload', formData, {
+        // Use a raw axios call (not the shared instance) so the instance-level default
+        // `Content-Type: application/json` cannot clobber the multipart content-type
+        // produced by form-data. We re-inject the baseURL and x-api-key manually.
+        const rawAxios = require('axios')
+        const apiKey = client.defaults.headers['x-api-key']
+        const baseURL = client.defaults.baseURL
+        const uploadUrl = `${baseURL}/api/agent-factory/upload`
+        console.log('[ClaudeWS] Raw upload URL:', uploadUrl)
+
+        const response = await rawAxios.post(uploadUrl, formData, {
             headers: {
                 ...formHeaders,
-                'Content-Type': formHeaders['content-type']
+                'x-api-key': apiKey
             },
             maxRedirects: 0,
             maxBodyLength: Infinity,
-            maxContentLength: Infinity
+            maxContentLength: Infinity,
+            timeout: 120000
         })
         console.log('[ClaudeWS] Upload response status:', response.status)
         console.log('[ClaudeWS] Upload response data:', response.data)
