@@ -195,15 +195,29 @@ const uploadPlugin = async (serverId: string, files: any[], _userId?: string, is
                 !!file.location
             )
 
+            // Determine content-type for the inner multipart part.
+            // Multer-stored files may have no extension on disk, so form-data cannot
+            // auto-detect the mime. Use multer's detected mimetype, falling back to
+            // application/zip for .zip uploads.
+            const innerContentType =
+                file.mimetype ||
+                (file.originalname && file.originalname.toLowerCase().endsWith('.zip') ? 'application/zip' : 'application/octet-stream')
+
             // Use file.path for disk storage
             if (file.path) {
-                console.log('[ClaudeWS] Creating read stream from:', file.path)
-                formData.append('file', fs.createReadStream(file.path), file.originalname)
+                console.log('[ClaudeWS] Creating read stream from:', file.path, 'as', innerContentType)
+                formData.append('file', fs.createReadStream(file.path), {
+                    filename: file.originalname,
+                    contentType: innerContentType
+                })
             }
             // Use file.buffer for memory storage
             else if (file.buffer) {
-                console.log('[ClaudeWS] Using file buffer')
-                formData.append('file', file.buffer, file.originalname)
+                console.log('[ClaudeWS] Using file buffer as', innerContentType)
+                formData.append('file', file.buffer, {
+                    filename: file.originalname,
+                    contentType: innerContentType
+                })
             }
             // Download from S3/MinIO location URL
             else if (file.location) {
@@ -219,8 +233,11 @@ const uploadPlugin = async (serverId: string, files: any[], _userId?: string, is
                         throw new Error(`S3/MinIO returned status ${fileResponse.status}`)
                     }
 
-                    console.log('[ClaudeWS] Downloaded file size:', fileResponse.data.byteLength, 'bytes')
-                    formData.append('file', Buffer.from(fileResponse.data), file.originalname)
+                    console.log('[ClaudeWS] Downloaded file size:', fileResponse.data.byteLength, 'bytes as', innerContentType)
+                    formData.append('file', Buffer.from(fileResponse.data), {
+                        filename: file.originalname,
+                        contentType: innerContentType
+                    })
                 } catch (downloadError: any) {
                     console.error('[ClaudeWS] Failed to download file from S3/MinIO:', {
                         message: downloadError.message,
@@ -267,9 +284,24 @@ const uploadPlugin = async (serverId: string, files: any[], _userId?: string, is
         return response.data
     } catch (error: any) {
         if (error instanceof InternalFlowiseError) throw error
+
+        // Surface upstream error details to help diagnose 4xx responses (415, 400, etc.)
+        const upstreamInfo = {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            upstreamURL: error.config?.url,
+            sentContentType: error.config?.headers?.['Content-Type'] || error.config?.headers?.['content-type'],
+            responseBody:
+                typeof error.response?.data === 'string'
+                    ? error.response.data.substring(0, 500)
+                    : JSON.stringify(error.response?.data || {}).substring(0, 500),
+            responseContentType: error.response?.headers?.['content-type']
+        }
+        console.error('[ClaudeWS] uploadPlugin upstream error:', upstreamInfo)
+
         throw new InternalFlowiseError(
             StatusCodes.INTERNAL_SERVER_ERROR,
-            `Error: claudewsPluginService.uploadPlugin - ${getErrorMessage(error)}`
+            `Error: claudewsPluginService.uploadPlugin - ${getErrorMessage(error)} | UPSTREAM: ${JSON.stringify(upstreamInfo)}`
         )
     }
 }
