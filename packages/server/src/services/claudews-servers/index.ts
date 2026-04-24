@@ -242,17 +242,38 @@ const testConnection = async (id: string): Promise<{ success: boolean; message: 
 
 /**
  * Test connection with provided credentials (without saving)
+ *
+ * When editing an existing server, the UI may send an empty apiKey together
+ * with the server id to indicate "keep the stored key". In that case we
+ * decrypt the stored key and use it with the (possibly edited) endpointUrl.
  */
 const testConnectionWithCredentials = async (credentials: {
     endpointUrl: string
-    apiKey: string
+    apiKey?: string
+    id?: string
 }): Promise<{ success: boolean; message: string; version?: string }> => {
     try {
+        let apiKey = credentials.apiKey?.trim() || ''
+
+        if (!apiKey && credentials.id) {
+            const server = await getServerById(credentials.id)
+            const decryptedData = await decryptCredentialData(server.apiKey)
+            apiKey = decryptedData.apiKey
+        }
+
+        if (!apiKey) {
+            return {
+                success: false,
+                message: 'API key is required'
+            }
+        }
+
+        const baseURL = credentials.endpointUrl.replace(/\/$/, '')
         const client = axios.create({
-            baseURL: credentials.endpointUrl,
+            baseURL,
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': credentials.apiKey
+                'x-api-key': apiKey
             },
             timeout: 30000
         })

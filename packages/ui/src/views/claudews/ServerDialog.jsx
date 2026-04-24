@@ -47,7 +47,9 @@ const ServerDialog = ({ show, dialogProps, onCancel, onConfirm, setError }) => {
                 name: data.name || '',
                 description: data.description || '',
                 endpointUrl: data.endpointUrl || '',
-                apiKey: data.apiKey || '',
+                // Leave blank in EDIT: server returns the encrypted blob which
+                // must not be echoed back. Empty means "keep stored key".
+                apiKey: '',
                 isActive: data.isActive !== undefined ? data.isActive : true
             })
         } else if (show && type === 'ADD') {
@@ -89,7 +91,8 @@ const ServerDialog = ({ show, dialogProps, onCancel, onConfirm, setError }) => {
             }
         }
 
-        if (!formData.apiKey.trim()) {
+        // In EDIT mode, blank apiKey means "keep the stored key".
+        if (type !== 'EDIT' && !formData.apiKey.trim()) {
             newErrors.apiKey = 'API Key is required'
         }
 
@@ -104,22 +107,22 @@ const ServerDialog = ({ show, dialogProps, onCancel, onConfirm, setError }) => {
 
         setTestStatus('testing')
         try {
-            let result
-            if (type === 'EDIT' && data?.id) {
-                // For existing servers, test with saved credentials
-                result = await testConnectionApi.request(data.id)
-            } else {
-                // For new servers, test with provided credentials
-                const credentials = {
-                    endpointUrl: formData.endpointUrl,
-                    apiKey: formData.apiKey
-                }
-                console.log('[ClaudeWS] Testing connection with credentials:', {
-                    endpointUrl: credentials.endpointUrl,
-                    apiKeyLength: credentials.apiKey?.length || 0
-                })
-                result = await testConnectionWithCredentialsApi.request(credentials)
+            // Always test with the current form values so edits take effect
+            // without requiring a Save first. In EDIT mode with a blank apiKey,
+            // pass the server id so the backend uses the stored key.
+            const credentials = {
+                endpointUrl: formData.endpointUrl,
+                apiKey: formData.apiKey
             }
+            if (type === 'EDIT' && data?.id) {
+                credentials.id = data.id
+            }
+            console.log('[ClaudeWS] Testing connection with credentials:', {
+                endpointUrl: credentials.endpointUrl,
+                apiKeyLength: credentials.apiKey?.length || 0,
+                usingStoredKey: !credentials.apiKey && !!credentials.id
+            })
+            const result = await testConnectionWithCredentialsApi.request(credentials)
 
             console.log('[ClaudeWS] Test connection result:', result)
 
@@ -142,7 +145,11 @@ const ServerDialog = ({ show, dialogProps, onCancel, onConfirm, setError }) => {
 
         try {
             if (type === 'EDIT' && data?.id) {
-                await updateServerApi.request(data.id, formData)
+                // Omit apiKey when blank so the server keeps the stored key
+                // instead of re-encrypting an empty value.
+                const { apiKey, ...rest } = formData
+                const payload = apiKey.trim() ? { ...rest, apiKey: apiKey.trim() } : rest
+                await updateServerApi.request(data.id, payload)
             } else {
                 await createServerApi.request(formData)
             }
@@ -193,9 +200,13 @@ const ServerDialog = ({ show, dialogProps, onCancel, onConfirm, setError }) => {
                         value={formData.apiKey}
                         onChange={handleChange('apiKey')}
                         error={!!errors.apiKey}
-                        helperText={errors.apiKey}
+                        helperText={
+                            errors.apiKey ||
+                            (type === 'EDIT' ? 'Leave blank to keep the current key' : '')
+                        }
+                        placeholder={type === 'EDIT' ? '••••••••  (unchanged)' : ''}
                         type='password'
-                        required
+                        required={type !== 'EDIT'}
                         fullWidth
                     />
 
